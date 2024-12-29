@@ -1,0 +1,12 @@
+.cache/
+/build/
+/cmake-build-*
+/.vscode
+/.idea
+/.vim
+*.o
+*.sw
+/compile_commands.json
+
+
+
