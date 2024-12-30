@@ -2,8 +2,8 @@
 // Created by shediao on 24-12-29.
 //
 
-#include "argparser.hpp"
 #include <gtest/gtest.h>
+#include "argparser.hpp"
 
 using namespace arg::parser;
 using namespace arg::parser::detail;
@@ -86,4 +86,5 @@ TEST(FromStringTest, Sizeable) {
 TEST(FromStringTest, Container) {
     EXPECT_EQ((from_string<std::vector<int>>("1,2,3", ',')), (std::vector<int>{1, 2, 3}));
     EXPECT_EQ((from_string<std::vector<std::pair<std::string, std::string>>>("k1=v1,k2=v2,k3=v3", ',', '=')), (std::vector<std::pair<std::string, std::string>>{{"k1", "v1"}, {"k2", "v2"}, {"k3", "v3"}}));
+    EXPECT_EQ((from_string<std::map<std::string, std::string>>("k1=v1,k2=v2,k3=v3", ',', '=')), (std::map<std::string, std::string>{{"k1", "v1"}, {"k2", "v2"}, {"k3", "v3"}}));
 }
