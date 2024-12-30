@@ -294,18 +294,20 @@ class OptionBase : public ArgBase {
 
       std::string value_help = get_value_help();
       int padding_size = option_width - short_option_str.size() -
-                         long_option_str.size() - value_help.size();
+                         long_option_str.size() - value_help.size() - 1;
       std::string padding =
           std::string(padding_size > 0 ? padding_size : 2, padding_char);
-      usage_str << std::format("  {}, {}{}{}", short_option_str,
-                               long_option_str, padding, get_description());
+      usage_str << std::format("  {}, {} {}{}{}", short_option_str,
+                               long_option_str, value_help, padding,
+                               get_description());
     } else {
       auto positional_str = names[0];
-      int padding_size = option_width - positional_str.size();
+      int padding_size =
+          option_width - positional_str.size() - value_help.size() - 1;
       std::string padding =
           std::string(padding_size > 0 ? padding_size : 2, padding_char);
-      usage_str << std::format("  {}{}{}", positional_str, padding,
-                               get_description());
+      usage_str << std::format("  {} {}{}{}", positional_str, value_help,
+                               padding, get_description());
     }
     return usage_str.str();
   }
@@ -318,14 +320,15 @@ template <typename T>
 class Option : public OptionBase {
  public:
   Option(const std::string &name, const std::string &description, T &bind_value)
-      : OptionBase(name, description), bind_value(bind_value) {}
+      : OptionBase(name, description), bind_value(bind_value) {
+    set_default_value_help<T>();
+  }
   bool is_option() const override { return true; }
   bool is_positional() const override { return false; }
   void parse(const std::string &arg_value) override {
     this->arg_value = arg_value;
     detail::set_value(bind_value, detail::from_string<T>(arg_value));
     set_count++;
-    set_default_value_help<T>();
   }
   T &bind_value;
 };
@@ -336,6 +339,7 @@ class Positional : public OptionBase {
   Positional(const std::string &name, const std::string &description,
              T &bind_value)
       : OptionBase(name, description), bind_value(bind_value) {
+    set_default_value_help<T>();
     set_value_help(names[0]);
   }
   bool is_option() const override { return false; }
@@ -344,7 +348,6 @@ class Positional : public OptionBase {
     this->arg_value = arg_value;
     detail::set_value(bind_value, detail::from_string<T>(arg_value));
     set_count++;
-    set_default_value_help<T>();
   }
   T &bind_value;
 };
@@ -426,7 +429,7 @@ class ArgParser {
     }
     for (const auto &arg : args) {
       if (arg->is_option() || arg->is_flag()) {
-        usage_str << arg->get_usage(24, ' ') << '\n';
+        usage_str << arg->get_usage(30, '.') << '\n';
       }
     }
 
@@ -437,7 +440,7 @@ class ArgParser {
     }
     for (const auto &arg : args) {
       if (arg->is_positional()) {
-        usage_str << arg->get_usage(24, ' ') << '\n';
+        usage_str << arg->get_usage(30, '.') << '\n';
       }
     }
     std::cout << usage_str.str() << std::endl;
