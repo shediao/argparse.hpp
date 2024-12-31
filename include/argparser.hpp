@@ -135,13 +135,29 @@ concept can_from_string_with_delim = requires(T t) {
     from_string<T>(std::declval<std::string>(), std::declval<char>());
 };
 
-inline std::vector<std::string> parse_option_name(const std::string &name) {
-    std::vector<std::string> result;
+inline std::pair<std::string, std::string> parse_option_name(
+    const std::string &name) {
     auto names = detail::split(name, ',', -1);
-    for (auto const &item : names) {
-        result.push_back(item);
+    if (names.size() == 2) {
+        const auto long_name = names[0].length() > 1
+                                   ? (names[0])
+                                   : (names[1].length() > 1 ? names[1] : "");
+        const auto short_name = names[0].length() == 1
+                                    ? (names[0])
+                                    : (names[1].length() == 1 ? names[1] : "");
+        if (long_name.empty() || short_name.empty()) {
+            throw std::invalid_argument("Invalid string for " + name);
+        }
+        return {short_name, long_name};
     }
-    return result;
+    if (names.size() == 1) {
+        if (names[0].length() > 1) {
+            return std::make_pair("", names[0]);
+        } else {
+            return std::make_pair(names[0], "");
+        }
+    }
+    throw std::invalid_argument("Invalid option name: " + name);
 }
 
 template <typename T>
@@ -165,28 +181,11 @@ class ArgBase {
     ArgBase(const std::string &name, const std::string &description)
         : names(detail::parse_option_name(name)), description(description) {}
     size_t count() const { return set_count; }
-    const std::vector<std::string> get_short_names() const {
-        std::vector<std::string> result;
-        for (const auto &name : names) {
-            if (name.size() == 1) {
-                result.push_back(name);
-            }
-        }
-        return result;
-    }
-    const std::vector<std::string> get_long_names() const {
-        std::vector<std::string> result;
-        for (const auto &name : names) {
-            if (name.size() > 1) {
-                result.push_back(name);
-            }
-        }
-        return result;
-    }
+    const std::string &get_short_name() const { return names.first; }
+    const std::string &get_long_name() const { return names.second; }
 
     const std::string &get_description() const { return description; }
-    virtual std::string get_usage(int option_width = 24,
-                                  int padding_char = ' ') const = 0;
+    virtual std::string get_usage(int option_width, int padding_char) const = 0;
     virtual ~ArgBase() = default;
     virtual bool is_flag() const = 0;
     virtual bool is_option() const = 0;
@@ -195,7 +194,7 @@ class ArgBase {
 
    protected:
     size_t set_count{0};
-    std::vector<std::string> names;
+    std::pair<std::string, std::string> names;
     std::string description;
 };
 
@@ -212,24 +211,15 @@ class Flag : public ArgBase {
     }
     std::string get_usage(int option_width, int padding_char) const override {
         std::stringstream usage_str;
-        auto short_names = get_short_names();
-        std::vector<std::string> short_options;
-        std::transform(begin(short_names), end(short_names),
-                       std::back_inserter(short_options),
-                       [](const auto &arg) { return "-" + arg; });
-        auto long_names = get_long_names();
-        std::vector<std::string> long_options;
-        std::transform(begin(long_names), end(long_names),
-                       std::back_inserter(long_options),
-                       [](const auto &arg) { return "--" + arg; });
-        std::string short_option_str = detail::join(short_options, ",");
-        std::string long_option_str = detail::join(long_options, ",");
-        int padding_size =
-            option_width - short_option_str.size() - long_option_str.size();
+        std::string option_str =
+            (get_short_name().empty() ? "    "
+                                      : ("-" + get_short_name() + ", ")) +
+            (get_long_name().empty() ? "" : "--" + get_long_name());
+        int padding_size = option_width - option_str.size();
         std::string padding =
             std::string(padding_size > 0 ? padding_size : 2, padding_char);
-        usage_str << std::format("  {}, {}{}{}", short_option_str,
-                                 long_option_str, padding, get_description());
+        usage_str << std::format("{}{}{}", option_str, padding,
+                                 get_description());
         return usage_str.str();
     }
     bool value{false};
@@ -259,29 +249,18 @@ class OptionBase : public ArgBase {
     std::string get_usage(int option_width, int padding_char) const override {
         std::stringstream usage_str;
         if (is_option()) {
-            auto short_names = get_short_names();
-            std::vector<std::string> short_options;
-            std::transform(begin(short_names), end(short_names),
-                           std::back_inserter(short_options),
-                           [](const auto &arg) { return "-" + arg; });
-            auto long_names = get_long_names();
-            std::vector<std::string> long_options;
-            std::transform(begin(long_names), end(long_names),
-                           std::back_inserter(long_options),
-                           [](const auto &arg) { return "--" + arg; });
-            std::string short_option_str = detail::join(short_options, ",");
-            std::string long_option_str = detail::join(long_options, ",");
-
-            std::string value_help = get_value_help();
-            int padding_size = option_width - short_option_str.size() -
-                               long_option_str.size() - value_help.size() - 1;
+            std::string option_str =
+                (get_short_name().empty() ? "    "
+                                          : ("-" + get_short_name() + ", ")) +
+                (get_long_name().empty() ? "" : "--" + get_long_name()) +
+                " <arg>";
+            int padding_size = option_width - option_str.size();
             std::string padding =
                 std::string(padding_size > 0 ? padding_size : 2, padding_char);
-            usage_str << std::format("  {}, {} {}{}{}", short_option_str,
-                                     long_option_str, value_help, padding,
+            usage_str << std::format("{}{}{}", option_str, padding,
                                      get_description());
         } else {
-            auto positional_str = names[0];
+            std::string positional_str = names.second;
             int padding_size =
                 option_width - positional_str.size() - value_help.size() - 1;
             std::string padding =
@@ -321,7 +300,7 @@ class Positional : public OptionBase {
                T &bind_value)
         : OptionBase(name, description), bind_value(bind_value) {
         set_default_value_help<T>();
-        set_value_help(names[0]);
+        set_value_help(names.second);
     }
     bool is_option() const override { return false; }
     bool is_positional() const override { return true; }
@@ -394,7 +373,7 @@ class ArgParser {
         }
         for (const auto &arg : args) {
             if (arg->is_option() || arg->is_flag()) {
-                usage_str << arg->get_usage(30, '.') << '\n';
+                usage_str << " " << arg->get_usage(24, '.') << '\n';
             }
         }
 
