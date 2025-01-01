@@ -5,6 +5,7 @@
 #ifndef ARG_PASER_HPP
 #define ARG_PASER_HPP
 
+#include <concepts>
 #include <cstddef>
 #include <iostream>
 #include <sstream>
@@ -26,6 +27,12 @@ concept is_tuple_like = requires(T t) {
 // 前置声明
 template <typename T>
 T from_string(std::string const &s);
+
+template <typename T>
+    requires std::constructible_from<T, std::string>
+T from_string(std::string const &s) {
+    return T(s);
+}
 
 template <typename T>
 std::string join(const std::vector<std::string> &v, const T &delim) {
@@ -106,9 +113,16 @@ ARGPARSER_TYPE_FROM_STRING(long double, stold)
 #undef ARGPARSER_TYPE_FROM_STRING
 
 template <typename T, std::size_t... I>
-T tuple_from_vector(std::vector<std::string> const &v,
-                    std::integer_sequence<std::size_t, I...>) {
+T tuple_from_vector_impl(std::vector<std::string> const &v,
+                         std::integer_sequence<std::size_t, I...>) {
     return T{from_string<std::decay_t<std::tuple_element_t<I, T>>>(v[I])...};
+}
+
+template <typename T>
+    requires is_tuple_like<T>
+T tuple_from_vector(std::vector<std::string> const &v) {
+    return tuple_from_vector_impl<T>(
+        v, std::make_index_sequence<std::tuple_size_v<std::decay_t<T>>>());
 }
 
 // for tuple like types
@@ -122,8 +136,7 @@ T from_string(std::string const &s, const char delim) {
             std::to_string(std::tuple_size_v<std::decay_t<T>>) +
             "th element:" + s);
     }
-    return tuple_from_vector<T>(
-        v, std::make_index_sequence<std::tuple_size_v<std::decay_t<T>>>());
+    return tuple_from_vector<T>(v);
 }
 
 template <typename T>
@@ -162,13 +175,13 @@ inline std::pair<std::string, std::string> parse_option_name(
 
 template <typename T>
     requires(!is_container<T>)
-void set_value(T &value, T new_value) {
+void replace_or_append_new_value(T &value, T new_value) {
     value = std::move(new_value);
 }
 
 template <typename T>
     requires is_container<T>
-void set_value(T &value, T new_value) {
+void replace_or_append_new_value(T &value, T new_value) {
     value.insert(value.end(), std::make_move_iterator(new_value.begin()),
                  std::make_move_iterator(new_value.end()));
 }
@@ -183,33 +196,38 @@ class ArgBase {
     size_t count() const { return set_count; }
     const std::string &get_short_name() const { return names.first; }
     const std::string &get_long_name() const { return names.second; }
-
+    void require(bool is_required = true) { this->is_required = is_required; }
     const std::string &get_description() const { return description; }
-    virtual std::string get_usage(int option_width, int padding_char) const = 0;
+    virtual std::string usage(int option_width, int padding_char) const = 0;
     virtual ~ArgBase() = default;
     virtual bool is_flag() const = 0;
     virtual bool is_option() const = 0;
     virtual bool is_positional() const = 0;
-    virtual void parse(const std::string &arg_value) = 0;
 
    protected:
     size_t set_count{0};
+    bool is_required{false};
     std::pair<std::string, std::string> names;
     std::string description;
 };
 
 class Flag : public ArgBase {
+    friend class ArgParser;
+
    public:
     Flag(const std::string &name, const std::string &description)
         : ArgBase(name, description) {}
     bool is_flag() const override { return true; }
     bool is_option() const override { return false; }
     bool is_positional() const override { return false; }
-    void parse(const std::string &arg_value) override {
-        detail::set_value(value, detail::from_string<bool>(arg_value));
+    void parse(const std::string &opt_value) {
+        detail::replace_or_append_new_value(
+            value, detail::from_string<bool>(opt_value));
         set_count++;
     }
-    std::string get_usage(int option_width, int padding_char) const override {
+
+   protected:
+    std::string usage(int option_width, int padding_char) const override {
         std::stringstream usage_str;
         std::string option_str =
             (get_short_name().empty() ? "    "
@@ -222,38 +240,100 @@ class Flag : public ArgBase {
                                  get_description());
         return usage_str.str();
     }
+
+   private:
     bool value{false};
 };
 
 class OptionBase : public ArgBase {
+    friend class ArgParser;
+
    public:
     OptionBase(const std::string &name, const std::string &description)
         : ArgBase(name, description) {}
     bool is_flag() const override { return false; }
+    void set_default(const std::string &default_value_str) {
+        this->default_value_str = default_value_str;
+    }
+    void set_value_help(const std::string &value_help) {
+        this->value_help = value_help;
+    }
+    template <typename T>
+        requires detail::is_container<T>
+    T as() const {
+        T result;
+        if (opt_values.empty()) {
+            result.insert(result.end(),
+                          detail::from_string<T>(default_value_str));
+        } else {
+            std::transform(opt_values.begin(), opt_values.end(),
+                           std::back_inserter(result),
+                           [](const std::string &opt_value) {
+                               return detail::from_string<T>(opt_value);
+                           });
+        }
+        return result;
+    }
+    template <typename T>
+        requires detail::is_container<T> &&
+                 detail::can_from_string_with_delim<T>
+    T as(char delim) const {
+        T result;
+        if (opt_values.empty()) {
+            result.insert(result.end(),
+                          detail::from_string<T>(default_value_str, delim));
+        } else {
+            std::transform(opt_values.begin(), opt_values.end(),
+                           std::back_inserter(result),
+                           [delim](const std::string &opt_value) {
+                               return detail::from_string<T>(opt_value, delim);
+                           });
+        }
+        return result;
+    }
+    template <typename T>
+        requires(!detail::is_container<T>)
+    T as() const {
+        if (opt_values.empty()) {
+            return detail::from_string<T>(default_value_str);
+        } else {
+            return detail::from_string<T>(opt_values.back());
+        }
+    }
+    template <typename T>
+        requires(!detail::is_container<T>) &&
+                detail::can_from_string_with_delim<T>
+    T as(char delim) const {
+        if (opt_values.empty()) {
+            return detail::from_string<T>(default_value_str, delim);
+        } else {
+            return detail::from_string<T>(opt_values.back(), delim);
+        }
+    }
+    virtual void parse(const std::string &opt_value) {
+        this->opt_values.push_back(opt_value);
+        set_count++;
+    }
+
+   protected:
     template <typename T>
     void set_default_value_help() {
         if constexpr (std::is_integral_v<T>) {
             value_help = "<N>";
         } else if constexpr (std::is_floating_point_v<T>) {
-            value_help = "<0.f>";
-        } else if constexpr (std::is_same_v<T, std::string>) {
-            value_help = "<TEXT>";
+            value_help = "<0.0>";
         } else {
-            value_help = "<ARG>";
+            value_help = "<arg>";
         }
     }
-    void set_value_help(const std::string &value_help) {
-        this->value_help = value_help;
-    }
-    const std::string &get_value_help() const { return value_help; }
-    std::string get_usage(int option_width, int padding_char) const override {
+    std::string usage(int option_width, int padding_char) const override {
         std::stringstream usage_str;
         if (is_option()) {
             std::string option_str =
                 (get_short_name().empty() ? "    "
                                           : ("-" + get_short_name() + ", ")) +
-                (get_long_name().empty() ? "" : "--" + get_long_name()) +
-                " <arg>";
+                (get_long_name().empty() ? "" : "--" + get_long_name()) + " " +
+                value_help;
             int padding_size = option_width - option_str.size();
             std::string padding =
                 std::string(padding_size > 0 ? padding_size : 2, padding_char);
@@ -270,13 +350,15 @@ class OptionBase : public ArgBase {
         }
         return usage_str.str();
     }
-
     std::string value_help;
-    std::string arg_value;
+    std::string default_value_str;
+    std::vector<std::string> opt_values;
 };
 
 template <typename T>
 class Option : public OptionBase {
+    friend class ArgParser;
+
    public:
     Option(const std::string &name, const std::string &description,
            T &bind_value)
@@ -285,16 +367,18 @@ class Option : public OptionBase {
     }
     bool is_option() const override { return true; }
     bool is_positional() const override { return false; }
-    void parse(const std::string &arg_value) override {
-        this->arg_value = arg_value;
-        detail::set_value(bind_value, detail::from_string<T>(arg_value));
-        set_count++;
+    void parse(const std::string &opt_value) override {
+        OptionBase::parse(opt_value);
+        detail::replace_or_append_new_value(bind_value,
+                                            detail::from_string<T>(opt_value));
     }
     T &bind_value;
 };
 
 template <typename T>
 class Positional : public OptionBase {
+    friend class ArgParser;
+
    public:
     Positional(const std::string &name, const std::string &description,
                T &bind_value)
@@ -304,10 +388,10 @@ class Positional : public OptionBase {
     }
     bool is_option() const override { return false; }
     bool is_positional() const override { return true; }
-    void parse(const std::string &arg_value) override {
-        this->arg_value = arg_value;
-        detail::set_value(bind_value, detail::from_string<T>(arg_value));
-        set_count++;
+    void parse(const std::string &opt_value) override {
+        OptionBase::parse(opt_value);
+        detail::replace_or_append_new_value(bind_value,
+                                            detail::from_string<T>(opt_value));
     }
     T &bind_value;
 };
@@ -373,7 +457,7 @@ class ArgParser {
         }
         for (const auto &arg : args) {
             if (arg->is_option() || arg->is_flag()) {
-                usage_str << " " << arg->get_usage(24, '.') << '\n';
+                usage_str << " " << arg->usage(24, '.') << '\n';
             }
         }
 
@@ -384,7 +468,7 @@ class ArgParser {
         }
         for (const auto &arg : args) {
             if (arg->is_positional()) {
-                usage_str << arg->get_usage(30, '.') << '\n';
+                usage_str << arg->usage(30, '.') << '\n';
             }
         }
         std::cout << usage_str.str() << std::endl;

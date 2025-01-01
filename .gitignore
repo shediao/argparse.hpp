@@ -5,7 +5,7 @@
 /.idea
 /.vim
 *.o
-*.sw
+*.swp
 /compile_commands.json
 
 
