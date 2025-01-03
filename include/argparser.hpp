@@ -27,17 +27,85 @@ concept IsTupleLike = requires(T t) {
 };
 
 template <typename T>
-T ParseFromString(std::string const &s);
-
-template <>
-char ParseFromString(std::string const &s) = delete;
-template <>
-wchar_t ParseFromString(std::string const &s) = delete;
+concept CanParseFromStringWithoutSplit =
+    std::same_as<T, std::string> || std::same_as<T, bool> ||
+    std::same_as<T, int> || std::same_as<T, long> ||
+    std::same_as<T, unsigned long> || std::same_as<T, long long> ||
+    std::same_as<T, unsigned long long> || std::same_as<T, float> ||
+    std::same_as<T, double> || std::same_as<T, long double> ||
+    requires(std::string const &s) { T(s); };
 
 template <typename T>
-    requires std::constructible_from<T, std::string>
 T ParseFromString(std::string const &s) {
-    return T(s);
+    size_t pos = 0;
+    if constexpr (std::is_same_v<T, int>) {
+        auto result = std::stoi(s, &pos);
+        if (pos != s.size()) {
+            throw std::invalid_argument("Invalid string for int: " + s);
+        }
+        return result;
+    } else if constexpr (std::is_same_v<T, long>) {
+        auto result = std::stol(s, &pos);
+        if (pos != s.size()) {
+            throw std::invalid_argument("Invalid string for long: " + s);
+        }
+        return result;
+    } else if constexpr (std::is_same_v<T, unsigned long>) {
+        auto result = std::stoul(s, &pos);
+        if (pos != s.size()) {
+            throw std::invalid_argument("Invalid string for unsigned long: " +
+                                        s);
+        }
+        return result;
+    } else if constexpr (std::is_same_v<T, long long>) {
+        auto result = std::stoll(s, &pos);
+        if (pos != s.size()) {
+            throw std::invalid_argument("Invalid string for long long: " + s);
+        }
+        return result;
+    } else if constexpr (std::is_same_v<T, unsigned long long>) {
+        auto result = std::stoull(s, &pos);
+        if (pos != s.size()) {
+            throw std::invalid_argument(
+                "Invalid string for unsigned long long: " + s);
+        }
+        return result;
+    } else if constexpr (std::is_same_v<T, float>) {
+        auto result = std::stof(s, &pos);
+        if (pos != s.size()) {
+            throw std::invalid_argument("Invalid string for float: " + s);
+        }
+        return result;
+    } else if constexpr (std::is_same_v<T, double>) {
+        auto result = std::stod(s, &pos);
+        if (pos != s.size()) {
+            throw std::invalid_argument("Invalid string for double: " + s);
+        }
+        return result;
+    } else if constexpr (std::is_same_v<T, long double>) {
+        auto result = std::stold(s, &pos);
+        if (pos != s.size()) {
+            throw std::invalid_argument("Invalid string for long double: " + s);
+        }
+        return result;
+    }
+    if constexpr (std::is_same_v<T, bool>) {
+        return ParseFromString<bool>(s);
+    }
+    if constexpr (std::is_same_v<T, std::string>) {
+        return s;
+    }
+    throw std::invalid_argument("Invalid type for ParseFromString");
+}
+template <>
+inline bool ParseFromString<bool>(std::string const &s) {
+    if (s == "true" || s == "on" || s == "1") {
+        return true;
+    }
+    if (s == "false" || s == "off" || s == "0") {
+        return false;
+    }
+    throw std::invalid_argument("Invalid string for bool: " + s);
 }
 
 template <typename T>
@@ -71,49 +139,6 @@ inline std::vector<std::string> Split(std::string const &s, char delim,
     return result;
 }
 
-template <>
-inline std::string ParseFromString<std::string>(std::string const &s) {
-    return s;
-}
-// bool 特化
-template <>
-inline bool ParseFromString<bool>(std::string const &s) {
-    if (s == "true" || s == "on" || s == "1") {
-        return true;
-    }
-    if (s == "false" || s == "off" || s == "0") {
-        return false;
-    }
-    throw std::invalid_argument("Invalid string for bool: " + s);
-}
-
-#define ARGPARSER_TYPE_FROM_STRING(type, std_stox)                             \
-    template <>                                                                \
-    inline type ParseFromString<type>(std::string const &s) {                  \
-        try {                                                                  \
-            size_t pos = 0;                                                    \
-            const type result{std_stox(s, &pos)};                              \
-            if (pos != s.size()) {                                             \
-                throw std::invalid_argument("Invalid string for " #type ": " + \
-                                            s);                                \
-            }                                                                  \
-            return result;                                                     \
-        } catch (const std::invalid_argument &e) {                             \
-            throw std::invalid_argument("Invalid string for " #type ": " + s); \
-        } catch (const std::out_of_range &e) {                                 \
-            throw std::out_of_range("Out of range for " #type ": " + s);       \
-        }                                                                      \
-    }
-ARGPARSER_TYPE_FROM_STRING(int, stoi)
-ARGPARSER_TYPE_FROM_STRING(long, stol)
-ARGPARSER_TYPE_FROM_STRING(unsigned long, stoul)
-ARGPARSER_TYPE_FROM_STRING(long long, stoll)
-ARGPARSER_TYPE_FROM_STRING(unsigned long long, stoull)
-ARGPARSER_TYPE_FROM_STRING(float, stof)
-ARGPARSER_TYPE_FROM_STRING(double, stod)
-ARGPARSER_TYPE_FROM_STRING(long double, stold)
-#undef ARGPARSER_TYPE_FROM_STRING
-
 template <typename T, std::size_t... I>
 T MakeTupleFromContainerImpl(std::vector<std::string> const &v,
                              std::integer_sequence<std::size_t, I...>) {
@@ -141,10 +166,6 @@ T ParseFromString(std::string const &s, const char delim) {
     }
     return MakeTupleFromContainer<T>(v);
 }
-
-template <typename T>
-concept CanParseFromStringWithoutSplit =
-    requires(T t) { ParseFromString<T>(std::declval<std::string>()); };
 
 template <typename T>
 concept CanParseFromStringSplitOnece = requires(T t) {
