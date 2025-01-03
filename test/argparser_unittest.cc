@@ -10,12 +10,23 @@ using namespace arg::parser;
 TEST(ArgParserTest, PrintUsaeg) {
     std::vector<const char*> args{"test", nullptr};
     ArgParser parser{1, args.data()};
-    parser.add_flag("h,help", "Show this help message");
-    parser.add_flag("v,version", "Show version info");
-    parser.add_flag("d,debug", "Set debug mode");
-    parser.add_flag("release", "Set release mode");
-    std::string input, output;
-    parser.add_option("i,input", "Path to input file", input);
-    parser.add_option("output", "Path output file", output);
+    struct Configs {
+        bool show_help = false;
+        bool show_version = false;
+        bool is_debug = false;
+        int level = 0;
+        std::string input, output;
+        std::vector<std::string> targets;
+    };
+    Configs configs;
+    parser.add_flag("h,help", "Show this help message", configs.show_help);
+    parser.add_flag("v,version", "Show version info", configs.show_version);
+    parser.add_flag("d,debug", "Set debug mode", configs.is_debug);
+    parser.add_flag("release", "Set release mode", configs.is_debug,
+                    action::store_false);
+    parser.add_flag("l,level", "Set level", configs.level);
+    parser.add_option("i,input", "Path to input file", configs.input);
+    parser.add_option("output", "Path output file", configs.output);
+    parser.add_positional("target", "build targets", configs.targets);
     parser.print_usage();
 }
