@@ -609,6 +609,14 @@ class ArgParser {
     template <typename T>
     void add_positional(const std::string &name, const std::string &description,
                         T &bind_value) {
+        if (std::ranges::find_if(args, [name](const auto &arg) {
+                return arg->is_positional() &&
+                       dynamic_cast<OptionBase *>(arg.get())->is_container();
+            }) != args.end()) {
+            throw std::runtime_error(
+                "Positional argument only support one container and it "
+                "must be the last one");
+        }
         args.push_back(
             std::make_unique<Positional<T>>(name, description, bind_value));
     }
