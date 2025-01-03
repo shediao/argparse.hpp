@@ -7,6 +7,7 @@
 
 #include <concepts>
 #include <cstddef>
+#include <functional>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -15,14 +16,6 @@
 #include <vector>
 
 namespace arg::parser {
-class ArgBase;
-class Flag;
-class OptionBase;
-template <typename T>
-class Option;
-template <typename T>
-class Positional;
-class ArgParser;
 
 namespace detail {
 
@@ -35,6 +28,11 @@ concept IsTupleLike = requires(T t) {
 
 template <typename T>
 T ParseFromString(std::string const &s);
+
+template <>
+char ParseFromString(std::string const &s) = delete;
+template <>
+wchar_t ParseFromString(std::string const &s) = delete;
 
 template <typename T>
     requires std::constructible_from<T, std::string>
@@ -72,10 +70,6 @@ inline std::vector<std::string> Split(std::string const &s, char delim,
     result.emplace_back(unsplit_it, s.end());
     return result;
 }
-template <typename T>
-concept IsContainer = requires(T t) {
-    t.insert(t.end(), std::declval<typename T::value_type>());
-};
 
 template <>
 inline std::string ParseFromString<std::string>(std::string const &s) {
@@ -122,7 +116,7 @@ ARGPARSER_TYPE_FROM_STRING(long double, stold)
 
 template <typename T, std::size_t... I>
 T MakeTupleFromContainerImpl(std::vector<std::string> const &v,
-                         std::integer_sequence<std::size_t, I...>) {
+                             std::integer_sequence<std::size_t, I...>) {
     return T{
         ParseFromString<std::decay_t<std::tuple_element_t<I, T>>>(v[I])...};
 }
@@ -155,6 +149,16 @@ concept CanParseFromStringWithoutSplit =
 template <typename T>
 concept CanParseFromStringSplitOnece = requires(T t) {
     ParseFromString<T>(std::declval<std::string>(), std::declval<char>());
+};
+template <typename T>
+concept CanParseFromString =
+    CanParseFromStringWithoutSplit<T> || CanParseFromStringSplitOnece<T>;
+
+template <typename T>
+concept IsContainer = requires(T t) {
+    t.insert(t.end(), std::declval<typename T::value_type>());
+    requires CanParseFromString<typename T::value_type>;
+    requires std::same_as<std::basic_string<typename T::value_type>, T>;
 };
 
 inline std::pair<std::string, std::string> ParseOptionNames(
@@ -196,22 +200,52 @@ void replace_or_append_new_value(T &value, T new_value) {
 }
 }  // namespace detail
 
+namespace action {
+void store_true(bool &value) { value = true; }
+
+void store_false(bool &value) { value = false; }
+
+template <typename T>
+    requires std::integral<T>
+void increment(T &value) {
+    value++;
+}
+
+template <typename T>
+    requires std::integral<T>
+void decrement(T &value) {
+    value--;
+}
+
+template <typename T>
+    requires detail::CanParseFromString<T>
+void replace_value(T &value, const std::string &opt_value) {
+    value = detail::ParseFromString<T>(opt_value);
+}
+
+template <typename T>
+    requires detail::IsContainer<T>
+void append_value(T &value, const std::string &opt_value) {
+    value.insert(value.end(), detail::ParseFromString<T>(opt_value));
+}
+}  // namespace action
+
 class ArgBase {
     friend class ArgParser;
 
    public:
     ArgBase(const std::string &name, const std::string &description)
         : description_(description) {
-            for (auto && opt_name : detail::Split(name, ',', -1)) {
-                if (opt_name.length() == 1) {
-                    short_opt_names_.push_back(std::move(opt_name));
-                } else if (opt_name.length() > 1) {
-                    long_opt_names_.push_back(std::move(opt_name));
-                } else {
-                    throw std::invalid_argument("Invalid option name: " + name);
-                }
+        for (auto &&opt_name : detail::Split(name, ',', -1)) {
+            if (opt_name.length() == 1) {
+                short_opt_names_.push_back(std::move(opt_name));
+            } else if (opt_name.length() > 1) {
+                long_opt_names_.push_back(std::move(opt_name));
+            } else {
+                throw std::invalid_argument("Invalid option name: " + name);
             }
         }
+    }
     size_t count() const { return count_; }
     void require(bool required = true) { this->required_ = required; }
     const std::string &get_description() const { return description_; }
@@ -229,23 +263,48 @@ class ArgBase {
     std::string description_;
 };
 
+template <typename... T>
+struct overload : T... {
+    using T::operator()...;
+};
+
+template <typename... T>
+overload(T...) -> overload<T...>;
+
+template <typename T = bool>
+    requires(std::integral<T> && detail::CanParseFromString<T>) ||
+            std::is_same_v<T, bool>
 class Flag : public ArgBase {
     friend class ArgParser;
 
    public:
     Flag(const std::string &name, const std::string &description)
-        : ArgBase(name, description) {}
+        : ArgBase(name, description), action_{action::store_true} {}
+    Flag(const std::string &name, const std::string &description,
+         std::function<void(T &)> action)
+        : ArgBase(name, description), action_(action) {}
     bool is_flag() const override { return true; }
     bool is_option() const override { return false; }
     bool is_positional() const override { return false; }
     void parse() {
-        value_ = true;
+        std::visit(overload{
+                       [this](T &value) { action_(value); },
+                       [this](std::reference_wrapper<T> &value) {
+                           action_(value.get());
+                       },
+                   },
+                   value_);
         count_++;
     }
-    void default(bool default_value) {
-       value_ = default_value;
+    void set_default(T default_value) { value_ = default_value; }
+    T value() const {
+        return std::visit(
+            overload{
+                [](T &value) { return value; },
+                [](std::reference_wrapper<T> &value) { return value.get(); },
+            },
+            value_);
     }
-    bool value() const { return value_; }
 
    protected:
     std::string usage(int option_width, char padding_char) const override {
@@ -253,8 +312,12 @@ class Flag : public ArgBase {
         std::string options_str{};
         std::vector<std::string> short_opts;
         std::vector<std::string> long_opts;
-        std::transform(begin(short_opt_names_), end(short_opt_names_), back_inserter(short_opts),[](auto const& s) { return "-" + s;});
-        std::transform(begin(long_opt_names_), end(long_opt_names_), back_inserter(long_opts),[](auto const& s) { return "--" + s;});
+        std::transform(begin(short_opt_names_), end(short_opt_names_),
+                       back_inserter(short_opts),
+                       [](auto const &s) { return "-" + s; });
+        std::transform(begin(long_opt_names_), end(long_opt_names_),
+                       back_inserter(long_opts),
+                       [](auto const &s) { return "--" + s; });
         if (!short_opts.empty()) {
             options_str += detail::join(short_opts, ',');
             if (!long_opts.empty()) {
@@ -264,14 +327,16 @@ class Flag : public ArgBase {
             options_str += "    ";
         }
         if (!long_opts.empty()) {
-          options_str += detail::join(long_opts, ',');
+            options_str += detail::join(long_opts, ',');
         }
-        usage_str << std::format("{0:<{1}}{2}", options_str, option_width, get_description());
+        usage_str << std::format("{0:<{1}}{2}", options_str, option_width,
+                                 get_description());
         return usage_str.str();
     }
 
    private:
-    bool value_{false};
+    std::variant<T, std::reference_wrapper<T>> value_;
+    std::function<void(T &)> action_;
 };
 
 class OptionBase : public ArgBase {
@@ -383,8 +448,8 @@ class OptionBase : public ArgBase {
             usage_str << std::format("{0:<{1}}{2}", options_str, option_width,
                                      get_description());
         } else {
-            usage_str << std::format("{0:<{1}}{2}", long_opt_names_[0], option_width,
-                                     get_description());
+            usage_str << std::format("{0:<{1}}{2}", long_opt_names_[0],
+                                     option_width, get_description());
         }
         return usage_str.str();
     }
@@ -394,43 +459,115 @@ class OptionBase : public ArgBase {
 };
 
 template <typename T>
+    requires detail::CanParseFromString<T> || detail::IsContainer<T>
 class Option : public OptionBase {
     friend class ArgParser;
 
    public:
     Option(const std::string &name, const std::string &description,
            T &bind_value)
-        : OptionBase(name, description), bind_value_(bind_value) {
+        requires detail::CanParseFromString<T>
+        : OptionBase(name, description),
+          value_(bind_value),
+          action_([](T &value, const std::string &opt_value) {
+              action::replace_value<T>(value, opt_value);
+          }) {
+        set_default_value_help<T>();
+    }
+    Option(const std::string &name, const std::string &description,
+           T &bind_value)
+        requires detail::IsContainer<T>
+        : OptionBase(name, description),
+          value_(bind_value),
+          action_([](T &value, const std::string &opt_value) {
+              action::append_value<T>(value, opt_value);
+          }) {
         set_default_value_help<T>();
     }
     bool is_option() const override { return true; }
     bool is_positional() const override { return false; }
     void parse(const std::string &opt_value) override {
         OptionBase::parse(opt_value);
-        detail::replace_or_append_new_value(
-            bind_value_.get(), detail::ParseFromString<T>(opt_value));
+        std::visit(
+            overload{
+                [this, &opt_value](T &value) { action_(value, opt_value); },
+                [this, &opt_value](std::reference_wrapper<T> &value) {
+                    action_(value.get(), opt_value);
+                },
+            },
+            value_);
     }
-    std::reference_wrapper<T> bind_value_;
+
+    T const &value() const {
+        return std::visit(
+            overload{
+                [](T &value) { return value; },
+                [](std::reference_wrapper<T> &value) { return value.get(); },
+            },
+            value_);
+    }
+
+   private:
+    std::variant<T, std::reference_wrapper<T>> value_;
+    std::function<void(T &, const std::string &)> action_;
 };
 
 template <typename T>
+    requires detail::CanParseFromString<T> || detail::IsContainer<T>
 class Positional : public OptionBase {
     friend class ArgParser;
 
    public:
-    Positional(const std::string &name, const std::string &description,
-               T &bind_value)
-        : OptionBase(name, description), bind_value_(bind_value) {
+    Positional(
+        const std::string &name, const std::string &description, T &bind_value,
+        std::function<void(T &, const std::string &)> action =
+            [](T &value, const std::string &opt_value) {
+                value = detail::ParseFromString<T>(opt_value);
+            })
+        requires detail::CanParseFromString<T>
+        : OptionBase(name, description),
+          bind_value_(bind_value),
+          action_(action) {
+        set_default_value_help<T>();
+    }
+    Positional(
+        const std::string &name, const std::string &description, T &bind_value,
+        std::function<void(T &, const std::string &)> action =
+            [](T &value, const std::string &opt_value) {
+                action::append_value<T>(value, opt_value);
+            })
+        requires(detail::IsContainer<T>)
+        : OptionBase(name, description),
+          bind_value_(bind_value),
+          action_(action) {
         set_default_value_help<T>();
     }
     bool is_option() const override { return false; }
     bool is_positional() const override { return true; }
     void parse(const std::string &opt_value) override {
         OptionBase::parse(opt_value);
-        detail::replace_or_append_new_value(
-            bind_value_.get(), detail::ParseFromString<T>(opt_value));
+        std::visit(
+            overload{
+                [this, &opt_value](T &value) { action_(value, opt_value); },
+                [this, &opt_value](std::reference_wrapper<T> &value) {
+                    action_(value.get(), opt_value);
+                },
+            },
+            bind_value_);
     }
-    std::reference_wrapper<T> bind_value_;
+
+    T const &value() const {
+        return std::visit(
+            overload{
+                [](T &value) { return value; },
+                [](std::reference_wrapper<T> &value) { return value.get(); },
+            },
+            bind_value_);
+    }
+
+   private:
+    std::variant<T, std::reference_wrapper<T>> bind_value_;
+    std::function<void(T &, const std::string &)> action_;
 };
 
 class ArgParser {
@@ -438,8 +575,10 @@ class ArgParser {
     ArgParser(int argc, const char *argv[])
         : commands(argc > 0 ? argv : nullptr,
                    argc > 0 ? argv + argc : nullptr) {}
+    template <typename T = bool>
+        requires std::integral<T> || std::is_same_v<T, bool>
     void add_flag(const std::string &name, const std::string &description) {
-        args.push_back(std::make_unique<Flag>(name, description));
+        args.push_back(std::make_unique<Flag<T>>(name, description));
     }
 
     template <typename T>
