@@ -238,16 +238,31 @@ inline void decrement(T &value) {
 }
 
 template <typename T>
-    requires detail::CanParseFromString<T>
+    requires detail::CanParseFromStringWithoutSplit<T>
 inline void replace_value(T &value, const std::string &opt_value) {
     value = detail::ParseFromString<T>(opt_value);
 }
 
 template <typename T>
-    requires detail::IsContainer<T>
+    requires detail::CanParseFromStringSplitOnece<T>
+inline void replace_value(T &value, const std::string &opt_value, char delim) {
+    value = detail::ParseFromString<T>(opt_value, delim);
+}
+
+template <typename T>
+    requires detail::IsContainer<T> &&
+             detail::CanParseFromStringWithoutSplit<typename T::value_type>
 inline void append_value(T &value, const std::string &opt_value) {
     value.insert(value.end(),
                  detail::ParseFromString<typename T::value_type>(opt_value));
+}
+
+template <typename T>
+    requires detail::IsContainer<T> &&
+             detail::CanParseFromStringSplitOnece<typename T::value_type>
+inline void append_value(T &value, const std::string &opt_value, char delim) {
+    value.insert(value.end(), detail::ParseFromString<typename T::value_type>(
+                                  opt_value, delim));
 }
 }  // namespace action
 
@@ -454,7 +469,7 @@ class Option : public OptionBase {
    public:
     Option(const std::string &name, const std::string &description,
            T &bind_value)
-        requires detail::CanParseFromString<T>
+        requires detail::CanParseFromStringWithoutSplit<T>
         : OptionBase(name, description),
           value_(std::ref(bind_value)),
           action_([](T &value, const std::string &opt_value) {
@@ -463,12 +478,35 @@ class Option : public OptionBase {
         set_default_value_help<T>();
     }
     Option(const std::string &name, const std::string &description,
+           T &bind_value, char delim)
+        requires detail::CanParseFromStringSplitOnece<T>
+        : OptionBase(name, description),
+          value_(std::ref(bind_value)),
+          action_([delim](T &value, const std::string &opt_value) {
+              action::replace_value<T>(value, opt_value, delim);
+          }) {
+        set_default_value_help<T>();
+    }
+    Option(const std::string &name, const std::string &description,
            T &bind_value)
-        requires detail::IsContainer<T>
+        requires detail::IsContainer<T> &&
+                     detail::CanParseFromStringWithoutSplit<
+                         typename T::value_type>
         : OptionBase(name, description),
           value_(std::ref(bind_value)),
           action_([](T &value, const std::string &opt_value) {
               action::append_value<T>(value, opt_value);
+          }) {
+        set_default_value_help<T>();
+    }
+    Option(const std::string &name, const std::string &description,
+           T &bind_value, char delim)
+        requires detail::IsContainer<T> && detail::CanParseFromStringSplitOnece<
+                                               typename T::value_type>
+        : OptionBase(name, description),
+          value_(std::ref(bind_value)),
+          action_([delim](T &value, const std::string &opt_value) {
+              action::append_value<T>(value, opt_value, delim);
           }) {
         set_default_value_help<T>();
     }
@@ -513,28 +551,47 @@ class Positional : public OptionBase {
     friend class ArgParser;
 
    public:
-    Positional(
-        const std::string &name, const std::string &description, T &bind_value,
-        std::function<void(T &, const std::string &)> action =
-            [](T &value, const std::string &opt_value) {
-                value = action::replace_value<T>(value, opt_value);
-            })
-        requires detail::CanParseFromString<T>
+    Positional(const std::string &name, const std::string &description,
+               T &bind_value)
+        requires detail::CanParseFromStringWithoutSplit<T>
         : OptionBase(name, description),
           bind_value_(std::ref(bind_value)),
-          action_(action) {
+          action_([](T &value, const std::string &opt_value) {
+              action::replace_value<T>(value, opt_value);
+          }) {
         set_default_value_help<T>();
     }
-    Positional(
-        const std::string &name, const std::string &description, T &bind_value,
-        std::function<void(T &, const std::string &)> action =
-            [](T &value, const std::string &opt_value) {
-                action::append_value<T>(value, opt_value);
-            })
-        requires detail::IsContainer<T>
+    Positional(const std::string &name, const std::string &description,
+               T &bind_value, char delim)
+        requires detail::CanParseFromStringSplitOnece<T>
         : OptionBase(name, description),
           bind_value_(std::ref(bind_value)),
-          action_(action) {
+          action_([delim](T &value, const std::string &opt_value) {
+              action::replace_value<T>(value, opt_value, delim);
+          }) {
+        set_default_value_help<T>();
+    }
+    Positional(const std::string &name, const std::string &description,
+               T &bind_value)
+        requires detail::IsContainer<T> &&
+                     detail::CanParseFromStringWithoutSplit<
+                         typename T::value_type>
+        : OptionBase(name, description),
+          bind_value_(std::ref(bind_value)),
+          action_([](T &value, const std::string &opt_value) {
+              action::append_value<T>(value, opt_value);
+          }) {
+        set_default_value_help<T>();
+    }
+    Positional(const std::string &name, const std::string &description,
+               T &bind_value, char delim)
+        requires detail::IsContainer<T> && detail::CanParseFromStringSplitOnece<
+                                               typename T::value_type>
+        : OptionBase(name, description),
+          bind_value_(std::ref(bind_value)),
+          action_([delim](T &value, const std::string &opt_value) {
+              action::append_value<T>(value, opt_value, delim);
+          }) {
         set_default_value_help<T>();
     }
     bool is_option() const override { return false; }
@@ -591,7 +648,9 @@ class ArgParser {
     }
 
     template <typename T>
-        requires detail::CanParseFromStringWithoutSplit<T>
+        requires detail::CanParseFromString<T> ||
+                 (detail::IsContainer<T> &&
+                  detail::CanParseFromString<typename T::value_type>)
     void add_option(const std::string &name, const std::string &description,
                     T &bind_value) {
         args.push_back(
@@ -599,7 +658,9 @@ class ArgParser {
     }
 
     template <typename T>
-        requires detail::CanParseFromStringSplitOnece<T>
+        requires detail::CanParseFromStringSplitOnece<T> ||
+                 (detail::IsContainer<T> &&
+                  detail::CanParseFromStringSplitOnece<typename T::value_type>)
     void add_option(const std::string &name, const std::string &description,
                     T &bind_value, char delim) {
         args.push_back(
@@ -607,6 +668,9 @@ class ArgParser {
     }
 
     template <typename T>
+        requires detail::CanParseFromString<T> ||
+                 (detail::IsContainer<T> &&
+                  detail::CanParseFromString<typename T::value_type>)
     void add_positional(const std::string &name, const std::string &description,
                         T &bind_value) {
         if (std::ranges::find_if(args, [name](const auto &arg) {
@@ -622,6 +686,9 @@ class ArgParser {
     }
 
     template <typename T>
+        requires detail::CanParseFromStringSplitOnece<T> ||
+                 (detail::IsContainer<T> &&
+                  detail::CanParseFromStringSplitOnece<typename T::value_type>)
     void add_positional(const std::string &name, const std::string &description,
                         T &bind_value, char delim) {
         args.push_back(std::make_unique<Positional<T>>(name, description,
@@ -686,8 +753,7 @@ class ArgParser {
             return it != args.end() ? it->get() : nullptr;
         }
     }
-    void parse(int argc, const char *argv[]) {
-        auto commands = std::vector<std::string>{argv, argv + argc};
+    void parse() {
         size_t i = 1;  // 跳过程序名
         std::vector<ArgBase *> positionals;
 

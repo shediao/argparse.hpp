@@ -11,3 +11,5 @@ link_libraries(GTest::gtest GTest::gtest_main)
 
 add_executable(argparser_fromstring_unittest test/argparser_fromstring_unittest.cc)
 add_executable(argparser_unittest test/argparser_unittest.cc)
+add_executable(argparser_parse_unittest test/argparser_parse_unittest.cc)
+add_executable(argparser_parse_gnu_coreutils_unittest test/argparser_parse_gnu_coreutils_unittest.cc)
