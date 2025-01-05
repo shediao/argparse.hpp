@@ -195,7 +195,6 @@ void replace_or_append_new_value(T &value, T new_value) {
 }
 }  // namespace detail
 
-namespace action {
 inline void store_true(bool &value) { value = true; }
 
 inline void store_false(bool &value) { value = false; }
@@ -239,7 +238,6 @@ inline void append_value(T &value, const std::string &opt_value, char delim) {
     value.insert(value.end(), detail::parse_from_string<typename T::value_type>(
                                   opt_value, delim));
 }
-}  // namespace action
 
 class ArgBase {
     friend class ArgParser;
@@ -331,7 +329,7 @@ class Flag : public FlagBase {
     Flag(const std::string &name, const std::string &description, T &bind_value)
         : FlagBase(name, description),
           value_(std::ref(bind_value)),
-          action_{action::store_true} {}
+          action_{store_true} {}
     Flag(const std::string &name, const std::string &description, T &bind_value,
          std::function<void(T &)> action)
         : FlagBase(name, description),
@@ -448,7 +446,7 @@ class Option : public OptionBase {
         : OptionBase(name, description),
           value_(std::ref(bind_value)),
           action_([](T &value, const std::string &opt_value) {
-              action::replace_value<T>(value, opt_value);
+              replace_value<T>(value, opt_value);
           }) {
         set_default_value_help<T>();
     }
@@ -458,7 +456,7 @@ class Option : public OptionBase {
         : OptionBase(name, description),
           value_(std::ref(bind_value)),
           action_([delim](T &value, const std::string &opt_value) {
-              action::replace_value<T>(value, opt_value, delim);
+              replace_value<T>(value, opt_value, delim);
           }) {
         set_default_value_help<T>();
     }
@@ -470,7 +468,7 @@ class Option : public OptionBase {
         : OptionBase(name, description),
           value_(std::ref(bind_value)),
           action_([](T &value, const std::string &opt_value) {
-              action::append_value<T>(value, opt_value);
+              append_value<T>(value, opt_value);
           }) {
         set_default_value_help<T>();
     }
@@ -481,7 +479,7 @@ class Option : public OptionBase {
         : OptionBase(name, description),
           value_(std::ref(bind_value)),
           action_([delim](T &value, const std::string &opt_value) {
-              action::append_value<T>(value, opt_value, delim);
+              append_value<T>(value, opt_value, delim);
           }) {
         set_default_value_help<T>();
     }
@@ -532,7 +530,7 @@ class Positional : public OptionBase {
         : OptionBase(name, description),
           bind_value_(std::ref(bind_value)),
           action_([](T &value, const std::string &opt_value) {
-              action::replace_value<T>(value, opt_value);
+              replace_value<T>(value, opt_value);
           }) {
         set_default_value_help<T>();
     }
@@ -542,7 +540,7 @@ class Positional : public OptionBase {
         : OptionBase(name, description),
           bind_value_(std::ref(bind_value)),
           action_([delim](T &value, const std::string &opt_value) {
-              action::replace_value<T>(value, opt_value, delim);
+              replace_value<T>(value, opt_value, delim);
           }) {
         set_default_value_help<T>();
     }
@@ -554,7 +552,7 @@ class Positional : public OptionBase {
         : OptionBase(name, description),
           bind_value_(std::ref(bind_value)),
           action_([](T &value, const std::string &opt_value) {
-              action::append_value<T>(value, opt_value);
+              append_value<T>(value, opt_value);
           }) {
         set_default_value_help<T>();
     }
@@ -565,7 +563,7 @@ class Positional : public OptionBase {
         : OptionBase(name, description),
           bind_value_(std::ref(bind_value)),
           action_([delim](T &value, const std::string &opt_value) {
-              action::append_value<T>(value, opt_value, delim);
+              append_value<T>(value, opt_value, delim);
           }) {
         set_default_value_help<T>();
     }
@@ -611,13 +609,13 @@ class ArgParser {
                    argc > 0 ? argv + argc : nullptr) {}
     void add_flag(const std::string &name, const std::string &description,
                   bool &bind_value,
-                  std::function<void(bool &)> action = action::store_true) {
+                  std::function<void(bool &)> action = store_true) {
         args.push_back(std::make_unique<Flag<bool>>(name, description,
                                                     bind_value, action));
     }
     void add_flag(const std::string &name, const std::string &description,
                   int &bind_value,
-                  std::function<void(int &)> action = action::increment<int>) {
+                  std::function<void(int &)> action = increment<int>) {
         args.push_back(
             std::make_unique<Flag<int>>(name, description, bind_value, action));
     }

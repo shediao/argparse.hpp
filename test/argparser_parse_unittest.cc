@@ -39,8 +39,8 @@ TEST_F(ArgParserTest, IntFlagTest) {
     int count1 = 0, count2 = 0;
 
     ArgParser parser(args.size(), args.data());
-    parser.add_flag("v", "Counter 1", count1, action::increment<int>);
-    parser.add_flag("verbose", "Counter 2", count2, action::increment<int>);
+    parser.add_flag("v", "Counter 1", count1, increment<int>);
+    parser.add_flag("verbose", "Counter 2", count2, increment<int>);
 
     parser.parse();
 
