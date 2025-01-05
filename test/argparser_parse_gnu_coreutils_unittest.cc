@@ -5,7 +5,7 @@
 
 #include "argparser.hpp"
 
-using namespace arg::parser;
+using namespace argparse;
 
 class GNUCoreutilsTest : public ::testing::Test {
    protected:

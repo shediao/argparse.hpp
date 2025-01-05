@@ -6,7 +6,7 @@
 
 #include "argparser.hpp"
 
-using namespace arg::parser;
+using namespace argparse;
 
 class ArgParserTest : public ::testing::Test {
    protected:

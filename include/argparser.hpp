@@ -15,7 +15,7 @@
 #include <utility>
 #include <vector>
 
-namespace arg::parser {
+namespace argparse {
 
 namespace {
 
@@ -837,6 +837,6 @@ class ArgParser {
     std::vector<std::string> commands;
 };
 
-}  // namespace arg::parser
+}  // namespace argparse
 
 #endif  // ARG_PASER_HPP

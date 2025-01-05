@@ -6,7 +6,7 @@
 
 #include <gtest/gtest.h>
 
-using namespace arg::parser;
+using namespace argparse;
 TEST(ArgParserTest, PrintUsaeg) {
     std::vector<const char*> args{"test", nullptr};
     ArgParser parser{1, args.data()};
