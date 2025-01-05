@@ -5,13 +5,18 @@
 #ifndef ARG_PASER_HPP
 #define ARG_PASER_HPP
 
-#include <cstddef>
+#include <algorithm>
+#include <format>
 #include <functional>
 #include <iostream>
+#include <memory>
+#include <ranges>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace argparse {
