@@ -4,6 +4,8 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
+
 #include "argparse.hpp"
 
 using namespace argparse;
