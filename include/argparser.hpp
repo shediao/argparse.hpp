@@ -141,7 +141,7 @@ inline std::vector<std::string> split(std::string const &s, char delim,
 
 template <typename T, std::size_t... I>
 T make_tuple_from_container_impl(std::vector<std::string> const &v,
-                             std::integer_sequence<std::size_t, I...>) {
+                                 std::integer_sequence<std::size_t, I...>) {
     return T{
         parse_from_string<std::decay_t<std::tuple_element_t<I, T>>>(v[I])...};
 }
@@ -172,8 +172,8 @@ concept can_parse_from_string_split_once = requires(T t) {
     parse_from_string<T>(std::declval<std::string>(), std::declval<char>());
 };
 template <typename T>
-concept can_parse_from_string =
-    can_parse_from_string_without_split<T> || can_parse_from_string_split_once<T>;
+concept can_parse_from_string = can_parse_from_string_without_split<T> ||
+                                can_parse_from_string_split_once<T>;
 
 template <typename T>
 concept is_container = requires(T t) {
@@ -193,8 +193,7 @@ void replace_or_append_new_value(T &value, T new_value) {
     value.insert(value.end(), std::make_move_iterator(new_value.begin()),
                  std::make_move_iterator(new_value.end()));
 }
-}
-
+}  // namespace
 
 inline void store_true(bool &value) { value = true; }
 
@@ -236,8 +235,8 @@ template <typename T>
     requires is_container<T> &&
              can_parse_from_string_split_once<typename T::value_type>
 inline void append_value(T &value, const std::string &opt_value, char delim) {
-    value.insert(value.end(), parse_from_string<typename T::value_type>(
-                                  opt_value, delim));
+    value.insert(value.end(),
+                 parse_from_string<typename T::value_type>(opt_value, delim));
 }
 
 class ArgBase {
@@ -464,8 +463,7 @@ class Option : public OptionBase {
     Option(const std::string &name, const std::string &description,
            T &bind_value)
         requires is_container<T> &&
-                     can_parse_from_string_without_split<
-                         typename T::value_type>
+                     can_parse_from_string_without_split<typename T::value_type>
         : OptionBase(name, description),
           value_(std::ref(bind_value)),
           action_([](T &value, const std::string &opt_value) {
@@ -475,8 +473,8 @@ class Option : public OptionBase {
     }
     Option(const std::string &name, const std::string &description,
            T &bind_value, char delim)
-        requires is_container<T> && can_parse_from_string_split_once<
-                                               typename T::value_type>
+        requires is_container<T> &&
+                     can_parse_from_string_split_once<typename T::value_type>
         : OptionBase(name, description),
           value_(std::ref(bind_value)),
           action_([delim](T &value, const std::string &opt_value) {
@@ -548,8 +546,7 @@ class Positional : public OptionBase {
     Positional(const std::string &name, const std::string &description,
                T &bind_value)
         requires is_container<T> &&
-                     can_parse_from_string_without_split<
-                         typename T::value_type>
+                     can_parse_from_string_without_split<typename T::value_type>
         : OptionBase(name, description),
           bind_value_(std::ref(bind_value)),
           action_([](T &value, const std::string &opt_value) {
@@ -559,8 +556,8 @@ class Positional : public OptionBase {
     }
     Positional(const std::string &name, const std::string &description,
                T &bind_value, char delim)
-        requires is_container<T> && can_parse_from_string_split_once<
-                                               typename T::value_type>
+        requires is_container<T> &&
+                     can_parse_from_string_split_once<typename T::value_type>
         : OptionBase(name, description),
           bind_value_(std::ref(bind_value)),
           action_([delim](T &value, const std::string &opt_value) {

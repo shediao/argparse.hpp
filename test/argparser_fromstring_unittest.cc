@@ -62,13 +62,15 @@ TEST(ParseFromStringTest, DoubleTest) {
 
 // 测试 long long
 TEST(ParseFromStringTest, LongLongTest) {
-    EXPECT_EQ(parse_from_string<long long>("123456789012345"), 123456789012345LL);
+    EXPECT_EQ(parse_from_string<long long>("123456789012345"),
+              123456789012345LL);
     EXPECT_EQ(parse_from_string<long long>("-987654321098765"),
               -987654321098765LL);
     EXPECT_EQ(parse_from_string<long long>("0"), 0LL);
 
     EXPECT_THROW(parse_from_string<long long>("123a"), std::invalid_argument);
-    EXPECT_THROW(parse_from_string<long long>("invalid"), std::invalid_argument);
+    EXPECT_THROW(parse_from_string<long long>("invalid"),
+                 std::invalid_argument);
     EXPECT_THROW(parse_from_string<long long>(
                      std::to_string(std::numeric_limits<long double>::max())),
                  std::out_of_range);
@@ -92,8 +94,9 @@ TEST(ParseFromStringTest, Sizeable) {
     EXPECT_EQ(
         (parse_from_string<std::pair<std::string, std::string>>("k=v", '=')),
         (std::pair<std::string, std::string>{"k", "v"}));
-    EXPECT_EQ((parse_from_string<std::pair<std::string, std::string>>("k=", '=')),
-              (std::pair<std::string, std::string>{"k", ""}));
+    EXPECT_EQ(
+        (parse_from_string<std::pair<std::string, std::string>>("k=", '=')),
+        (std::pair<std::string, std::string>{"k", ""}));
     EXPECT_EQ(
         (parse_from_string<std::pair<std::string, std::string>>("k=v=vv", '=')),
         (std::pair<std::string, std::string>{"k", "v=vv"}));
