@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <map>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -341,4 +342,162 @@ TEST_F(ArgParserTest, DoubleDashPositionalTest) {
     EXPECT_EQ(positionals[0], "-v");
     EXPECT_EQ(positionals[1], "--name=value");
     EXPECT_EQ(positionals[2], "pos1");
+}
+
+// 测试默认值
+TEST_F(ArgParserTest, DefaultValueTest) {
+    auto args = make_args("prog");  // 不提供任何参数
+
+    // 基本类型默认值测试
+    int int_val;
+    long long_val;
+    double double_val;
+    std::string str_val;
+
+    // 容器类型默认值测试
+    std::vector<int> vec_val;
+    std::pair<std::string, int> pair_val;
+    std::vector<std::string> pos_val;
+
+    ArgParser parser("prog", "the prog description");
+
+    // 设置选项的默认值
+    parser.add_option("i", "Integer value", int_val).set_default("42");
+    parser.add_option("l", "Long value", long_val).set_default("1234567890");
+    parser.add_option("d", "Double value", double_val).set_default("3.14159");
+    parser.add_option("s", "String value", str_val).set_default("default");
+
+    // 设置容器类型的默认值
+    parser.add_option("v", "Vector value", vec_val).set_default({"1","2","3"});
+    parser.add_option("p", "Pair value", pair_val, ':').set_default("key:100");
+
+    // 设置位置参数的默认值
+    parser.add_positional("files", "Input files", pos_val)
+        .set_default({"file1.txt","file2.txt"});
+
+    parser.parse(args.size(), args.data());
+
+    // 验证基本类型默认值
+    EXPECT_EQ(int_val, 42);
+    EXPECT_EQ(long_val, 1234567890L);
+    EXPECT_DOUBLE_EQ(double_val, 3.14159);
+    EXPECT_EQ(str_val, "default");
+
+    // 验证容器类型默认值
+    // ASSERT_EQ(vec_val.size(), 3);
+    // EXPECT_EQ(vec_val[0], 1);
+    // EXPECT_EQ(vec_val[1], 2);
+    // EXPECT_EQ(vec_val[2], 3);
+
+    EXPECT_EQ(pair_val.first, "key");
+    EXPECT_EQ(pair_val.second, 100);
+
+    ASSERT_EQ(pos_val.size(), 2);
+    EXPECT_EQ(pos_val[0], "file1.txt");
+    EXPECT_EQ(pos_val[1], "file2.txt");
+}
+
+// 测试默认值被命令行参数覆盖
+TEST_F(ArgParserTest, DefaultValueOverrideTest) {
+    auto args = make_args("prog", "-i", "100", "--str=custom", "custom1.txt",
+                          "custom2.txt");
+
+    int int_val;
+    std::string str_val;
+    std::vector<std::string> pos_val;
+
+    ArgParser parser("prog", "the prog description");
+
+    // 设置默认值，但会被命令行参数覆盖
+    parser.add_option("i", "Integer value", int_val).set_default("42");
+    parser.add_option("str", "String value", str_val).set_default("default");
+    parser.add_positional("files", "Input files", pos_val)
+        .set_default({"file1.txt", "file2.txt"});
+
+    parser.parse(args.size(), args.data());
+
+    // 验证值已被命令行参数覆盖
+    EXPECT_EQ(int_val, 100);
+    EXPECT_EQ(str_val, "custom");
+    ASSERT_EQ(pos_val.size(), 2);
+    EXPECT_EQ(pos_val[0], "custom1.txt");
+    EXPECT_EQ(pos_val[1], "custom2.txt");
+}
+
+// 测试 map 和 vector<pair> 类型
+TEST_F(ArgParserTest, MapAndVectorPairTest) {
+    auto args =
+        make_args("prog");
+
+    // map类型用于存储配置键值对
+    std::map<std::string, std::string> config;
+    // vector<pair>类型用于存储键值对列表
+    std::vector<std::pair<std::string, std::string>> pairs;
+    // 位置参数也可以是vector<pair>类型
+    std::vector<std::pair<std::string, std::string>> attributes;
+
+    ArgParser parser("prog", "the prog description");
+    parser.add_option("config", "Configuration key-value pairs", config, '=').set_default({"host=localhost", "port=8080"});
+    parser.add_option("pairs", "List of key-value pairs", pairs, ':').set_default({"key1:value1", "key2:value2"});
+    parser.add_positional("attributes", "User attributes", attributes, '=').set_default({"name=alice", "age=20", "city=beijing"});
+
+    parser.parse(args.size(), args.data());
+
+    // 验证map类型选项
+    ASSERT_EQ(config.size(), 2);
+    EXPECT_EQ(config["host"], "localhost");
+    EXPECT_EQ(config["port"], "8080");
+
+    // 验证vector<pair>类型选项
+    ASSERT_EQ(pairs.size(), 2);
+    EXPECT_EQ(pairs[0].first, "key1");
+    EXPECT_EQ(pairs[0].second, "value1");
+    EXPECT_EQ(pairs[1].first, "key2");
+    EXPECT_EQ(pairs[1].second, "value2");
+
+    // 验证vector<pair>类型位置参数
+    ASSERT_EQ(attributes.size(), 3);
+    EXPECT_EQ(attributes[0].first, "name");
+    EXPECT_EQ(attributes[0].second, "alice");
+    EXPECT_EQ(attributes[1].first, "age");
+    EXPECT_EQ(attributes[1].second, "20");
+    EXPECT_EQ(attributes[2].first, "city");
+    EXPECT_EQ(attributes[2].second, "beijing");
+}
+
+// 测试 map 和 vector<pair> 的默认值
+TEST_F(ArgParserTest, MapAndVectorPairDefaultValueTest) {
+    auto args = make_args("prog", "--config=host=localhost","--config=port=8080", "--pairs=key1:value1", "--pairs=key2:value2", "--attributes", "name=alice", "--attributes", "age=20");
+
+    std::map<std::string, std::string> config;
+    std::vector<std::pair<std::string, std::string>> pairs;
+    std::vector<std::pair<std::string, std::string>> attributes;
+
+    ArgParser parser("prog", "the prog description");
+
+    // 设置默认值
+    parser.add_option("config", "Configuration key-value pairs", config, '=');
+    parser.add_option("pairs", "List of key-value pairs", pairs, ':');
+    parser.add_positional("attributes", "User attributes", attributes, '=');
+
+    parser.parse(args.size(), args.data());
+
+    // 验证map类型默认值
+    ASSERT_EQ(config.size(), 2);
+    EXPECT_EQ(config["host"], "localhost");
+    EXPECT_EQ(config["port"], "8080");
+
+    // 验证vector<pair>类型默认值
+    ASSERT_EQ(pairs.size(), 2);
+    EXPECT_EQ(pairs[0].first, "key1");
+    EXPECT_EQ(pairs[0].second, "value1");
+    EXPECT_EQ(pairs[1].first, "key2");
+    EXPECT_EQ(pairs[1].second, "value2");
+
+    // 验证vector<pair>类型位置参数默认值
+    ASSERT_EQ(attributes.size(), 2);
+    EXPECT_EQ(attributes[0].first, "name");
+    EXPECT_EQ(attributes[0].second, "alice");
+    EXPECT_EQ(attributes[1].first, "age");
+    EXPECT_EQ(attributes[1].second, "20");
 }

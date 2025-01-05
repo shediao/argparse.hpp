@@ -368,9 +368,6 @@ class OptionBase : public ArgBase {
     OptionBase(const std::string &name, const std::string &description)
         : ArgBase(name, description) {}
     bool is_flag() const override { return false; }
-    void set_default(const std::string &default_value) {
-        this->default_value_ = default_value;
-    }
     void set_value_help(const std::string &value_help) {
         this->value_help = value_help;
     }
@@ -380,6 +377,7 @@ class OptionBase : public ArgBase {
     }
 
     virtual bool is_multiple() const = 0;
+    virtual void use_default_if_needed() = 0;
 
    protected:
     template <typename T>
@@ -430,7 +428,6 @@ class OptionBase : public ArgBase {
         return usage_str.str();
     }
     std::string value_help;
-    std::string default_value_;
     std::vector<std::string> opt_values;
 };
 
@@ -502,6 +499,33 @@ class Option : public OptionBase {
             return false;
         }
     }
+    void use_default_if_needed() override {
+        if (count() != 0) {
+            return;
+        }
+        if constexpr (is_container<T>) {
+            if (default_value_.has_value()) {
+                for (const auto &value : default_value_.value()) {
+                    parse(value);
+                }
+            }
+        } else {
+            if (default_value_.has_value()) {
+                parse(default_value_.value());
+            }
+        }
+    }
+
+    void set_default(const std::string &default_value)
+        requires (!is_container<T>)
+    {
+        this->default_value_ = default_value;
+    }
+    void set_default(std::initializer_list<std::string> default_value)
+        requires is_container<T>
+    {
+        this->default_value_ = default_value;
+    }
 
     T const &value() const {
         return std::visit(
@@ -515,6 +539,9 @@ class Option : public OptionBase {
    private:
     std::variant<T, std::reference_wrapper<T>> value_;
     std::function<void(T &, const std::string &)> action_;
+    std::conditional_t<is_container<T>, std::optional<std::vector<std::string>>,
+                       std::optional<std::string>>
+        default_value_;
 };
 
 template <typename T>
@@ -585,6 +612,32 @@ class Positional : public OptionBase {
             return false;
         }
     }
+    void use_default_if_needed() override {
+        if (count() != 0) {
+            return;
+        }
+        if constexpr (is_container<T>) {
+            if (default_value_.has_value()) {
+                for (const auto &value : default_value_.value()) {
+                    parse(value);
+                }
+            }
+        } else {
+            if (default_value_.has_value()) {
+                parse(default_value_.value());
+            }
+        }
+    }
+    void set_default(const std::string &default_value)
+        requires(!is_container<T>)
+    {
+        this->default_value_ = default_value;
+    }
+    void set_default(std::initializer_list<std::string> default_value)
+        requires is_container<T>
+    {
+        this->default_value_ = default_value;
+    }
 
     T const &value() const {
         return std::visit(
@@ -598,6 +651,9 @@ class Positional : public OptionBase {
    private:
     std::variant<T, std::reference_wrapper<T>> bind_value_;
     std::function<void(T &, const std::string &)> action_;
+    std::conditional_t<is_container<T>, std::optional<std::vector<std::string>>,
+                       std::optional<std::string>>
+        default_value_;
 };
 
 class ArgParser {
@@ -862,11 +918,8 @@ class ArgParser {
         // 检查没有提供的选项， 且有默认值的情况
         for (const auto &arg : args) {
             if ((arg->is_option() || arg->is_positional()) &&
-                arg->count() == 0 &&
-                !dynamic_cast<OptionBase *>(arg.get())
-                     ->default_value_.empty()) {
-                dynamic_cast<OptionBase *>(arg.get())->parse(
-                    dynamic_cast<OptionBase *>(arg.get())->default_value_);
+                arg->count() == 0) {
+                dynamic_cast<OptionBase *>(arg.get())->use_default_if_needed();
             }
         }
     }
