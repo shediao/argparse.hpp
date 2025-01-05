@@ -1,33 +1,44 @@
-cmake_minimum_required(VERSION 3.30)
-project(argparse)
+cmake_minimum_required(VERSION 3.15)
+project(
+  argparse
+  VERSION "0.1"
+  LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_EXTENSIONS OFF)
+set("PROJECT_DESCRIPTION"
+    "A header-only lightweight C++ command line option parser")
+set("PROJECT_HOMEPAGE_URL" "https://github.com/shediao/argparse.hpp")
 
-# 创建接口库target
+option(ARGPARSE_BUILD_EXAMPLES "Set to ON to build examples" ON)
+option(ARGPARSE_BUILD_TESTS "Set to ON to build tests" ON)
+
 add_library(argparse INTERFACE)
-target_include_directories(argparse INTERFACE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
-)
 
-# 启用测试
-enable_testing()
-add_subdirectory(test)
+target_include_directories(
+  argparse INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+                     $<INSTALL_INTERFACE:include>)
 
-# 安装配置
-install(TARGETS argparse
-    EXPORT argparse-targets
-    INCLUDES DESTINATION include
-)
+target_compile_features(argparse INTERFACE cxx_std_20)
+add_library(argparse::argparse ALIAS argparse)
 
-install(DIRECTORY include/
-    DESTINATION include
-    FILES_MATCHING PATTERN "*.hpp"
-)
+if(ARGPARSE_BUILD_TESTS)
+  enable_testing()
+  add_subdirectory(test)
+endif()
 
-install(EXPORT argparse-targets
-    FILE argparse-targets.cmake
-    NAMESPACE argparse::
-    DESTINATION lib/cmake/argparse
-)
+install(
+  TARGETS argparse
+  EXPORT argparse-targets
+  INCLUDES
+  DESTINATION include)
+
+install(
+  DIRECTORY include/
+  DESTINATION include
+  FILES_MATCHING
+  PATTERN "*.hpp")
+
+install(
+  EXPORT argparse-targets
+  FILE argparse-targets.cmake
+  NAMESPACE argparse::
+  DESTINATION lib/cmake/argparse)
