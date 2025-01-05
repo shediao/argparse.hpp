@@ -293,12 +293,10 @@ class FlagBase : public ArgBase {
         std::string options_str{};
         std::vector<std::string> short_opts;
         std::vector<std::string> long_opts;
-        std::ranges::transform(short_opt_names_,
-                       back_inserter(short_opts),
-                       [](auto const &s) { return "-" + s; });
-        std::ranges::transform(long_opt_names_,
-                       back_inserter(long_opts),
-                       [](auto const &s) { return "--" + s; });
+        std::ranges::transform(short_opt_names_, back_inserter(short_opts),
+                               [](auto const &s) { return "-" + s; });
+        std::ranges::transform(long_opt_names_, back_inserter(long_opts),
+                               [](auto const &s) { return "--" + s; });
         if (!short_opts.empty()) {
             options_str += join(short_opts, ',');
             if (!long_opts.empty()) {
@@ -365,8 +363,8 @@ class OptionBase : public ArgBase {
     OptionBase(const std::string &name, const std::string &description)
         : ArgBase(name, description) {}
     bool is_flag() const override { return false; }
-    void set_default(const std::string &default_value_str) {
-        this->default_value_str = default_value_str;
+    void set_default(const std::string &default_value) {
+        this->default_value_ = default_value;
     }
     void set_value_help(const std::string &value_help) {
         this->value_help = value_help;
@@ -395,12 +393,10 @@ class OptionBase : public ArgBase {
             std::string options_str{};
             std::vector<std::string> short_opts;
             std::vector<std::string> long_opts;
-            std::ranges::transform(short_opt_names_,
-                           back_inserter(short_opts),
-                           [](auto const &s) { return "-" + s; });
-            std::ranges::transform(long_opt_names_,
-                           back_inserter(long_opts),
-                           [](auto const &s) { return "--" + s; });
+            std::ranges::transform(short_opt_names_, back_inserter(short_opts),
+                                   [](auto const &s) { return "-" + s; });
+            std::ranges::transform(long_opt_names_, back_inserter(long_opts),
+                                   [](auto const &s) { return "--" + s; });
             if (!short_opts.empty()) {
                 options_str += join(short_opts, ',');
                 if (!long_opts.empty()) {
@@ -429,7 +425,7 @@ class OptionBase : public ArgBase {
         return usage_str.str();
     }
     std::string value_help;
-    std::string default_value_str;
+    std::string default_value_;
     std::vector<std::string> opt_values;
 };
 
@@ -603,45 +599,51 @@ class ArgParser {
    public:
     ArgParser(std::string prog, std::string description)
         : program{std::move(prog)}, description(std::move(description)) {}
-    void add_flag(const std::string &name, const std::string &description,
-                  bool &bind_value,
-                  std::function<void(bool &)> action = store_true) {
-        args.push_back(std::make_unique<Flag<bool>>(name, description,
-                                                    bind_value, std::move(action)));
+    Flag<bool> &add_flag(const std::string &name,
+                         const std::string &description, bool &bind_value,
+                         std::function<void(bool &)> action = store_true) {
+        args.push_back(std::make_unique<Flag<bool>>(
+            name, description, bind_value, std::move(action)));
+        return *dynamic_cast<Flag<bool> *>(args.back().get());
     }
-    void add_flag(const std::string &name, const std::string &description,
-                  int &bind_value,
-                  std::function<void(int &)> action = increment<int>) {
-        args.push_back(
-            std::make_unique<Flag<int>>(name, description, bind_value, std::move(action)));
+    Flag<int> &add_flag(const std::string &name, const std::string &description,
+                        int &bind_value,
+                        std::function<void(int &)> action = increment<int>) {
+        args.push_back(std::make_unique<Flag<int>>(
+            name, description, bind_value, std::move(action)));
+        return *dynamic_cast<Flag<int> *>(args.back().get());
     }
 
     template <typename T>
         requires can_parse_from_string<T> ||
                  (is_container<T> &&
                   can_parse_from_string<typename T::value_type>)
-    void add_option(const std::string &name, const std::string &description,
-                    T &bind_value) {
+    Option<T> &add_option(const std::string &name,
+                          const std::string &description, T &bind_value) {
         args.push_back(
             std::make_unique<Option<T>>(name, description, bind_value));
+        return *dynamic_cast<Option<T> *>(args.back().get());
     }
 
     template <typename T>
         requires can_parse_from_string_split_once<T> ||
                  (is_container<T> &&
                   can_parse_from_string_split_once<typename T::value_type>)
-    void add_option(const std::string &name, const std::string &description,
-                    T &bind_value, char delim) {
+    Option<T> &add_option(const std::string &name,
+                          const std::string &description, T &bind_value,
+                          char delim) {
         args.push_back(
             std::make_unique<Option<T>>(name, description, bind_value, delim));
+        return *dynamic_cast<Option<T> *>(args.back().get());
     }
 
     template <typename T>
         requires can_parse_from_string<T> ||
                  (is_container<T> &&
                   can_parse_from_string<typename T::value_type>)
-    void add_positional(const std::string &name, const std::string &description,
-                        T &bind_value) {
+    Positional<T> &add_positional(const std::string &name,
+                                  const std::string &description,
+                                  T &bind_value) {
         if (std::ranges::find_if(args, [](const auto &arg) {
                 return arg->is_positional() &&
                        dynamic_cast<OptionBase *>(arg.get())->is_multiple();
@@ -652,16 +654,19 @@ class ArgParser {
         }
         args.push_back(
             std::make_unique<Positional<T>>(name, description, bind_value));
+        return *dynamic_cast<Positional<T> *>(args.back().get());
     }
 
     template <typename T>
         requires can_parse_from_string_split_once<T> ||
                  (is_container<T> &&
                   can_parse_from_string_split_once<typename T::value_type>)
-    void add_positional(const std::string &name, const std::string &description,
-                        T &bind_value, char delim) {
+    Positional<T> &add_positional(const std::string &name,
+                                  const std::string &description, T &bind_value,
+                                  char delim) {
         args.push_back(std::make_unique<Positional<T>>(name, description,
                                                        bind_value, delim));
+        return *dynamic_cast<Positional<T> *>(args.back().get());
     }
 
     void print_usage() const {
@@ -710,20 +715,18 @@ class ArgParser {
     }
     ArgBase *get_arg(const std::string &name) const {
         if (name.length() == 1) {
-            auto it =
-                std::ranges::find_if(args, [name](const auto &arg) {
-                    return std::find(arg->short_opt_names_.begin(),
-                                     arg->short_opt_names_.end(),
-                                     name) != arg->short_opt_names_.end();
-                });
+            auto it = std::ranges::find_if(args, [name](const auto &arg) {
+                return std::find(arg->short_opt_names_.begin(),
+                                 arg->short_opt_names_.end(),
+                                 name) != arg->short_opt_names_.end();
+            });
             return it != args.end() ? it->get() : nullptr;
         } else {
-            auto it =
-                std::ranges::find_if(args, [name](const auto &arg) {
-                    return std::find(arg->long_opt_names_.begin(),
-                                     arg->long_opt_names_.end(),
-                                     name) != arg->long_opt_names_.end();
-                });
+            auto it = std::ranges::find_if(args, [name](const auto &arg) {
+                return std::find(arg->long_opt_names_.begin(),
+                                 arg->long_opt_names_.end(),
+                                 name) != arg->long_opt_names_.end();
+            });
             return it != args.end() ? it->get() : nullptr;
         }
     }
@@ -848,6 +851,17 @@ class ArgParser {
                     (!arg->long_opt_names_.empty()    ? arg->long_opt_names_[0]
                      : !arg->short_opt_names_.empty() ? arg->short_opt_names_[0]
                                                       : ""));
+            }
+        }
+
+        // 检查没有提供的选项， 且有默认值的情况
+        for (const auto &arg : args) {
+            if ((arg->is_option() || arg->is_positional()) &&
+                arg->count() == 0 &&
+                !dynamic_cast<OptionBase *>(arg.get())
+                     ->default_value_.empty()) {
+                dynamic_cast<OptionBase *>(arg.get())->parse(
+                    dynamic_cast<OptionBase *>(arg.get())->default_value_);
             }
         }
     }
