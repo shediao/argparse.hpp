@@ -165,7 +165,7 @@ TEST_F(ArgParserTest, RequiredOptionTest) {
 
     ArgParser parser("prog", "the prog description");
     parser.add_option("r,required", "Required option", required);
-    parser.get_arg("required")->require();
+    parser["required"].require();
 
     EXPECT_THROW(parser.parse(args.size(), args.data()), std::runtime_error);
 }

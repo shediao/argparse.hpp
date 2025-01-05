@@ -288,9 +288,9 @@ class FlagBase : public ArgBase {
    public:
     FlagBase(const std::string &name, const std::string &description)
         : ArgBase(name, description) {}
-    bool is_flag() const override { return true; }
-    bool is_option() const override { return false; }
-    bool is_positional() const override { return false; }
+    bool is_flag() const override final { return true; }
+    bool is_option() const override final { return false; }
+    bool is_positional() const override final { return false; }
     virtual void parse() = 0;
 
    protected:
@@ -325,7 +325,7 @@ overload(T...) -> overload<T...>;
 
 template <typename T = bool>
     requires std::integral<T> || std::is_same_v<T, bool>
-class Flag : public FlagBase {
+class Flag final : public FlagBase {
     friend class ArgParser;
 
    public:
@@ -368,7 +368,7 @@ class OptionBase : public ArgBase {
    public:
     OptionBase(const std::string &name, const std::string &description)
         : ArgBase(name, description) {}
-    bool is_flag() const override { return false; }
+    bool is_flag() const override final { return false; }
     void set_value_help(const std::string &value_help) {
         this->value_help = value_help;
     }
@@ -434,7 +434,7 @@ class OptionBase : public ArgBase {
 
 template <typename T>
     requires can_parse_from_string<T> || is_container<T>
-class Option : public OptionBase {
+class Option final : public OptionBase {
     friend class ArgParser;
 
    public:
@@ -480,8 +480,8 @@ class Option : public OptionBase {
           }) {
         set_default_value_help<T>();
     }
-    bool is_option() const override { return true; }
-    bool is_positional() const override { return false; }
+    bool is_option() const override final { return true; }
+    bool is_positional() const override final { return false; }
     void parse(const std::string &opt_value) override {
         OptionBase::parse(opt_value);
         std::visit(
@@ -547,7 +547,7 @@ class Option : public OptionBase {
 
 template <typename T>
     requires can_parse_from_string<T> || is_container<T>
-class Positional : public OptionBase {
+class Positional final : public OptionBase {
     friend class ArgParser;
 
    public:
@@ -593,8 +593,8 @@ class Positional : public OptionBase {
           }) {
         set_default_value_help<T>();
     }
-    bool is_option() const override { return false; }
-    bool is_positional() const override { return true; }
+    bool is_option() const override final { return false; }
+    bool is_positional() const override final { return true; }
     void parse(const std::string &opt_value) override {
         OptionBase::parse(opt_value);
         std::visit(
@@ -775,7 +775,7 @@ class ArgParser {
     void print_version() const {
         std::cout << "Version: " << version << std::endl;
     }
-    ArgBase *get_arg(const std::string &name) const {
+    ArgBase *get(const std::string &name) {
         if (name.length() == 1) {
             auto it = std::ranges::find_if(args, [name](const auto &arg) {
                 return std::find(arg->short_opt_names_.begin(),
@@ -792,7 +792,14 @@ class ArgParser {
             return it != args.end() ? it->get() : nullptr;
         }
     }
-    void parse(int argc, const char *argv[]) const {
+    ArgBase &operator[](const std::string &name) {
+        if (auto *arg = get(name); arg != nullptr) {
+            return *arg;
+        } else {
+            throw std::runtime_error("Unknown option: " + name);
+        }
+    }
+    void parse(int argc, const char *argv[]) {
         std::vector<const char *> commands{argv, argv + argc};
         size_t i = 1;  // Skip program name
         if (!commands.empty() && commands[0] != nullptr &&
@@ -824,7 +831,7 @@ class ArgParser {
                     name = name.substr(0, eq_pos);
                 }
 
-                if (auto *option = get_arg(name)) {
+                if (auto *option = get(name)) {
                     if (option->is_flag()) {
                         auto *flag = dynamic_cast<FlagBase *>(option);
                         flag->parse();
@@ -850,7 +857,7 @@ class ArgParser {
                 // Handle combined short options
                 for (size_t j = 0; j < opts.size(); ++j) {
                     std::string name(1, opts[j]);
-                    if (auto *option = get_arg(name)) {
+                    if (auto *option = get(name)) {
                         if (option->is_flag()) {
                             auto *flag = dynamic_cast<FlagBase *>(option);
                             flag->parse();
