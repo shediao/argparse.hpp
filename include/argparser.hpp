@@ -27,7 +27,7 @@ concept is_tuple_like = requires(T t) {
 };
 
 template <typename T>
-concept CanParseFromStringWithoutSplit =
+concept can_parse_from_string_without_split =
     std::same_as<T, std::string> || std::same_as<T, bool> ||
     std::same_as<T, int> || std::same_as<T, long> ||
     std::same_as<T, unsigned long> || std::same_as<T, long long> ||
@@ -173,7 +173,7 @@ concept CanParseFromStringSplitOnece = requires(T t) {
 };
 template <typename T>
 concept CanParseFromString =
-    CanParseFromStringWithoutSplit<T> || CanParseFromStringSplitOnece<T>;
+    can_parse_from_string_without_split<T> || CanParseFromStringSplitOnece<T>;
 
 template <typename T>
 concept IsContainer = requires(T t) {
@@ -238,7 +238,7 @@ inline void decrement(T &value) {
 }
 
 template <typename T>
-    requires detail::CanParseFromStringWithoutSplit<T>
+    requires detail::can_parse_from_string_without_split<T>
 inline void replace_value(T &value, const std::string &opt_value) {
     value = detail::ParseFromString<T>(opt_value);
 }
@@ -251,7 +251,7 @@ inline void replace_value(T &value, const std::string &opt_value, char delim) {
 
 template <typename T>
     requires detail::IsContainer<T> &&
-             detail::CanParseFromStringWithoutSplit<typename T::value_type>
+             detail::can_parse_from_string_without_split<typename T::value_type>
 inline void append_value(T &value, const std::string &opt_value) {
     value.insert(value.end(),
                  detail::ParseFromString<typename T::value_type>(opt_value));
@@ -469,7 +469,7 @@ class Option : public OptionBase {
    public:
     Option(const std::string &name, const std::string &description,
            T &bind_value)
-        requires detail::CanParseFromStringWithoutSplit<T>
+        requires detail::can_parse_from_string_without_split<T>
         : OptionBase(name, description),
           value_(std::ref(bind_value)),
           action_([](T &value, const std::string &opt_value) {
@@ -490,7 +490,7 @@ class Option : public OptionBase {
     Option(const std::string &name, const std::string &description,
            T &bind_value)
         requires detail::IsContainer<T> &&
-                     detail::CanParseFromStringWithoutSplit<
+                     detail::can_parse_from_string_without_split<
                          typename T::value_type>
         : OptionBase(name, description),
           value_(std::ref(bind_value)),
@@ -553,7 +553,7 @@ class Positional : public OptionBase {
    public:
     Positional(const std::string &name, const std::string &description,
                T &bind_value)
-        requires detail::CanParseFromStringWithoutSplit<T>
+        requires detail::can_parse_from_string_without_split<T>
         : OptionBase(name, description),
           bind_value_(std::ref(bind_value)),
           action_([](T &value, const std::string &opt_value) {
@@ -574,7 +574,7 @@ class Positional : public OptionBase {
     Positional(const std::string &name, const std::string &description,
                T &bind_value)
         requires detail::IsContainer<T> &&
-                     detail::CanParseFromStringWithoutSplit<
+                     detail::can_parse_from_string_without_split<
                          typename T::value_type>
         : OptionBase(name, description),
           bind_value_(std::ref(bind_value)),
