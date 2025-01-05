@@ -20,7 +20,7 @@ namespace arg::parser {
 namespace detail {
 
 template <typename T>
-concept IsTupleLike = requires(T t) {
+concept is_tuple_like = requires(T t) {
     typename std::tuple_element<0, T>::type;
     requires std::tuple_size<T>::value > 0;
     std::get<0>(std::declval<T &>());
@@ -147,7 +147,7 @@ T MakeTupleFromContainerImpl(std::vector<std::string> const &v,
 }
 
 template <typename T>
-    requires IsTupleLike<T>
+    requires is_tuple_like<T>
 T MakeTupleFromContainer(std::vector<std::string> const &v) {
     return MakeTupleFromContainerImpl<T>(
         v, std::make_index_sequence<std::tuple_size_v<std::decay_t<T>>>());
@@ -155,7 +155,7 @@ T MakeTupleFromContainer(std::vector<std::string> const &v) {
 
 // for tuple like types
 template <typename T>
-    requires IsTupleLike<T>
+    requires is_tuple_like<T>
 T ParseFromString(std::string const &s, const char delim) {
     auto v = detail::Split(s, delim, std::tuple_size_v<std::decay_t<T>>);
     if (v.size() != std::tuple_size_v<std::decay_t<T>>) {
