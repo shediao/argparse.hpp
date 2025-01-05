@@ -8,8 +8,7 @@ set("PROJECT_DESCRIPTION"
     "A header-only lightweight C++ command line option parser")
 set("PROJECT_HOMEPAGE_URL" "https://github.com/shediao/argparse.hpp")
 
-option(ARGPARSE_BUILD_EXAMPLES "Set to ON to build examples" ON)
-option(ARGPARSE_BUILD_TESTS "Set to ON to build tests" ON)
+option(ARGPARSE_BUILD_TESTS "Set to ON to build tests" OFF)
 
 add_library(argparse INTERFACE)
 
