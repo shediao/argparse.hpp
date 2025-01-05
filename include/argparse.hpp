@@ -10,6 +10,7 @@
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <ranges>
 #include <sstream>
 #include <stdexcept>
@@ -517,7 +518,7 @@ class Option : public OptionBase {
     }
 
     void set_default(const std::string &default_value)
-        requires (!is_container<T>)
+        requires(!is_container<T>)
     {
         this->default_value_ = default_value;
     }

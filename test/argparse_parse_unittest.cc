@@ -368,12 +368,13 @@ TEST_F(ArgParserTest, DefaultValueTest) {
     parser.add_option("s", "String value", str_val).set_default("default");
 
     // 设置容器类型的默认值
-    parser.add_option("v", "Vector value", vec_val).set_default({"1","2","3"});
+    parser.add_option("v", "Vector value", vec_val)
+        .set_default({"1", "2", "3"});
     parser.add_option("p", "Pair value", pair_val, ':').set_default("key:100");
 
     // 设置位置参数的默认值
     parser.add_positional("files", "Input files", pos_val)
-        .set_default({"file1.txt","file2.txt"});
+        .set_default({"file1.txt", "file2.txt"});
 
     parser.parse(args.size(), args.data());
 
@@ -426,8 +427,7 @@ TEST_F(ArgParserTest, DefaultValueOverrideTest) {
 
 // 测试 map 和 vector<pair> 类型
 TEST_F(ArgParserTest, MapAndVectorPairTest) {
-    auto args =
-        make_args("prog");
+    auto args = make_args("prog");
 
     // map类型用于存储配置键值对
     std::map<std::string, std::string> config;
@@ -437,9 +437,12 @@ TEST_F(ArgParserTest, MapAndVectorPairTest) {
     std::vector<std::pair<std::string, std::string>> attributes;
 
     ArgParser parser("prog", "the prog description");
-    parser.add_option("config", "Configuration key-value pairs", config, '=').set_default({"host=localhost", "port=8080"});
-    parser.add_option("pairs", "List of key-value pairs", pairs, ':').set_default({"key1:value1", "key2:value2"});
-    parser.add_positional("attributes", "User attributes", attributes, '=').set_default({"name=alice", "age=20", "city=beijing"});
+    parser.add_option("config", "Configuration key-value pairs", config, '=')
+        .set_default({"host=localhost", "port=8080"});
+    parser.add_option("pairs", "List of key-value pairs", pairs, ':')
+        .set_default({"key1:value1", "key2:value2"});
+    parser.add_positional("attributes", "User attributes", attributes, '=')
+        .set_default({"name=alice", "age=20", "city=beijing"});
 
     parser.parse(args.size(), args.data());
 
@@ -467,7 +470,10 @@ TEST_F(ArgParserTest, MapAndVectorPairTest) {
 
 // 测试 map 和 vector<pair> 的默认值
 TEST_F(ArgParserTest, MapAndVectorPairDefaultValueTest) {
-    auto args = make_args("prog", "--config=host=localhost","--config=port=8080", "--pairs=key1:value1", "--pairs=key2:value2", "--attributes", "name=alice", "--attributes", "age=20");
+    auto args =
+        make_args("prog", "--config=host=localhost", "--config=port=8080",
+                  "--pairs=key1:value1", "--pairs=key2:value2", "--attributes",
+                  "name=alice", "--attributes", "age=20");
 
     std::map<std::string, std::string> config;
     std::vector<std::pair<std::string, std::string>> pairs;
