@@ -122,7 +122,7 @@ std::string join(const std::vector<std::string> &v, const T &delim) {
     return result.str();
 }
 
-inline std::vector<std::string> Split(std::string const &s, char delim,
+inline std::vector<std::string> split(std::string const &s, char delim,
                                       int max) {
     std::vector<std::string> result;
     auto unsplit_it = s.begin();
@@ -157,10 +157,10 @@ T make_tuple_from_container(std::vector<std::string> const &v) {
 template <typename T>
     requires is_tuple_like<T>
 T parse_from_string(std::string const &s, const char delim) {
-    auto v = detail::Split(s, delim, std::tuple_size_v<std::decay_t<T>>);
+    auto v = detail::split(s, delim, std::tuple_size_v<std::decay_t<T>>);
     if (v.size() != std::tuple_size_v<std::decay_t<T>>) {
         throw std::invalid_argument(
-            "Invalid string for Split " +
+            "Invalid string for split " +
             std::to_string(std::tuple_size_v<std::decay_t<T>>) +
             "th element:" + s);
     }
@@ -183,7 +183,7 @@ concept IsContainer = requires(T t) {
 
 inline std::pair<std::string, std::string> ParseOptionNames(
     const std::string &name) {
-    auto names = detail::Split(name, ',', -1);
+    auto names = detail::split(name, ',', -1);
     if (names.size() == 2) {
         const auto long_name = names[0].length() > 1
                                    ? (names[0])
@@ -272,7 +272,7 @@ class ArgBase {
    public:
     ArgBase(const std::string &name, const std::string &description)
         : description_(description) {
-        for (auto &&opt_name : detail::Split(name, ',', -1)) {
+        for (auto &&opt_name : detail::split(name, ',', -1)) {
             if (opt_name.length() == 1) {
                 short_opt_names_.push_back(std::move(opt_name));
             } else if (opt_name.length() > 1) {

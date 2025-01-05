@@ -75,12 +75,12 @@ TEST(ParseFromStringTest, LongLongTest) {
                  std::out_of_range);
 }
 
-TEST(ParseFromStringTest, Split) {
-    EXPECT_EQ(Split("k=v", '=', 2), (std::vector<std::string>{"k", "v"}));
-    EXPECT_EQ(Split("1,2,3", ',', 3),
+TEST(ParseFromStringTest, split) {
+    EXPECT_EQ(split("k=v", '=', 2), (std::vector<std::string>{"k", "v"}));
+    EXPECT_EQ(split("1,2,3", ',', 3),
               (std::vector<std::string>{"1", "2", "3"}));
-    EXPECT_EQ(Split("1,2,3", ',', 2), (std::vector<std::string>{"1", "2,3"}));
-    EXPECT_EQ(Split("1,2,3", ',', 4),
+    EXPECT_EQ(split("1,2,3", ',', 2), (std::vector<std::string>{"1", "2,3"}));
+    EXPECT_EQ(split("1,2,3", ',', 4),
               (std::vector<std::string>{"1", "2", "3"}));
 }
 
