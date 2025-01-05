@@ -172,13 +172,13 @@ concept can_parse_from_string_split_once = requires(T t) {
     parse_from_string<T>(std::declval<std::string>(), std::declval<char>());
 };
 template <typename T>
-concept CanParseFromString =
+concept can_parse_from_string =
     can_parse_from_string_without_split<T> || can_parse_from_string_split_once<T>;
 
 template <typename T>
 concept IsContainer = requires(T t) {
     t.insert(t.end(), std::declval<typename T::value_type>());
-    requires CanParseFromString<typename T::value_type>;
+    requires can_parse_from_string<typename T::value_type>;
 };
 
 inline std::pair<std::string, std::string> ParseOptionNames(
@@ -462,7 +462,7 @@ class OptionBase : public ArgBase {
 };
 
 template <typename T>
-    requires detail::CanParseFromString<T> || detail::IsContainer<T>
+    requires detail::can_parse_from_string<T> || detail::IsContainer<T>
 class Option : public OptionBase {
     friend class ArgParser;
 
@@ -546,7 +546,7 @@ class Option : public OptionBase {
 };
 
 template <typename T>
-    requires detail::CanParseFromString<T> || detail::IsContainer<T>
+    requires detail::can_parse_from_string<T> || detail::IsContainer<T>
 class Positional : public OptionBase {
     friend class ArgParser;
 
@@ -648,9 +648,9 @@ class ArgParser {
     }
 
     template <typename T>
-        requires detail::CanParseFromString<T> ||
+        requires detail::can_parse_from_string<T> ||
                  (detail::IsContainer<T> &&
-                  detail::CanParseFromString<typename T::value_type>)
+                  detail::can_parse_from_string<typename T::value_type>)
     void add_option(const std::string &name, const std::string &description,
                     T &bind_value) {
         args.push_back(
@@ -668,9 +668,9 @@ class ArgParser {
     }
 
     template <typename T>
-        requires detail::CanParseFromString<T> ||
+        requires detail::can_parse_from_string<T> ||
                  (detail::IsContainer<T> &&
-                  detail::CanParseFromString<typename T::value_type>)
+                  detail::can_parse_from_string<typename T::value_type>)
     void add_positional(const std::string &name, const std::string &description,
                         T &bind_value) {
         if (std::ranges::find_if(args, [name](const auto &arg) {
