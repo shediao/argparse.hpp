@@ -8,8 +8,8 @@
 
 using namespace argparse;
 TEST(ArgParserTest, PrintUsaeg) {
-    std::vector<const char*> args{"test", nullptr};
-    ArgParser parser{1, args.data()};
+    std::vector<const char*> args{"prog", nullptr};
+    ArgParser parser{"prog", "the prog description"};
     struct Configs {
         bool show_help = false;
         bool show_version = false;

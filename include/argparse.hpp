@@ -601,9 +601,8 @@ class Positional : public OptionBase {
 
 class ArgParser {
    public:
-    ArgParser(int argc, const char *argv[])
-        : commands(argc > 0 ? argv : nullptr,
-                   argc > 0 ? argv + argc : nullptr) {}
+    ArgParser(std::string const &prog, std::string description)
+        : program{prog}, description(description) {}
     void add_flag(const std::string &name, const std::string &description,
                   bool &bind_value,
                   std::function<void(bool &)> action = store_true) {
@@ -667,7 +666,12 @@ class ArgParser {
 
     void print_usage() const {
         std::stringstream usage_str;
-        usage_str << "Usage: \n  " << commands[0];
+        if (!description.empty()) {
+            usage_str << "\n";
+            usage_str << description;
+            usage_str << "\n\n";
+        }
+        usage_str << "Usage: \n  " << program;
         if (std::ranges::find_if(args, [](const auto &arg) {
                 return arg->is_option() || arg->is_flag();
             }) != args.end()) {
@@ -723,8 +727,13 @@ class ArgParser {
             return it != args.end() ? it->get() : nullptr;
         }
     }
-    void parse() {
+    void parse(int argc = 0, const char *argv[] = nullptr) {
+        std::vector<const char *> commands{argv, argv + argc};
         size_t i = 1;  // 跳过程序名
+        if (!commands.empty() && commands[0] != nullptr &&
+            commands[0][0] == '-') {
+            i = 0;
+        }
         std::vector<ArgBase *> positionals;
 
         // 收集所有的位置参数
@@ -828,9 +837,9 @@ class ArgParser {
 
    private:
     std::vector<std::unique_ptr<ArgBase>> args;
-    std::string version;
-    std::string usage;
-    std::vector<std::string> commands;
+    std::string version{"0.1"};
+    std::string program;
+    std::string description;
 };
 
 }  // namespace argparse

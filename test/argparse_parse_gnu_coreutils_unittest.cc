@@ -28,14 +28,14 @@ TEST_F(GNUCoreutilsTest, LSCommandTest) {
     std::string color_mode;
     std::vector<std::string> paths;
 
-    ArgParser parser(args.size(), args.data());
+    ArgParser parser("ls", "list directory contents");
     parser.add_flag("l", "List in long format", list_long);
     parser.add_flag("a,all", "Show hidden entries", show_all);
     parser.add_flag("h,human-readable", "Human readable sizes", human_readable);
     parser.add_option("color", "Colorize output", color_mode);
     parser.add_positional("paths", "Paths to list", paths);
 
-    parser.parse();
+    parser.parse(args.size(), args.data());
 
     EXPECT_TRUE(list_long);
     EXPECT_TRUE(show_all);
@@ -53,13 +53,13 @@ TEST_F(GNUCoreutilsTest, CPCommandTest) {
     std::vector<std::string> preserve;
     std::vector<std::string> files;
 
-    ArgParser parser(args.size(), args.data());
+    ArgParser parser("cp", "copy files");
     parser.add_flag("r,recursive", "Copy directories recursively", recursive);
     parser.add_flag("v,verbose", "Explain what is being done", verbose);
     parser.add_option("preserve", "Preserve attributes", preserve);
     parser.add_positional("files", "Source and destination", files);
 
-    parser.parse();
+    parser.parse(args.size(), args.data());
 
     EXPECT_TRUE(recursive);
     EXPECT_TRUE(verbose);
@@ -80,14 +80,14 @@ TEST_F(GNUCoreutilsTest, GrepCommandTest) {
     std::string pattern;
     std::vector<std::string> files;
 
-    ArgParser parser(args.size(), args.data());
+    ArgParser parser("grep", "file pattern searcher");
     parser.add_flag("i,ignore-case", "Ignore case distinctions", ignore_case);
     parser.add_flag("n,line-number", "Print line number", line_number);
     parser.add_option("color", "Colorize output", color);
     parser.add_positional("pattern", "Search pattern", pattern);
     parser.add_positional("files", "Input files", files);
 
-    parser.parse();
+    parser.parse(args.size(), args.data());
 
     EXPECT_TRUE(ignore_case);
     EXPECT_TRUE(line_number);
@@ -105,12 +105,12 @@ TEST_F(GNUCoreutilsTest, PSCommandTest) {
     bool full_format = false;
     std::string sort_key;
 
-    ArgParser parser(args.size(), args.data());
+    ArgParser parser("ps", "process status");
     parser.add_flag("e", "Show all processes", show_all);
     parser.add_flag("f", "Full format listing", full_format);
     parser.add_option("sort", "Sort by key", sort_key);
 
-    parser.parse();
+    parser.parse(args.size(), args.data());
 
     EXPECT_TRUE(show_all);
     EXPECT_TRUE(full_format);
@@ -125,13 +125,13 @@ TEST_F(GNUCoreutilsTest, DFCommandTest) {
     std::vector<std::string> exclude_types;
     std::vector<std::string> paths;
 
-    ArgParser parser(args.size(), args.data());
+    ArgParser parser("df", "display free disk space");
     parser.add_flag("h,human-readable", "Human readable sizes", human_readable);
     parser.add_flag("T,print-type", "Print file system type", show_type);
     parser.add_option("exclude-type", "Exclude fs type", exclude_types);
     parser.add_positional("paths", "Paths to show", paths);
 
-    parser.parse();
+    parser.parse(args.size(), args.data());
 
     EXPECT_TRUE(human_readable);
     EXPECT_TRUE(show_type);
@@ -150,14 +150,15 @@ TEST_F(GNUCoreutilsTest, SortCommandTest) {
     std::string field_sep = "\0";
     std::vector<std::string> files;
 
-    ArgParser parser(args.size(), args.data());
+    ArgParser parser("sort",
+                     "sort or merge records (lines) of text and binary files");
     parser.add_flag("n,numeric-sort", "Sort numerically", numeric_sort);
     parser.add_flag("r,reverse", "Reverse sort", reverse);
     parser.add_option("k,key", "Sort key positions", key_positions, ',');
     parser.add_option("t,field-separator", "Field separator", field_sep);
     parser.add_positional("files", "Input files", files);
 
-    parser.parse();
+    parser.parse(args.size(), args.data());
 
     EXPECT_TRUE(numeric_sort);
     EXPECT_TRUE(reverse);
@@ -178,13 +179,14 @@ TEST_F(GNUCoreutilsTest, ChmodCommandTest) {
     std::string mode;
     std::vector<std::string> files;
 
-    ArgParser parser(args.size(), args.data());
+    ArgParser parser("chmod",
+                     "chmod – change file modes or Access Control Lists");
     parser.add_flag("R,recursive", "Change files recursively", recursive);
     parser.add_option("reference", "Reference file", reference_file);
     parser.add_positional("mode", "File mode", mode);
     parser.add_positional("files", "Target files", files);
 
-    parser.parse();
+    parser.parse(args.size(), args.data());
 
     EXPECT_TRUE(recursive);
     EXPECT_EQ(reference_file, "ref.txt");
@@ -203,14 +205,14 @@ TEST_F(GNUCoreutilsTest, Base64CommandTest) {
     std::string input_file;
     std::string output_file;
 
-    ArgParser parser(args.size(), args.data());
+    ArgParser parser("base64", "encode/decode binary file");
     parser.add_option("w,wrap-cols", "Wrap lines at cols", wrap_cols);
     parser.add_flag("i,ignore-garbage", "Ignore non-alphabet chars",
                     ignore_garbage);
     parser.add_option("o,output", "Output file", output_file);
     parser.add_positional("input", "Input file", input_file);
 
-    parser.parse();
+    parser.parse(args.size(), args.data());
 
     EXPECT_EQ(wrap_cols, 76);
     EXPECT_TRUE(ignore_garbage);
