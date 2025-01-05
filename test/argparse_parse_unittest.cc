@@ -319,3 +319,26 @@ TEST_F(ArgParserTest, VectorOfComplexTuplesTest) {
     EXPECT_EQ(std::get<1>(values[1]), 2);
     EXPECT_DOUBLE_EQ(std::get<2>(values[1]), 2.2);
 }
+
+// 测试 -- 后的位置参数
+TEST_F(ArgParserTest, DoubleDashPositionalTest) {
+    auto args = make_args("prog", "-v", "--name=test", "--", "-v",
+                          "--name=value", "pos1");
+    bool verbose = false;
+    std::string name;
+    std::vector<std::string> positionals;
+
+    ArgParser parser("prog", "the prog description");
+    parser.add_flag("v", "Verbose", verbose);
+    parser.add_option("name", "Name", name);
+    parser.add_positional("files", "Input files", positionals);
+
+    parser.parse(args.size(), args.data());
+
+    EXPECT_TRUE(verbose);
+    EXPECT_EQ(name, "test");
+    ASSERT_EQ(positionals.size(), 3);
+    EXPECT_EQ(positionals[0], "-v");
+    EXPECT_EQ(positionals[1], "--name=value");
+    EXPECT_EQ(positionals[2], "pos1");
+}

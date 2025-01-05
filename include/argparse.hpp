@@ -21,7 +21,7 @@ namespace {
 template <typename T>
 concept is_tuple_like = requires(T t) {
     typename std::tuple_element<0, T>::type;
-    requires std::tuple_size<T>::value > 0;
+    requires std::tuple_size_v<T> > 0;
     std::get<0>(std::declval<T &>());
 };
 
@@ -201,13 +201,13 @@ inline void store_false(bool &value) { value = false; }
 template <typename T>
     requires std::integral<T>
 inline void increment(T &value) {
-    value++;
+    ++value;
 }
 
 template <typename T>
     requires std::integral<T>
 inline void decrement(T &value) {
-    value--;
+    --value;
 }
 
 template <typename T>
@@ -293,10 +293,10 @@ class FlagBase : public ArgBase {
         std::string options_str{};
         std::vector<std::string> short_opts;
         std::vector<std::string> long_opts;
-        std::transform(begin(short_opt_names_), end(short_opt_names_),
+        std::ranges::transform(short_opt_names_,
                        back_inserter(short_opts),
                        [](auto const &s) { return "-" + s; });
-        std::transform(begin(long_opt_names_), end(long_opt_names_),
+        std::ranges::transform(long_opt_names_,
                        back_inserter(long_opts),
                        [](auto const &s) { return "--" + s; });
         if (!short_opts.empty()) {
@@ -333,7 +333,7 @@ class Flag : public FlagBase {
          std::function<void(T &)> action)
         : FlagBase(name, description),
           value_(std::ref(bind_value)),
-          action_(action) {}
+          action_(std::move(action)) {}
     void parse() override {
         std::visit(overload{
                        [this](T &value) { action_(value); },
@@ -395,10 +395,10 @@ class OptionBase : public ArgBase {
             std::string options_str{};
             std::vector<std::string> short_opts;
             std::vector<std::string> long_opts;
-            std::transform(begin(short_opt_names_), end(short_opt_names_),
+            std::ranges::transform(short_opt_names_,
                            back_inserter(short_opts),
                            [](auto const &s) { return "-" + s; });
-            std::transform(begin(long_opt_names_), end(long_opt_names_),
+            std::ranges::transform(long_opt_names_,
                            back_inserter(long_opts),
                            [](auto const &s) { return "--" + s; });
             if (!short_opts.empty()) {
@@ -601,19 +601,19 @@ class Positional : public OptionBase {
 
 class ArgParser {
    public:
-    ArgParser(std::string const &prog, std::string description)
-        : program{prog}, description(description) {}
+    ArgParser(std::string prog, std::string description)
+        : program{std::move(prog)}, description(std::move(description)) {}
     void add_flag(const std::string &name, const std::string &description,
                   bool &bind_value,
                   std::function<void(bool &)> action = store_true) {
         args.push_back(std::make_unique<Flag<bool>>(name, description,
-                                                    bind_value, action));
+                                                    bind_value, std::move(action)));
     }
     void add_flag(const std::string &name, const std::string &description,
                   int &bind_value,
                   std::function<void(int &)> action = increment<int>) {
         args.push_back(
-            std::make_unique<Flag<int>>(name, description, bind_value, action));
+            std::make_unique<Flag<int>>(name, description, bind_value, std::move(action)));
     }
 
     template <typename T>
@@ -642,7 +642,7 @@ class ArgParser {
                   can_parse_from_string<typename T::value_type>)
     void add_positional(const std::string &name, const std::string &description,
                         T &bind_value) {
-        if (std::ranges::find_if(args, [name](const auto &arg) {
+        if (std::ranges::find_if(args, [](const auto &arg) {
                 return arg->is_positional() &&
                        dynamic_cast<OptionBase *>(arg.get())->is_multiple();
             }) != args.end()) {
@@ -711,7 +711,7 @@ class ArgParser {
     ArgBase *get_arg(const std::string &name) const {
         if (name.length() == 1) {
             auto it =
-                std::find_if(args.begin(), args.end(), [name](const auto &arg) {
+                std::ranges::find_if(args, [name](const auto &arg) {
                     return std::find(arg->short_opt_names_.begin(),
                                      arg->short_opt_names_.end(),
                                      name) != arg->short_opt_names_.end();
@@ -719,7 +719,7 @@ class ArgParser {
             return it != args.end() ? it->get() : nullptr;
         } else {
             auto it =
-                std::find_if(args.begin(), args.end(), [name](const auto &arg) {
+                std::ranges::find_if(args, [name](const auto &arg) {
                     return std::find(arg->long_opt_names_.begin(),
                                      arg->long_opt_names_.end(),
                                      name) != arg->long_opt_names_.end();
@@ -727,7 +727,7 @@ class ArgParser {
             return it != args.end() ? it->get() : nullptr;
         }
     }
-    void parse(int argc = 0, const char *argv[] = nullptr) {
+    void parse(int argc, const char *argv[]) const {
         std::vector<const char *> commands{argv, argv + argc};
         size_t i = 1;  // 跳过程序名
         if (!commands.empty() && commands[0] != nullptr &&
@@ -807,6 +807,11 @@ class ArgParser {
                     }
                 }
             }
+            // 处理 -- 选项
+            else if (arg == "--") {
+                i++;
+                break;
+            }
             // 处理位置参数
             else {
                 if (pos_index < positionals.size()) {
@@ -819,6 +824,18 @@ class ArgParser {
                 } else {
                     throw std::runtime_error("Too many positional arguments");
                 }
+            }
+            ++i;
+        }
+        while (i < commands.size()) {
+            if (pos_index < positionals.size()) {
+                auto *pos = dynamic_cast<OptionBase *>(positionals[pos_index]);
+                pos->parse(commands[i]);
+                if (!pos->is_multiple()) {
+                    pos_index++;
+                }
+            } else {
+                throw std::runtime_error("Too many positional arguments");
             }
             ++i;
         }
