@@ -181,31 +181,6 @@ concept is_container = requires(T t) {
     requires can_parse_from_string<typename T::value_type>;
 };
 
-inline std::pair<std::string, std::string> ParseOptionNames(
-    const std::string &name) {
-    auto names = detail::split(name, ',', -1);
-    if (names.size() == 2) {
-        const auto long_name = names[0].length() > 1
-                                   ? (names[0])
-                                   : (names[1].length() > 1 ? names[1] : "");
-        const auto short_name = names[0].length() == 1
-                                    ? (names[0])
-                                    : (names[1].length() == 1 ? names[1] : "");
-        if (long_name.empty() || short_name.empty()) {
-            throw std::invalid_argument("Invalid string for " + name);
-        }
-        return {short_name, long_name};
-    }
-    if (names.size() == 1) {
-        if (names[0].length() > 1) {
-            return std::make_pair("", names[0]);
-        } else {
-            return std::make_pair(names[0], "");
-        }
-    }
-    throw std::invalid_argument("Invalid option name: " + name);
-}
-
 template <typename T>
     requires(!is_container<T>)
 void replace_or_append_new_value(T &value, T new_value) {
