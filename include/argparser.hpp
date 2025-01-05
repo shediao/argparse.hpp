@@ -17,7 +17,7 @@
 
 namespace arg::parser {
 
-namespace detail {
+namespace {
 
 template <typename T>
 concept is_tuple_like = requires(T t) {
@@ -157,7 +157,7 @@ T make_tuple_from_container(std::vector<std::string> const &v) {
 template <typename T>
     requires is_tuple_like<T>
 T parse_from_string(std::string const &s, const char delim) {
-    auto v = detail::split(s, delim, std::tuple_size_v<std::decay_t<T>>);
+    auto v = split(s, delim, std::tuple_size_v<std::decay_t<T>>);
     if (v.size() != std::tuple_size_v<std::decay_t<T>>) {
         throw std::invalid_argument(
             "Invalid string for split " +
@@ -193,7 +193,8 @@ void replace_or_append_new_value(T &value, T new_value) {
     value.insert(value.end(), std::make_move_iterator(new_value.begin()),
                  std::make_move_iterator(new_value.end()));
 }
-}  // namespace detail
+}
+
 
 inline void store_true(bool &value) { value = true; }
 
@@ -212,30 +213,30 @@ inline void decrement(T &value) {
 }
 
 template <typename T>
-    requires detail::can_parse_from_string_without_split<T>
+    requires can_parse_from_string_without_split<T>
 inline void replace_value(T &value, const std::string &opt_value) {
-    value = detail::parse_from_string<T>(opt_value);
+    value = parse_from_string<T>(opt_value);
 }
 
 template <typename T>
-    requires detail::can_parse_from_string_split_once<T>
+    requires can_parse_from_string_split_once<T>
 inline void replace_value(T &value, const std::string &opt_value, char delim) {
-    value = detail::parse_from_string<T>(opt_value, delim);
+    value = parse_from_string<T>(opt_value, delim);
 }
 
 template <typename T>
-    requires detail::is_container<T> &&
-             detail::can_parse_from_string_without_split<typename T::value_type>
+    requires is_container<T> &&
+             can_parse_from_string_without_split<typename T::value_type>
 inline void append_value(T &value, const std::string &opt_value) {
     value.insert(value.end(),
-                 detail::parse_from_string<typename T::value_type>(opt_value));
+                 parse_from_string<typename T::value_type>(opt_value));
 }
 
 template <typename T>
-    requires detail::is_container<T> &&
-             detail::can_parse_from_string_split_once<typename T::value_type>
+    requires is_container<T> &&
+             can_parse_from_string_split_once<typename T::value_type>
 inline void append_value(T &value, const std::string &opt_value, char delim) {
-    value.insert(value.end(), detail::parse_from_string<typename T::value_type>(
+    value.insert(value.end(), parse_from_string<typename T::value_type>(
                                   opt_value, delim));
 }
 
@@ -245,7 +246,7 @@ class ArgBase {
    public:
     ArgBase(const std::string &name, const std::string &description)
         : description_(description) {
-        for (auto &&opt_name : detail::split(name, ',', -1)) {
+        for (auto &&opt_name : split(name, ',', -1)) {
             if (opt_name.length() == 1) {
                 short_opt_names_.push_back(std::move(opt_name));
             } else if (opt_name.length() > 1) {
@@ -301,7 +302,7 @@ class FlagBase : public ArgBase {
                        back_inserter(long_opts),
                        [](auto const &s) { return "--" + s; });
         if (!short_opts.empty()) {
-            options_str += detail::join(short_opts, ',');
+            options_str += join(short_opts, ',');
             if (!long_opts.empty()) {
                 options_str += ", ";
             }
@@ -309,7 +310,7 @@ class FlagBase : public ArgBase {
             options_str += "    ";
         }
         if (!long_opts.empty()) {
-            options_str += detail::join(long_opts, ',');
+            options_str += join(long_opts, ',');
         }
         usage_str << std::format("{0:<{1}}{2}", options_str, option_width,
                                  get_description());
@@ -377,7 +378,7 @@ class OptionBase : public ArgBase {
         count_++;
     }
 
-    virtual bool is_container() const = 0;
+    virtual bool is_multiple() const = 0;
 
    protected:
     template <typename T>
@@ -403,7 +404,7 @@ class OptionBase : public ArgBase {
                            back_inserter(long_opts),
                            [](auto const &s) { return "--" + s; });
             if (!short_opts.empty()) {
-                options_str += detail::join(short_opts, ',');
+                options_str += join(short_opts, ',');
                 if (!long_opts.empty()) {
                     options_str += ", ";
                 }
@@ -411,17 +412,17 @@ class OptionBase : public ArgBase {
                 options_str += "    ";
             }
             if (!long_opts.empty()) {
-                options_str += detail::join(long_opts, ',');
+                options_str += join(long_opts, ',');
             }
             options_str += (" " + value_help);
-            if (is_container()) {
+            if (is_multiple()) {
                 options_str += " ...";
             }
             usage_str << std::format("{0:<{1}}{2}", options_str, option_width,
                                      get_description());
         } else {
             std::string options_str{long_opt_names_[0]};
-            if (is_container()) {
+            if (is_multiple()) {
                 options_str += " ...";
             }
             usage_str << std::format("{0:<{1}}{2}", options_str, option_width,
@@ -435,14 +436,14 @@ class OptionBase : public ArgBase {
 };
 
 template <typename T>
-    requires detail::can_parse_from_string<T> || detail::is_container<T>
+    requires can_parse_from_string<T> || is_container<T>
 class Option : public OptionBase {
     friend class ArgParser;
 
    public:
     Option(const std::string &name, const std::string &description,
            T &bind_value)
-        requires detail::can_parse_from_string_without_split<T>
+        requires can_parse_from_string_without_split<T>
         : OptionBase(name, description),
           value_(std::ref(bind_value)),
           action_([](T &value, const std::string &opt_value) {
@@ -452,7 +453,7 @@ class Option : public OptionBase {
     }
     Option(const std::string &name, const std::string &description,
            T &bind_value, char delim)
-        requires detail::can_parse_from_string_split_once<T>
+        requires can_parse_from_string_split_once<T>
         : OptionBase(name, description),
           value_(std::ref(bind_value)),
           action_([delim](T &value, const std::string &opt_value) {
@@ -462,8 +463,8 @@ class Option : public OptionBase {
     }
     Option(const std::string &name, const std::string &description,
            T &bind_value)
-        requires detail::is_container<T> &&
-                     detail::can_parse_from_string_without_split<
+        requires is_container<T> &&
+                     can_parse_from_string_without_split<
                          typename T::value_type>
         : OptionBase(name, description),
           value_(std::ref(bind_value)),
@@ -474,7 +475,7 @@ class Option : public OptionBase {
     }
     Option(const std::string &name, const std::string &description,
            T &bind_value, char delim)
-        requires detail::is_container<T> && detail::can_parse_from_string_split_once<
+        requires is_container<T> && can_parse_from_string_split_once<
                                                typename T::value_type>
         : OptionBase(name, description),
           value_(std::ref(bind_value)),
@@ -496,8 +497,8 @@ class Option : public OptionBase {
             },
             value_);
     }
-    bool is_container() const override {
-        if constexpr (detail::is_container<T>) {
+    bool is_multiple() const override {
+        if constexpr (is_container<T>) {
             return true;
         } else {
             return false;
@@ -519,14 +520,14 @@ class Option : public OptionBase {
 };
 
 template <typename T>
-    requires detail::can_parse_from_string<T> || detail::is_container<T>
+    requires can_parse_from_string<T> || is_container<T>
 class Positional : public OptionBase {
     friend class ArgParser;
 
    public:
     Positional(const std::string &name, const std::string &description,
                T &bind_value)
-        requires detail::can_parse_from_string_without_split<T>
+        requires can_parse_from_string_without_split<T>
         : OptionBase(name, description),
           bind_value_(std::ref(bind_value)),
           action_([](T &value, const std::string &opt_value) {
@@ -536,7 +537,7 @@ class Positional : public OptionBase {
     }
     Positional(const std::string &name, const std::string &description,
                T &bind_value, char delim)
-        requires detail::can_parse_from_string_split_once<T>
+        requires can_parse_from_string_split_once<T>
         : OptionBase(name, description),
           bind_value_(std::ref(bind_value)),
           action_([delim](T &value, const std::string &opt_value) {
@@ -546,8 +547,8 @@ class Positional : public OptionBase {
     }
     Positional(const std::string &name, const std::string &description,
                T &bind_value)
-        requires detail::is_container<T> &&
-                     detail::can_parse_from_string_without_split<
+        requires is_container<T> &&
+                     can_parse_from_string_without_split<
                          typename T::value_type>
         : OptionBase(name, description),
           bind_value_(std::ref(bind_value)),
@@ -558,7 +559,7 @@ class Positional : public OptionBase {
     }
     Positional(const std::string &name, const std::string &description,
                T &bind_value, char delim)
-        requires detail::is_container<T> && detail::can_parse_from_string_split_once<
+        requires is_container<T> && can_parse_from_string_split_once<
                                                typename T::value_type>
         : OptionBase(name, description),
           bind_value_(std::ref(bind_value)),
@@ -580,8 +581,8 @@ class Positional : public OptionBase {
             },
             bind_value_);
     }
-    bool is_container() const override {
-        if constexpr (detail::is_container<T>) {
+    bool is_multiple() const override {
+        if constexpr (is_container<T>) {
             return true;
         } else {
             return false;
@@ -621,9 +622,9 @@ class ArgParser {
     }
 
     template <typename T>
-        requires detail::can_parse_from_string<T> ||
-                 (detail::is_container<T> &&
-                  detail::can_parse_from_string<typename T::value_type>)
+        requires can_parse_from_string<T> ||
+                 (is_container<T> &&
+                  can_parse_from_string<typename T::value_type>)
     void add_option(const std::string &name, const std::string &description,
                     T &bind_value) {
         args.push_back(
@@ -631,9 +632,9 @@ class ArgParser {
     }
 
     template <typename T>
-        requires detail::can_parse_from_string_split_once<T> ||
-                 (detail::is_container<T> &&
-                  detail::can_parse_from_string_split_once<typename T::value_type>)
+        requires can_parse_from_string_split_once<T> ||
+                 (is_container<T> &&
+                  can_parse_from_string_split_once<typename T::value_type>)
     void add_option(const std::string &name, const std::string &description,
                     T &bind_value, char delim) {
         args.push_back(
@@ -641,14 +642,14 @@ class ArgParser {
     }
 
     template <typename T>
-        requires detail::can_parse_from_string<T> ||
-                 (detail::is_container<T> &&
-                  detail::can_parse_from_string<typename T::value_type>)
+        requires can_parse_from_string<T> ||
+                 (is_container<T> &&
+                  can_parse_from_string<typename T::value_type>)
     void add_positional(const std::string &name, const std::string &description,
                         T &bind_value) {
         if (std::ranges::find_if(args, [name](const auto &arg) {
                 return arg->is_positional() &&
-                       dynamic_cast<OptionBase *>(arg.get())->is_container();
+                       dynamic_cast<OptionBase *>(arg.get())->is_multiple();
             }) != args.end()) {
             throw std::runtime_error(
                 "Positional argument only support one container and it "
@@ -659,9 +660,9 @@ class ArgParser {
     }
 
     template <typename T>
-        requires detail::can_parse_from_string_split_once<T> ||
-                 (detail::is_container<T> &&
-                  detail::can_parse_from_string_split_once<typename T::value_type>)
+        requires can_parse_from_string_split_once<T> ||
+                 (is_container<T> &&
+                  can_parse_from_string_split_once<typename T::value_type>)
     void add_positional(const std::string &name, const std::string &description,
                         T &bind_value, char delim) {
         args.push_back(std::make_unique<Positional<T>>(name, description,
@@ -807,7 +808,7 @@ class ArgParser {
                     auto *pos =
                         dynamic_cast<OptionBase *>(positionals[pos_index]);
                     pos->parse(arg);
-                    if (!pos->is_container()) {
+                    if (!pos->is_multiple()) {
                         pos_index++;
                     }
                 } else {

@@ -7,7 +7,6 @@
 #include "argparser.hpp"
 
 using namespace arg::parser;
-using namespace arg::parser::detail;
 // 测试 bool
 TEST(ParseFromStringTest, BoolTest) {
     EXPECT_EQ(parse_from_string<bool>("true"), true);
