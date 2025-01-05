@@ -70,7 +70,7 @@ TEST_F(GNUCoreutilsTest, CPCommandTest) {
     EXPECT_EQ(files[1], "dest.txt");
 }
 
-// 文本处理命令测试
+// Text processing command tests
 TEST_F(GNUCoreutilsTest, GrepCommandTest) {
     auto args = make_args("grep", "-i", "-n", "--color=always", "pattern",
                           "file1.txt", "file2.txt");
@@ -98,7 +98,7 @@ TEST_F(GNUCoreutilsTest, GrepCommandTest) {
     EXPECT_EQ(files[1], "file2.txt");
 }
 
-// 系统信息命令测试
+// System information command tests
 TEST_F(GNUCoreutilsTest, PSCommandTest) {
     auto args = make_args("ps", "-e", "-f", "--sort=-%cpu");
     bool show_all = false;

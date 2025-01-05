@@ -794,14 +794,14 @@ class ArgParser {
     }
     void parse(int argc, const char *argv[]) const {
         std::vector<const char *> commands{argv, argv + argc};
-        size_t i = 1;  // 跳过程序名
+        size_t i = 1;  // Skip program name
         if (!commands.empty() && commands[0] != nullptr &&
             commands[0][0] == '-') {
             i = 0;
         }
         std::vector<ArgBase *> positionals;
 
-        // 收集所有的位置参数
+        // Collect all positional arguments
         for (const auto &arg : args) {
             if (arg->is_positional()) {
                 positionals.push_back(arg.get());
@@ -813,7 +813,7 @@ class ArgParser {
         while (i < commands.size()) {
             const std::string &arg = commands[i];
 
-            // 处理长选项 (--option)
+            // Handle long options (--option)
             if (arg.size() > 2 && arg.substr(0, 2) == "--") {
                 std::string name = arg.substr(2);
                 auto eq_pos = name.find('=');
@@ -843,11 +843,11 @@ class ArgParser {
                     throw std::runtime_error("Unknown option: " + name);
                 }
             }
-            // 处理短选项 (-o)
+            // Handle short options (-o)
             else if (arg.size() > 1 && arg[0] == '-' && arg[1] != '-') {
                 std::string opts = arg.substr(1);
 
-                // 处理组合的短选项
+                // Handle combined short options
                 for (size_t j = 0; j < opts.size(); ++j) {
                     std::string name(1, opts[j]);
                     if (auto *option = get_arg(name)) {
@@ -857,7 +857,8 @@ class ArgParser {
                         } else if (option->is_option()) {
                             auto *opt = dynamic_cast<OptionBase *>(option);
                             if (j < opts.size() - 1) {
-                                // 如果不是最后一个字符，剩余的部分作为值
+                                // If not the last character, use the rest as
+                                // value
                                 opt->parse(opts.substr(j + 1));
                                 break;
                             } else if (i + 1 < commands.size()) {
@@ -872,12 +873,12 @@ class ArgParser {
                     }
                 }
             }
-            // 处理 -- 选项
+            // Handle -- option
             else if (arg == "--") {
                 i++;
                 break;
             }
-            // 处理位置参数
+            // Handle positional arguments
             else {
                 if (pos_index < positionals.size()) {
                     auto *pos =
@@ -892,6 +893,7 @@ class ArgParser {
             }
             ++i;
         }
+
         while (i < commands.size()) {
             if (pos_index < positionals.size()) {
                 auto *pos = dynamic_cast<OptionBase *>(positionals[pos_index]);
@@ -905,7 +907,7 @@ class ArgParser {
             ++i;
         }
 
-        // 检查必需的参数是否都提供了
+        // Check if all required arguments are provided
         for (const auto &arg : args) {
             if (arg->required_ && arg->count() == 0) {
                 throw std::runtime_error(
@@ -916,7 +918,7 @@ class ArgParser {
             }
         }
 
-        // 检查没有提供的选项， 且有默认值的情况
+        // Handle options that were not provided but have default values
         for (const auto &arg : args) {
             if ((arg->is_option() || arg->is_positional()) &&
                 arg->count() == 0) {

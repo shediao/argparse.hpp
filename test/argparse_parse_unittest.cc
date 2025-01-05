@@ -385,10 +385,10 @@ TEST_F(ArgParserTest, DefaultValueTest) {
     EXPECT_EQ(str_val, "default");
 
     // 验证容器类型默认值
-    // ASSERT_EQ(vec_val.size(), 3);
-    // EXPECT_EQ(vec_val[0], 1);
-    // EXPECT_EQ(vec_val[1], 2);
-    // EXPECT_EQ(vec_val[2], 3);
+    ASSERT_EQ(vec_val.size(), 3);
+    EXPECT_EQ(vec_val[0], 1);
+    EXPECT_EQ(vec_val[1], 2);
+    EXPECT_EQ(vec_val[2], 3);
 
     EXPECT_EQ(pair_val.first, "key");
     EXPECT_EQ(pair_val.second, 100);
