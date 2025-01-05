@@ -176,7 +176,7 @@ concept can_parse_from_string =
     can_parse_from_string_without_split<T> || can_parse_from_string_split_once<T>;
 
 template <typename T>
-concept IsContainer = requires(T t) {
+concept is_container = requires(T t) {
     t.insert(t.end(), std::declval<typename T::value_type>());
     requires can_parse_from_string<typename T::value_type>;
 };
@@ -207,13 +207,13 @@ inline std::pair<std::string, std::string> ParseOptionNames(
 }
 
 template <typename T>
-    requires(!IsContainer<T>)
+    requires(!is_container<T>)
 void replace_or_append_new_value(T &value, T new_value) {
     value = std::move(new_value);
 }
 
 template <typename T>
-    requires IsContainer<T>
+    requires is_container<T>
 void replace_or_append_new_value(T &value, T new_value) {
     value.insert(value.end(), std::make_move_iterator(new_value.begin()),
                  std::make_move_iterator(new_value.end()));
@@ -250,7 +250,7 @@ inline void replace_value(T &value, const std::string &opt_value, char delim) {
 }
 
 template <typename T>
-    requires detail::IsContainer<T> &&
+    requires detail::is_container<T> &&
              detail::can_parse_from_string_without_split<typename T::value_type>
 inline void append_value(T &value, const std::string &opt_value) {
     value.insert(value.end(),
@@ -258,7 +258,7 @@ inline void append_value(T &value, const std::string &opt_value) {
 }
 
 template <typename T>
-    requires detail::IsContainer<T> &&
+    requires detail::is_container<T> &&
              detail::can_parse_from_string_split_once<typename T::value_type>
 inline void append_value(T &value, const std::string &opt_value, char delim) {
     value.insert(value.end(), detail::parse_from_string<typename T::value_type>(
@@ -462,7 +462,7 @@ class OptionBase : public ArgBase {
 };
 
 template <typename T>
-    requires detail::can_parse_from_string<T> || detail::IsContainer<T>
+    requires detail::can_parse_from_string<T> || detail::is_container<T>
 class Option : public OptionBase {
     friend class ArgParser;
 
@@ -489,7 +489,7 @@ class Option : public OptionBase {
     }
     Option(const std::string &name, const std::string &description,
            T &bind_value)
-        requires detail::IsContainer<T> &&
+        requires detail::is_container<T> &&
                      detail::can_parse_from_string_without_split<
                          typename T::value_type>
         : OptionBase(name, description),
@@ -501,7 +501,7 @@ class Option : public OptionBase {
     }
     Option(const std::string &name, const std::string &description,
            T &bind_value, char delim)
-        requires detail::IsContainer<T> && detail::can_parse_from_string_split_once<
+        requires detail::is_container<T> && detail::can_parse_from_string_split_once<
                                                typename T::value_type>
         : OptionBase(name, description),
           value_(std::ref(bind_value)),
@@ -524,7 +524,7 @@ class Option : public OptionBase {
             value_);
     }
     bool is_container() const override {
-        if constexpr (detail::IsContainer<T>) {
+        if constexpr (detail::is_container<T>) {
             return true;
         } else {
             return false;
@@ -546,7 +546,7 @@ class Option : public OptionBase {
 };
 
 template <typename T>
-    requires detail::can_parse_from_string<T> || detail::IsContainer<T>
+    requires detail::can_parse_from_string<T> || detail::is_container<T>
 class Positional : public OptionBase {
     friend class ArgParser;
 
@@ -573,7 +573,7 @@ class Positional : public OptionBase {
     }
     Positional(const std::string &name, const std::string &description,
                T &bind_value)
-        requires detail::IsContainer<T> &&
+        requires detail::is_container<T> &&
                      detail::can_parse_from_string_without_split<
                          typename T::value_type>
         : OptionBase(name, description),
@@ -585,7 +585,7 @@ class Positional : public OptionBase {
     }
     Positional(const std::string &name, const std::string &description,
                T &bind_value, char delim)
-        requires detail::IsContainer<T> && detail::can_parse_from_string_split_once<
+        requires detail::is_container<T> && detail::can_parse_from_string_split_once<
                                                typename T::value_type>
         : OptionBase(name, description),
           bind_value_(std::ref(bind_value)),
@@ -608,7 +608,7 @@ class Positional : public OptionBase {
             bind_value_);
     }
     bool is_container() const override {
-        if constexpr (detail::IsContainer<T>) {
+        if constexpr (detail::is_container<T>) {
             return true;
         } else {
             return false;
@@ -649,7 +649,7 @@ class ArgParser {
 
     template <typename T>
         requires detail::can_parse_from_string<T> ||
-                 (detail::IsContainer<T> &&
+                 (detail::is_container<T> &&
                   detail::can_parse_from_string<typename T::value_type>)
     void add_option(const std::string &name, const std::string &description,
                     T &bind_value) {
@@ -659,7 +659,7 @@ class ArgParser {
 
     template <typename T>
         requires detail::can_parse_from_string_split_once<T> ||
-                 (detail::IsContainer<T> &&
+                 (detail::is_container<T> &&
                   detail::can_parse_from_string_split_once<typename T::value_type>)
     void add_option(const std::string &name, const std::string &description,
                     T &bind_value, char delim) {
@@ -669,7 +669,7 @@ class ArgParser {
 
     template <typename T>
         requires detail::can_parse_from_string<T> ||
-                 (detail::IsContainer<T> &&
+                 (detail::is_container<T> &&
                   detail::can_parse_from_string<typename T::value_type>)
     void add_positional(const std::string &name, const std::string &description,
                         T &bind_value) {
@@ -687,7 +687,7 @@ class ArgParser {
 
     template <typename T>
         requires detail::can_parse_from_string_split_once<T> ||
-                 (detail::IsContainer<T> &&
+                 (detail::is_container<T> &&
                   detail::can_parse_from_string_split_once<typename T::value_type>)
     void add_positional(const std::string &name, const std::string &description,
                         T &bind_value, char delim) {
