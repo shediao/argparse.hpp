@@ -441,6 +441,7 @@ class OptionBase : public ArgBase {
 
     virtual bool is_multiple() const = 0;
     virtual void use_default_if_needed() = 0;
+    virtual std::optional<std::string> get_default_value() const = 0;
 
     template <typename T>
     void set_default_value_help() {
@@ -453,6 +454,7 @@ class OptionBase : public ArgBase {
         }
     }
     std::string usage(int option_width) const override {
+        constexpr int max_width = 80;
         std::stringstream usage_str;
         if (is_option()) {
             std::string options_str{};
@@ -479,13 +481,37 @@ class OptionBase : public ArgBase {
             }
             usage_str << std::format("{0:<{1}}{2}", options_str, option_width,
                                      description());
+            if (auto default_value = get_default_value();
+                default_value.has_value()) {
+                auto default_value_string =
+                    " (default: " + *default_value + ")";
+                if (option_width + description().length() +
+                        default_value_string.length() >
+                    max_width) {
+                    usage_str << "\n"
+                              << std::format("{0:<{1}}{2}", "", option_width,
+                                             default_value_string);
+                }
+            }
         } else {
             std::string options_str{long_opt_names_[0]};
             if (is_multiple()) {
-                options_str += " ...";
+                options_str += "...";
             }
             usage_str << std::format("{0:<{1}}{2}", options_str, option_width,
                                      description());
+            if (auto default_value = get_default_value();
+                default_value.has_value()) {
+                auto default_value_string =
+                    " (default: " + *default_value + ")";
+                if (option_width + description().length() +
+                        default_value_string.length() >
+                    max_width) {
+                    usage_str << "\n"
+                              << std::format("{0:<{1}}{2}", "", option_width,
+                                             default_value_string);
+                }
+            }
         }
         return usage_str.str();
     }
@@ -597,6 +623,18 @@ class Option final : public OptionBase {
                 parse(default_value_.value());
             }
         }
+    }
+    std::optional<std::string> get_default_value() const override {
+        if constexpr (is_container<T>) {
+            if (default_value_.has_value()) {
+                return "{" + join(default_value_.value(), ',') + "}";
+            }
+        } else {
+            if (default_value_.has_value()) {
+                return default_value_.value();
+            }
+        }
+        return std::nullopt;
     }
 
    private:
@@ -712,6 +750,18 @@ class Positional final : public OptionBase {
             }
         }
     }
+    std::optional<std::string> get_default_value() const override {
+        if constexpr (is_container<T>) {
+            if (default_value_.has_value()) {
+                return "{" + join(default_value_.value(), ',') + "}";
+            }
+        } else {
+            if (default_value_.has_value()) {
+                return default_value_.value();
+            }
+        }
+        return std::nullopt;
+    }
 
    private:
     std::reference_wrapper<T> bind_value_;
@@ -814,7 +864,7 @@ class ArgParser {
         if (std::ranges::find_if(args, [](const auto &arg) {
                 return arg->is_option() || arg->is_flag();
             }) != args.end()) {
-            usage_str << " [OPTIONS]...";
+            usage_str << " [options]...";
         }
         auto positionals = args | std::views::filter([](const auto &arg) {
                                return arg->is_positional();
