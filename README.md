@@ -80,3 +80,35 @@ int main(int argc, const char* argv[]) {
     return 0;
 }
 ```
+
+## Usage
+
+### 1. cmake
+
+```
+FetchContent_Declare(
+    argparse
+    GIT_REPOSITORY https://github.com/shediao/argparse.hpp
+    GIT_TAG v0.0.1
+)
+FetchContent_MakeAvailable(argparse)
+
+
+
+target_link_libraries(xxx PRIVATE argparse::argparse ...)
+```
+
+OR
+
+```
+git clone https://github.com/shediao/argparse.hpp /path/to/argparse.hpp
+add_subdirectory(/path/to/argparse.hpp)
+```
+
+```
+#include <argparse.hpp>
+```
+
+### 2. others
+
+copy `argparse.hpp` to myproject/dir/include
