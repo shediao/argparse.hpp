@@ -547,12 +547,12 @@ class Option final : public OptionBase {
           }) {
         set_default_value_help<T>();
     }
-    void set_default(const std::string &default_value)
+    void default_value(const std::string &default_value)
         requires(!is_container<T>)
     {
         this->default_value_ = default_value;
     }
-    void set_default(std::initializer_list<std::string> default_value)
+    void default_value(std::initializer_list<std::string> default_value)
         requires is_container<T>
     {
         this->default_value_ = default_value;
@@ -661,12 +661,12 @@ class Positional final : public OptionBase {
           }) {
         set_default_value_help<T>();
     }
-    void set_default(const std::string &default_value)
+    void default_value(const std::string &default_value)
         requires(!is_container<T>)
     {
         this->default_value_ = default_value;
     }
-    void set_default(std::initializer_list<std::string> default_value)
+    void default_value(std::initializer_list<std::string> default_value)
         requires is_container<T>
     {
         this->default_value_ = default_value;

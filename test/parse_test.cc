@@ -362,19 +362,19 @@ TEST_F(ArgParserTest, DefaultValueTest) {
     ArgParser parser("prog", "the prog description");
 
     // 设置选项的默认值
-    parser.add_option("i", "Integer value", int_val).set_default("42");
-    parser.add_option("l", "Long value", long_val).set_default("1234567890");
-    parser.add_option("d", "Double value", double_val).set_default("3.14159");
-    parser.add_option("s", "String value", str_val).set_default("default");
+    parser.add_option("i", "Integer value", int_val).default_value("42");
+    parser.add_option("l", "Long value", long_val).default_value("1234567890");
+    parser.add_option("d", "Double value", double_val).default_value("3.14159");
+    parser.add_option("s", "String value", str_val).default_value("default");
 
     // 设置容器类型的默认值
     parser.add_option("v", "Vector value", vec_val)
-        .set_default({"1", "2", "3"});
-    parser.add_option("p", "Pair value", pair_val, ':').set_default("key:100");
+        .default_value({"1", "2", "3"});
+    parser.add_option("p", "Pair value", pair_val, ':').default_value("key:100");
 
     // 设置位置参数的默认值
     parser.add_positional("files", "Input files", pos_val)
-        .set_default({"file1.txt", "file2.txt"});
+        .default_value({"file1.txt", "file2.txt"});
 
     parser.parse(args.size(), args.data());
 
@@ -410,10 +410,10 @@ TEST_F(ArgParserTest, DefaultValueOverrideTest) {
     ArgParser parser("prog", "the prog description");
 
     // 设置默认值，但会被命令行参数覆盖
-    parser.add_option("i", "Integer value", int_val).set_default("42");
-    parser.add_option("str", "String value", str_val).set_default("default");
+    parser.add_option("i", "Integer value", int_val).default_value("42");
+    parser.add_option("str", "String value", str_val).default_value("default");
     parser.add_positional("files", "Input files", pos_val)
-        .set_default({"file1.txt", "file2.txt"});
+        .default_value({"file1.txt", "file2.txt"});
 
     parser.parse(args.size(), args.data());
 
@@ -438,11 +438,11 @@ TEST_F(ArgParserTest, MapAndVectorPairTest) {
 
     ArgParser parser("prog", "the prog description");
     parser.add_option("config", "Configuration key-value pairs", config, '=')
-        .set_default({"host=localhost", "port=8080"});
+        .default_value({"host=localhost", "port=8080"});
     parser.add_option("pairs", "List of key-value pairs", pairs, ':')
-        .set_default({"key1:value1", "key2:value2"});
+        .default_value({"key1:value1", "key2:value2"});
     parser.add_positional("attributes", "User attributes", attributes, '=')
-        .set_default({"name=alice", "age=20", "city=beijing"});
+        .default_value({"name=alice", "age=20", "city=beijing"});
 
     parser.parse(args.size(), args.data());
 
