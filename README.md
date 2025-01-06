@@ -1,5 +1,3 @@
-
-
 # Quick start
 
 This is a lightweight & typesafe C++ option parser library, supporting the standard GNU style syntax for options.
@@ -24,28 +22,61 @@ Additionally, anything after `--` will be parsed as a positional argument.
 #include <argparse.hpp>
 ```
 
-
 ```cpp
-std::vector<const char*> args{"ls", "-l", "-a", "-h", "--color=auto", "/path/to/dir"};
-bool list_long = false;
-bool show_all = false;
-bool human_readable = false;
-std::string color_mode;
-std::vector<std::string> paths;
+struct ParsedArgs {
+    std::string prompt;
+    std::optional<std::string> system_prompt;
+    std::optional<std::string> model;
+    std::optional<std::string> api_key;
+    std::optional<std::string> api_url;
+    std::optional<std::string> proxy;
+    std::optional<double> temperature;
+    std::optional<double> top_p;
+    bool stream = false;
+    bool interactive = false;
+    bool debug = false;
+    bool verbose = false;
+    bool help = false;
+    bool version = false;
+};
 
-ArgParser parser(args.size(), args.data());
-parser.add_flag("l", "List in long format", list_long);
-parser.add_flag("a,all", "Show hidden entries", show_all);
-parser.add_flag("h,human-readable", "Human readable sizes", human_readable);
-parser.add_option("color", "Colorize output", color_mode);
-parser.add_positional("paths", "Paths to list", paths);
+int main(int argc, const char* argv[]) {
 
-parser.parse();
+    argparse::ArgParser parser("openai-cli", "OpenAI API Compatible Command Line Chatbot")
+    ParsedArgs args;
 
-EXPECT_TRUE(list_long);
-EXPECT_TRUE(show_all);
-EXPECT_TRUE(human_readable);
-EXPECT_EQ(color_mode, "auto");
-ASSERT_EQ(paths.size(), 1);
-EXPECT_EQ(paths[0], "/path/to/dir");
+    parser.add_flag("d,debug", "Enable debug mode", args.debug);
+    parser.add_flag("h,help", "Show help", args.help);
+    parser.add_flag("i,interactive", "Enable interactive mode", args.interactive);
+    parser.add_flag("stream", "Enable streaming mode", args.stream);
+    parser.add_flag("v,verbose", "Enable verbose mode", args.verbose);
+    parser.add_flag("version", "Show version", args.version);
+
+    parser.add_option("k,key", "OpenAI API key", args.api_key);
+    parser.add_option("m,model", "Model to use", args.model)
+      .default_value("gpt-3.5-turbo");
+    parser.add_option("p,prompt", "Prompt", args.prompt);
+    parser.add_option("proxy", "Use proxy", args.proxy);
+    parser.add_option("s,system-prompt", "System prompt", args.system_prompt);
+    parser.add_option("t,temperature", "Model temperature", args.temperature);
+    parser.add_option("top-p", "Model top-p parameter", args.top_p);
+    parser.add_option("u,url", "OpenAI API Compatible URL", args.api_url)
+      .default_value("https://api.openai.com/v1/chat/completions");
+    parser.add_positional("prompt", "Prompt", args.prompt);
+
+
+    try {
+        parser.parse_args(argc, argv);
+    } catch (const std::runtime_error& err) {
+        std::cerr << err.what() << std::endl;
+        return 1;
+    }
+
+    if (args.help) {
+        parser.print_help();
+        return 0;
+    }
+
+    return 0;
+}
 ```
