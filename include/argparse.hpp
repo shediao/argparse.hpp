@@ -325,7 +325,7 @@ class ArgBase {
     size_t count() const { return count_; }
     void require(bool required = true) { this->required_ = required; }
     const std::string &get_description() const { return description_; }
-    virtual std::string usage(int option_width, char padding_char) const = 0;
+    virtual std::string usage(int option_width) const = 0;
     virtual ~ArgBase() = default;
     virtual bool is_flag() const = 0;
     virtual bool is_option() const = 0;
@@ -359,7 +359,7 @@ class FlagBase : public ArgBase {
     virtual void parse() = 0;
 
    protected:
-    std::string usage(int option_width, char padding_char) const override {
+    std::string usage(int option_width) const override {
         std::stringstream usage_str;
         std::string options_str{};
         std::vector<std::string> short_opts;
@@ -451,7 +451,7 @@ class OptionBase : public ArgBase {
             value_help = "<arg>";
         }
     }
-    std::string usage(int option_width, char padding_char) const override {
+    std::string usage(int option_width) const override {
         std::stringstream usage_str;
         if (is_option()) {
             std::string options_str{};
@@ -824,7 +824,7 @@ class ArgParser {
         }
         for (const auto &arg : args) {
             if (arg->is_option() || arg->is_flag()) {
-                usage_str << " " << arg->usage(32, '.') << '\n';
+                usage_str << " " << arg->usage(32) << '\n';
             }
         }
 
@@ -835,7 +835,7 @@ class ArgParser {
         }
         for (const auto &arg : args) {
             if (arg->is_positional()) {
-                usage_str << " " << arg->usage(32, '.') << '\n';
+                usage_str << " " << arg->usage(32) << '\n';
             }
         }
         std::cout << usage_str.str() << std::endl;
