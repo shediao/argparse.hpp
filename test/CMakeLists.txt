@@ -17,7 +17,9 @@ function(add_argparse_test test_name)
   add_test(NAME ${test_name} COMMAND ${test_name})
 endfunction()
 
-add_argparse_test(argparse_fromstring_unittest)
-add_argparse_test(argparse_unittest)
-add_argparse_test(argparse_parse_unittest)
-add_argparse_test(argparse_parse_gnu_coreutils_unittest)
+file(GLOB test_files "*.cc")
+
+foreach(test_file ${test_files})
+  get_filename_component(test_name ${test_file} NAME_WE)
+  add_argparse_test(${test_name})
+endforeach()
