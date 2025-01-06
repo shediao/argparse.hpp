@@ -17,7 +17,6 @@
 #include <string>
 #include <tuple>
 #include <utility>
-#include <variant>
 #include <vector>
 
 namespace argparse {
@@ -224,6 +223,43 @@ void replace_or_append_new_value(T &value, T new_value) {
     value.insert(value.end(), std::make_move_iterator(new_value.begin()),
                  std::make_move_iterator(new_value.end()));
 }
+
+template <typename T>
+struct action_value_type {
+    using type = T;
+};
+template <typename T>
+struct action_value_type<std::optional<T>> {
+    using type = T;
+};
+template <typename T>
+using action_value_type_t = typename action_value_type<T>::type;
+
+template <typename T>
+struct flag_action_function {
+    using type = std::function<void(T &)>;
+};
+template <typename T>
+struct flag_action_function<std::optional<T>> {
+    using type = std::function<void(T &)>;
+};
+
+template <typename T>
+using flag_action_function_t = typename flag_action_function<T>::type;
+
+template <typename T>
+struct option_action_function {
+    using type = std::function<void(T &, std::string const &)>;
+};
+template <typename T>
+struct option_action_function<std::optional<T>> {
+    using type = std::function<void(T &, std::string const &)>;
+};
+
+template <typename T>
+using option_action_function_t = typename option_action_function<T>::type;
+template <typename T>
+using positional_action_function_t = typename option_action_function<T>::type;
 }  // namespace
 
 inline void store_true(bool &value) { value = true; }
@@ -308,6 +344,9 @@ struct overload : T... {
     using T::operator()...;
 };
 
+template <typename... T>
+overload(T...) -> overload<T...>;
+
 class FlagBase : public ArgBase {
     friend class ArgParser;
 
@@ -346,46 +385,41 @@ class FlagBase : public ArgBase {
     }
 };
 
-template <typename... T>
-overload(T...) -> overload<T...>;
-
 template <typename T = bool>
-    requires std::integral<T> || std::is_same_v<T, bool>
+    requires std::integral<T> || std::is_same_v<T, bool> ||
+             (is_optional_v<T> &&
+              (std::integral<typename T::value_type> ||
+               std::is_same_v<typename T::value_type, bool>))
 class Flag final : public FlagBase {
     friend class ArgParser;
 
    public:
     Flag(const std::string &name, const std::string &description, T &bind_value)
         : FlagBase(name, description),
-          value_(std::ref(bind_value)),
+          bind_value_(std::ref(bind_value)),
           action_{store_true} {}
     Flag(const std::string &name, const std::string &description, T &bind_value,
-         std::function<void(T &)> action)
+         flag_action_function_t<T> action)
         : FlagBase(name, description),
-          value_(std::ref(bind_value)),
+          bind_value_(std::ref(bind_value)),
           action_(std::move(action)) {}
     void parse() override {
-        std::visit(overload{
-                       [this](T &value) { action_(value); },
-                       [this](std::reference_wrapper<T> &value) {
-                           action_(value.get());
-                       },
-                   },
-                   value_);
+        if constexpr (is_optional_v<T>) {
+            auto &optional_value = bind_value_.get();
+            if (!optional_value.has_value()) {
+                optional_value = typename T::value_type{};
+            }
+            action_(optional_value.value());
+        } else {
+            action_(bind_value_.get());
+        }
         count_++;
     }
-    T const &value() const {
-        return std::visit(
-            overload{
-                [](T &value) { return value; },
-                [](std::reference_wrapper<T> &value) { return value.get(); },
-            },
-            value_);
-    }
+    T const &value() const { return bind_value_; }
 
    private:
-    std::variant<T, std::reference_wrapper<T>> value_;
-    std::function<void(T &)> action_;
+    std::reference_wrapper<T> bind_value_;
+    flag_action_function_t<T> action_;
 };
 
 class OptionBase : public ArgBase {
@@ -459,28 +493,34 @@ class OptionBase : public ArgBase {
 };
 
 template <typename T>
-    requires can_parse_from_string<T> || is_container<T>
+    requires can_parse_from_string<T> ||
+             (is_optional_v<T> &&
+              can_parse_from_string<typename T::value_type>) ||
+             is_container<T>
 class Option final : public OptionBase {
     friend class ArgParser;
 
    public:
     Option(const std::string &name, const std::string &description,
            T &bind_value)
-        requires is_parse_from_string_basic_type<T>
+        requires is_parse_from_string_basic_type<T> ||
+                 (is_optional_v<T> &&
+                  is_parse_from_string_basic_type<typename T::value_type>)
         : OptionBase(name, description),
-          value_(std::ref(bind_value)),
-          action_([](T &value, const std::string &opt_value) {
-              replace_value<T>(value, opt_value);
-          }) {
+          bind_value_(std::ref(bind_value)),
+          action_(replace_value<action_value_type_t<T>>) {
         set_default_value_help<T>();
     }
     Option(const std::string &name, const std::string &description,
            T &bind_value, char delim)
-        requires is_tuple_like_parse_from_split_string<T>
+        requires is_tuple_like_parse_from_split_string<T> ||
+                 (is_optional_v<T> &&
+                  is_tuple_like_parse_from_split_string<typename T::value_type>)
         : OptionBase(name, description),
-          value_(std::ref(bind_value)),
-          action_([delim](T &value, const std::string &opt_value) {
-              replace_value<T>(value, opt_value, delim);
+          bind_value_(std::ref(bind_value)),
+          action_([delim](action_value_type_t<T> &value,
+                          const std::string &opt_value) {
+              replace_value<action_value_type_t<T>>(value, opt_value, delim);
           }) {
         set_default_value_help<T>();
     }
@@ -489,7 +529,7 @@ class Option final : public OptionBase {
         requires is_container<T> &&
                      is_parse_from_string_basic_type<typename T::value_type>
         : OptionBase(name, description),
-          value_(std::ref(bind_value)),
+          bind_value_(std::ref(bind_value)),
           action_([](T &value, const std::string &opt_value) {
               append_value<T>(value, opt_value);
           }) {
@@ -500,7 +540,7 @@ class Option final : public OptionBase {
         requires is_container<T> && is_tuple_like_parse_from_split_string<
                                         typename T::value_type>
         : OptionBase(name, description),
-          value_(std::ref(bind_value)),
+          bind_value_(std::ref(bind_value)),
           action_([delim](T &value, const std::string &opt_value) {
               append_value<T>(value, opt_value, delim);
           }) {
@@ -510,14 +550,15 @@ class Option final : public OptionBase {
     bool is_positional() const override final { return false; }
     void parse(const std::string &opt_value) override {
         OptionBase::parse(opt_value);
-        std::visit(
-            overload{
-                [this, &opt_value](T &value) { action_(value, opt_value); },
-                [this, &opt_value](std::reference_wrapper<T> &value) {
-                    action_(value.get(), opt_value);
-                },
-            },
-            value_);
+        if constexpr (is_optional_v<T>) {
+            auto &optional_value = bind_value_.get();
+            if (!optional_value.has_value()) {
+                optional_value = typename T::value_type{};
+            }
+            action_(optional_value.value(), opt_value);
+        } else {
+            action_(bind_value_.get(), opt_value);
+        }
     }
     bool is_multiple() const override {
         if constexpr (is_container<T>) {
@@ -554,46 +595,45 @@ class Option final : public OptionBase {
         this->default_value_ = default_value;
     }
 
-    T const &value() const {
-        return std::visit(
-            overload{
-                [](T &value) { return value; },
-                [](std::reference_wrapper<T> &value) { return value.get(); },
-            },
-            value_);
-    }
+    T const &value() const { return bind_value_; }
 
    private:
-    std::variant<T, std::reference_wrapper<T>> value_;
-    std::function<void(T &, const std::string &)> action_;
+    std::reference_wrapper<T> bind_value_;
+    option_action_function_t<T> action_;
     std::conditional_t<is_container<T>, std::optional<std::vector<std::string>>,
                        std::optional<std::string>>
         default_value_;
 };
 
 template <typename T>
-    requires can_parse_from_string<T> || is_container<T>
+    requires can_parse_from_string<T> ||
+             (is_optional_v<T> &&
+              can_parse_from_string<typename T::value_type>) ||
+             is_container<T>
 class Positional final : public OptionBase {
     friend class ArgParser;
 
    public:
     Positional(const std::string &name, const std::string &description,
                T &bind_value)
-        requires is_parse_from_string_basic_type<T>
+        requires is_parse_from_string_basic_type<T> ||
+                 (is_optional_v<T> &&
+                  is_parse_from_string_basic_type<typename T::value_type>)
         : OptionBase(name, description),
           bind_value_(std::ref(bind_value)),
-          action_([](T &value, const std::string &opt_value) {
-              replace_value<T>(value, opt_value);
-          }) {
+          action_(replace_value<action_value_type_t<T>>) {
         set_default_value_help<T>();
     }
     Positional(const std::string &name, const std::string &description,
                T &bind_value, char delim)
-        requires is_tuple_like_parse_from_split_string<T>
+        requires is_tuple_like_parse_from_split_string<T> ||
+                 (is_optional_v<T> &&
+                  is_tuple_like_parse_from_split_string<typename T::value_type>)
         : OptionBase(name, description),
           bind_value_(std::ref(bind_value)),
-          action_([delim](T &value, const std::string &opt_value) {
-              replace_value<T>(value, opt_value, delim);
+          action_([delim](action_value_type_t<T> &value,
+                          const std::string &opt_value) {
+              replace_value<action_value_type_t<T>>(value, opt_value, delim);
           }) {
         set_default_value_help<T>();
     }
@@ -623,14 +663,15 @@ class Positional final : public OptionBase {
     bool is_positional() const override final { return true; }
     void parse(const std::string &opt_value) override {
         OptionBase::parse(opt_value);
-        std::visit(
-            overload{
-                [this, &opt_value](T &value) { action_(value, opt_value); },
-                [this, &opt_value](std::reference_wrapper<T> &value) {
-                    action_(value.get(), opt_value);
-                },
-            },
-            bind_value_);
+        if constexpr (is_optional_v<T>) {
+            auto &optional_value = bind_value_.get();
+            if (!optional_value.has_value()) {
+                optional_value = typename T::value_type{};
+            }
+            action_(optional_value.value(), opt_value);
+        } else {
+            action_(bind_value_.get(), opt_value);
+        }
     }
     bool is_multiple() const override {
         if constexpr (is_container<T>) {
@@ -666,18 +707,11 @@ class Positional final : public OptionBase {
         this->default_value_ = default_value;
     }
 
-    T const &value() const {
-        return std::visit(
-            overload{
-                [](T &value) { return value; },
-                [](std::reference_wrapper<T> &value) { return value.get(); },
-            },
-            bind_value_);
-    }
+    T const &value() const { return bind_value_; }
 
    private:
-    std::variant<T, std::reference_wrapper<T>> bind_value_;
-    std::function<void(T &, const std::string &)> action_;
+    std::reference_wrapper<T> bind_value_;
+    positional_action_function_t<T> action_;
     std::conditional_t<is_container<T>, std::optional<std::vector<std::string>>,
                        std::optional<std::string>>
         default_value_;
@@ -689,14 +723,14 @@ class ArgParser {
         : program{std::move(prog)}, description(std::move(description)) {}
     Flag<bool> &add_flag(const std::string &name,
                          const std::string &description, bool &bind_value,
-                         std::function<void(bool &)> action = store_true) {
+                         flag_action_function_t<bool> action = store_true) {
         args.push_back(std::make_unique<Flag<bool>>(
             name, description, bind_value, std::move(action)));
         return *dynamic_cast<Flag<bool> *>(args.back().get());
     }
     Flag<int> &add_flag(const std::string &name, const std::string &description,
                         int &bind_value,
-                        std::function<void(int &)> action = increment<int>) {
+                        flag_action_function_t<int> action = increment<int>) {
         args.push_back(std::make_unique<Flag<int>>(
             name, description, bind_value, std::move(action)));
         return *dynamic_cast<Flag<int> *>(args.back().get());

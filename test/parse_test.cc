@@ -507,3 +507,19 @@ TEST_F(ArgParserTest, MapAndVectorPairDefaultValueTest) {
     EXPECT_EQ(attributes[1].first, "age");
     EXPECT_EQ(attributes[1].second, "20");
 }
+
+TEST_F(ArgParserTest, OptionalValueTest) {
+    auto args = make_args("prog", "--name", "myname");
+
+    std::optional<std::string> name;
+    std::optional<std::string> name2;
+    ArgParser parser("prog", "the prog description");
+    parser.add_option("name", "Name of the user", name);
+    parser.add_option("name2", "Name of the user", name2);
+
+    parser.parse(args.size(), args.data());
+
+    ASSERT_TRUE(name.has_value());
+    ASSERT_EQ(name.value(), "myname");
+    ASSERT_TRUE(!name2.has_value());
+}
