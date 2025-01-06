@@ -491,6 +491,8 @@ class OptionBase : public ArgBase {
                     usage_str << "\n"
                               << std::format("{0:<{1}}{2}", "", option_width,
                                              default_value_string);
+                } else {
+                    usage_str << default_value_string;
                 }
             }
         } else {
@@ -510,6 +512,8 @@ class OptionBase : public ArgBase {
                     usage_str << "\n"
                               << std::format("{0:<{1}}{2}", "", option_width,
                                              default_value_string);
+                } else {
+                    usage_str << default_value_string;
                 }
             }
         }
