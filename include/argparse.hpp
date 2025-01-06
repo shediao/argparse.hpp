@@ -738,6 +738,8 @@ class ArgParser {
 
     template <typename T>
         requires can_parse_from_string<T> ||
+                 (is_optional_v<T> &&
+                  can_parse_from_string<typename T::value_type>) ||
                  (is_container<T> &&
                   can_parse_from_string<typename T::value_type>)
     Option<T> &add_option(const std::string &name,
@@ -749,6 +751,8 @@ class ArgParser {
 
     template <typename T>
         requires is_tuple_like_parse_from_split_string<T> ||
+                 (is_optional_v<T> &&
+                  is_tuple_like_parse_from_split_string<typename T::value_type>) ||
                  (is_container<T> &&
                   is_tuple_like_parse_from_split_string<typename T::value_type>)
     Option<T> &add_option(const std::string &name,
@@ -761,6 +765,8 @@ class ArgParser {
 
     template <typename T>
         requires can_parse_from_string<T> ||
+                 (is_optional_v<T> &&
+                  can_parse_from_string<typename T::value_type>) ||
                  (is_container<T> &&
                   can_parse_from_string<typename T::value_type>)
     Positional<T> &add_positional(const std::string &name,
@@ -781,6 +787,8 @@ class ArgParser {
 
     template <typename T>
         requires is_tuple_like_parse_from_split_string<T> ||
+                 (is_optional_v<T> &&
+                  is_tuple_like_parse_from_split_string<typename T::value_type>) ||
                  (is_container<T> &&
                   is_tuple_like_parse_from_split_string<typename T::value_type>)
     Positional<T> &add_positional(const std::string &name,
