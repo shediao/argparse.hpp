@@ -25,6 +25,32 @@ namespace argparse {
 namespace {
 
 template <typename T>
+struct is_optional : std::false_type {};
+
+template <typename T>
+struct is_optional<std::optional<T>> : std::true_type {};
+
+template <typename T>
+constexpr bool is_optional_v = is_optional<T>::value;
+
+template <typename T>
+struct is_string : std::false_type {};
+
+template <>
+struct is_string<std::string> : std::true_type {};
+template <>
+struct is_string<std::wstring> : std::true_type {};
+template <>
+struct is_string<std::u8string> : std::true_type {};
+template <>
+struct is_string<std::u16string> : std::true_type {};
+template <>
+struct is_string<std::u32string> : std::true_type {};
+
+template <typename T>
+constexpr bool is_string_v = is_string<T>::value;
+
+template <typename T>
 concept is_tuple_like = requires(T t) {
     typename std::tuple_element<0, T>::type;
     requires std::tuple_size_v<T> > 0;
