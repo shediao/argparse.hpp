@@ -58,7 +58,7 @@ concept is_tuple_like = requires(T t) {
 };
 
 template <typename T>
-concept can_parse_from_string_without_split =
+concept is_parse_from_string_basic_type =
     std::same_as<T, std::string> || std::same_as<T, bool> ||
     std::same_as<T, int> || std::same_as<T, long> ||
     std::same_as<T, unsigned long> || std::same_as<T, long long> ||
@@ -199,12 +199,12 @@ T parse_from_string(std::string const &s, const char delim) {
 }
 
 template <typename T>
-concept can_parse_from_string_split_once = requires(T t) {
+concept is_tuple_like_parse_from_split_string = requires(T t) {
     parse_from_string<T>(std::declval<std::string>(), std::declval<char>());
 };
 template <typename T>
-concept can_parse_from_string = can_parse_from_string_without_split<T> ||
-                                can_parse_from_string_split_once<T>;
+concept can_parse_from_string = is_parse_from_string_basic_type<T> ||
+                                is_tuple_like_parse_from_split_string<T>;
 
 template <typename T>
 concept is_container = requires(T t) {
@@ -243,20 +243,20 @@ inline void decrement(T &value) {
 }
 
 template <typename T>
-    requires can_parse_from_string_without_split<T>
+    requires is_parse_from_string_basic_type<T>
 inline void replace_value(T &value, const std::string &opt_value) {
     value = parse_from_string<T>(opt_value);
 }
 
 template <typename T>
-    requires can_parse_from_string_split_once<T>
+    requires is_tuple_like_parse_from_split_string<T>
 inline void replace_value(T &value, const std::string &opt_value, char delim) {
     value = parse_from_string<T>(opt_value, delim);
 }
 
 template <typename T>
     requires is_container<T> &&
-             can_parse_from_string_without_split<typename T::value_type>
+             is_parse_from_string_basic_type<typename T::value_type>
 inline void append_value(T &value, const std::string &opt_value) {
     value.insert(value.end(),
                  parse_from_string<typename T::value_type>(opt_value));
@@ -264,7 +264,7 @@ inline void append_value(T &value, const std::string &opt_value) {
 
 template <typename T>
     requires is_container<T> &&
-             can_parse_from_string_split_once<typename T::value_type>
+             is_tuple_like_parse_from_split_string<typename T::value_type>
 inline void append_value(T &value, const std::string &opt_value, char delim) {
     value.insert(value.end(),
                  parse_from_string<typename T::value_type>(opt_value, delim));
@@ -466,7 +466,7 @@ class Option final : public OptionBase {
    public:
     Option(const std::string &name, const std::string &description,
            T &bind_value)
-        requires can_parse_from_string_without_split<T>
+        requires is_parse_from_string_basic_type<T>
         : OptionBase(name, description),
           value_(std::ref(bind_value)),
           action_([](T &value, const std::string &opt_value) {
@@ -476,7 +476,7 @@ class Option final : public OptionBase {
     }
     Option(const std::string &name, const std::string &description,
            T &bind_value, char delim)
-        requires can_parse_from_string_split_once<T>
+        requires is_tuple_like_parse_from_split_string<T>
         : OptionBase(name, description),
           value_(std::ref(bind_value)),
           action_([delim](T &value, const std::string &opt_value) {
@@ -487,7 +487,7 @@ class Option final : public OptionBase {
     Option(const std::string &name, const std::string &description,
            T &bind_value)
         requires is_container<T> &&
-                     can_parse_from_string_without_split<typename T::value_type>
+                     is_parse_from_string_basic_type<typename T::value_type>
         : OptionBase(name, description),
           value_(std::ref(bind_value)),
           action_([](T &value, const std::string &opt_value) {
@@ -497,8 +497,8 @@ class Option final : public OptionBase {
     }
     Option(const std::string &name, const std::string &description,
            T &bind_value, char delim)
-        requires is_container<T> &&
-                     can_parse_from_string_split_once<typename T::value_type>
+        requires is_container<T> && is_tuple_like_parse_from_split_string<
+                                        typename T::value_type>
         : OptionBase(name, description),
           value_(std::ref(bind_value)),
           action_([delim](T &value, const std::string &opt_value) {
@@ -579,7 +579,7 @@ class Positional final : public OptionBase {
    public:
     Positional(const std::string &name, const std::string &description,
                T &bind_value)
-        requires can_parse_from_string_without_split<T>
+        requires is_parse_from_string_basic_type<T>
         : OptionBase(name, description),
           bind_value_(std::ref(bind_value)),
           action_([](T &value, const std::string &opt_value) {
@@ -589,7 +589,7 @@ class Positional final : public OptionBase {
     }
     Positional(const std::string &name, const std::string &description,
                T &bind_value, char delim)
-        requires can_parse_from_string_split_once<T>
+        requires is_tuple_like_parse_from_split_string<T>
         : OptionBase(name, description),
           bind_value_(std::ref(bind_value)),
           action_([delim](T &value, const std::string &opt_value) {
@@ -600,7 +600,7 @@ class Positional final : public OptionBase {
     Positional(const std::string &name, const std::string &description,
                T &bind_value)
         requires is_container<T> &&
-                     can_parse_from_string_without_split<typename T::value_type>
+                     is_parse_from_string_basic_type<typename T::value_type>
         : OptionBase(name, description),
           bind_value_(std::ref(bind_value)),
           action_([](T &value, const std::string &opt_value) {
@@ -610,8 +610,8 @@ class Positional final : public OptionBase {
     }
     Positional(const std::string &name, const std::string &description,
                T &bind_value, char delim)
-        requires is_container<T> &&
-                     can_parse_from_string_split_once<typename T::value_type>
+        requires is_container<T> && is_tuple_like_parse_from_split_string<
+                                        typename T::value_type>
         : OptionBase(name, description),
           bind_value_(std::ref(bind_value)),
           action_([delim](T &value, const std::string &opt_value) {
@@ -714,9 +714,9 @@ class ArgParser {
     }
 
     template <typename T>
-        requires can_parse_from_string_split_once<T> ||
+        requires is_tuple_like_parse_from_split_string<T> ||
                  (is_container<T> &&
-                  can_parse_from_string_split_once<typename T::value_type>)
+                  is_tuple_like_parse_from_split_string<typename T::value_type>)
     Option<T> &add_option(const std::string &name,
                           const std::string &description, T &bind_value,
                           char delim) {
@@ -746,9 +746,9 @@ class ArgParser {
     }
 
     template <typename T>
-        requires can_parse_from_string_split_once<T> ||
+        requires is_tuple_like_parse_from_split_string<T> ||
                  (is_container<T> &&
-                  can_parse_from_string_split_once<typename T::value_type>)
+                  is_tuple_like_parse_from_split_string<typename T::value_type>)
     Positional<T> &add_positional(const std::string &name,
                                   const std::string &description, T &bind_value,
                                   char delim) {
