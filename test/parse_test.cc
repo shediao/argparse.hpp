@@ -686,3 +686,95 @@ TEST_F(ArgParserTest, InvalidOptionNameWithWhitespaceTest) {
         parser.add_positional("input\tfile", "Invalid positional name", pos),
         std::invalid_argument);
 }
+
+// Test count() function
+TEST_F(ArgParserTest, CountTest) {
+    auto args = make_args("prog", "-v", "-v", "--name", "test");
+
+    bool flag = false;
+    int count = 0;
+    std::string name;
+    std::optional<std::string> opt_name;
+    std::vector<std::string> vec;
+
+    ArgParser parser("prog", "the prog description");
+    parser.add_flag("v", "Verbose flag", flag);
+    parser.add_flag("c", "Counter", count, increment<int>);
+    parser.add_option("name", "Name", name);
+    parser.add_option("opt-name", "Optional name", opt_name);
+    parser.add_option("vec", "Vector", vec);
+
+    // Before parsing
+    EXPECT_EQ(parser["v"].count(), 0);
+    EXPECT_EQ(parser["c"].count(), 0);
+    EXPECT_EQ(parser["name"].count(), 0);
+    EXPECT_EQ(parser["opt-name"].count(), 0);
+    EXPECT_EQ(parser["vec"].count(), 0);
+
+    parser.parse(args.size(), args.data());
+
+    // After parsing
+    EXPECT_EQ(parser["v"].count(), 2);         // Flag was used twice
+    EXPECT_EQ(parser["c"].count(), 0);         // Flag was not used
+    EXPECT_EQ(parser["name"].count(), 1);      // Option was used once
+    EXPECT_EQ(parser["opt-name"].count(), 0);  // Option was not used
+    EXPECT_EQ(parser["vec"].count(), 0);       // Option was not used
+
+    // For optional types, count() == 0 is equivalent to !has_value()
+    EXPECT_FALSE(opt_name.has_value());
+    EXPECT_EQ(parser["opt-name"].count() == 0, !opt_name.has_value());
+}
+
+// Test count() with default values
+TEST_F(ArgParserTest, CountWithDefaultValueTest) {
+    auto args = make_args("prog");
+
+    std::string str_with_default;
+    std::string str_without_default;
+    std::optional<std::string> opt_with_default;
+    std::optional<std::string> opt_without_default;
+
+    ArgParser parser("prog", "the prog description");
+    parser.add_option("str1", "String with default", str_with_default)
+        .default_value("default");
+    parser.add_option("str2", "String without default", str_without_default);
+    parser.add_option("opt1", "Optional with default", opt_with_default)
+        .default_value("default");
+    parser.add_option("opt2", "Optional without default", opt_without_default);
+
+    parser.parse(args.size(), args.data());
+
+    // Even with default values, count() should be 0 if not explicitly provided
+    EXPECT_EQ(parser["str1"].count(), 0);
+    EXPECT_EQ(parser["str2"].count(), 0);
+    EXPECT_EQ(parser["opt1"].count(), 0);
+    EXPECT_EQ(parser["opt2"].count(), 0);
+
+    // For optional types, verify count() == 0 matches !has_value()
+    EXPECT_EQ(parser["opt1"].count() == 0, opt_with_default.has_value());
+    EXPECT_EQ(parser["opt2"].count() == 0, !opt_without_default.has_value());
+}
+
+// Test count() with multiple values
+TEST_F(ArgParserTest, CountWithMultipleValuesTest) {
+    auto args = make_args("prog", "--vec", "1", "--vec", "2", "--vec", "3",
+                          "--pairs", "key1:val1", "--pairs", "key2:val2");
+
+    std::vector<int> vec;
+    std::vector<std::pair<std::string, std::string>> pairs;
+
+    ArgParser parser("prog", "the prog description");
+    parser.add_option("vec", "Vector values", vec);
+    parser.add_option("pairs", "Key-value pairs", pairs, ':');
+
+    parser.parse(args.size(), args.data());
+
+    // For container types, count() should match the number of times the option
+    // was used
+    EXPECT_EQ(parser["vec"].count(), 3);    // Option was used three times
+    EXPECT_EQ(parser["pairs"].count(), 2);  // Option was used twice
+
+    // Verify the actual number of elements matches
+    EXPECT_EQ(vec.size(), 3);
+    EXPECT_EQ(pairs.size(), 2);
+}

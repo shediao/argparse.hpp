@@ -635,6 +635,7 @@ class Option final : public OptionBase {
                 parse(default_value_.value());
             }
         }
+        count_ = 0;
     }
     std::optional<std::string> get_default_value() const override {
         if constexpr (ParseFromStringContainerType<T>) {
@@ -753,6 +754,7 @@ class Positional final : public OptionBase {
                 parse(default_value_.value());
             }
         }
+        count_ = 0;
     }
     std::optional<std::string> get_default_value() const override {
         if constexpr (ParseFromStringContainerType<T>) {
