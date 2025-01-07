@@ -524,3 +524,28 @@ TEST_F(ArgParserTest, OptionalValueTest) {
     ASSERT_EQ(name.value(), "myname");
     ASSERT_TRUE(!name2.has_value());
 }
+
+// 测试 choices 功能
+TEST_F(ArgParserTest, ChoicesTest) {
+    auto args = make_args("prog", "--color", "red", "--size", "large");
+    std::string color, size;
+
+    ArgParser parser("prog", "the prog description");
+    parser.add_option("color", "Color choice", color).choices({"red", "green", "blue"});
+    parser.add_option("size", "Size choice", size).choices({"small", "medium", "large"});
+
+    parser.parse(args.size(), args.data());
+
+    EXPECT_EQ(color, "red");
+    EXPECT_EQ(size, "large");
+}
+
+TEST_F(ArgParserTest, InvalidChoiceTest) {
+    auto args = make_args("prog", "--color", "yellow");  // yellow is not a valid choice
+    std::string color;
+
+    ArgParser parser("prog", "the prog description");
+    parser.add_option("color", "Color choice", color).choices({"red", "green", "blue"});
+
+    EXPECT_THROW(parser.parse(args.size(), args.data()), std::invalid_argument);
+}

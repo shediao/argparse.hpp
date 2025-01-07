@@ -432,6 +432,19 @@ class Flag final : public FlagBase {
     flag_action_function_t<T> action_;
 };
 
+template <typename T>
+class OptionValueChecker {
+   public:
+    OptionValueChecker(std::function<bool(const T &)> check,
+                       std::string error_message)
+        : check_(std::move(check)), error_message_(std::move(error_message)) {}
+    bool operator()(const T &value) const { return check_(value); }
+    const std::string &error_message() const { return error_message_; }
+   private:
+    std::function<bool(const T &)> check_;
+    std::string error_message_;
+};
+
 class OptionBase : public ArgBase {
     friend class ArgParser;
 
@@ -439,9 +452,24 @@ class OptionBase : public ArgBase {
     OptionBase(const std::string &name, const std::string &description)
         : ArgBase(name, description) {}
 
+    OptionBase &choices(std::initializer_list<std::string> choices) {
+        value_checker_.push_back(OptionValueChecker<std::string>(
+            [choices](const std::string &value) {
+                return std::ranges::find(choices, value) != choices.end();
+            },
+            "not in choices: " + join(choices, ',')));
+        return *this;
+    }
+
    protected:
     bool is_flag() const override final { return false; }
     virtual void parse(const std::string &opt_value) {
+        for (const auto &checker : value_checker_) {
+            if (!checker(opt_value)) {
+                throw std::invalid_argument("check failed: (" + opt_value +
+                                            "): " + checker.error_message());
+            }
+        }
         this->opt_values.push_back(opt_value);
         count_++;
     }
@@ -528,6 +556,7 @@ class OptionBase : public ArgBase {
     }
     std::string value_help;
     std::vector<std::string> opt_values;
+    std::vector<OptionValueChecker<std::string>> value_checker_;
 };
 
 template <typename T>
@@ -584,15 +613,17 @@ class Option final : public OptionBase {
           }) {
         set_default_value_help<T>();
     }
-    void default_value(const std::string &default_value)
+    Option<T> &default_value(const std::string &default_value)
         requires(!is_container<T>)
     {
         this->default_value_ = default_value;
+        return *this;
     }
-    void default_value(std::initializer_list<std::string> default_value)
+    Option<T> &default_value(std::initializer_list<std::string> default_value)
         requires is_container<T>
     {
         this->default_value_ = default_value;
+        return *this;
     }
 
     T const &value() const { return bind_value_; }
@@ -710,15 +741,17 @@ class Positional final : public OptionBase {
           }) {
         set_default_value_help<T>();
     }
-    void default_value(const std::string &default_value)
+    Positional<T> &default_value(const std::string &default_value)
         requires(!is_container<T>)
     {
         this->default_value_ = default_value;
+        return *this;
     }
-    void default_value(std::initializer_list<std::string> default_value)
+    Positional<T> &default_value(std::initializer_list<std::string> default_value)
         requires is_container<T>
     {
         this->default_value_ = default_value;
+        return *this;
     }
 
     T const &value() const { return bind_value_; }
