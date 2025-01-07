@@ -409,11 +409,11 @@ class Flag final : public FlagBase {
    protected:
     void parse() override {
         if constexpr (is_optional_v<T>) {
-            auto &optional_value = bind_value_.get();
-            if (!optional_value.has_value()) {
-                optional_value = typename T::value_type{};
+            auto &flag_value = bind_value_.get();
+            if (!flag_value.has_value()) {
+                flag_value = typename T::value_type{};
             }
-            action_(optional_value.value());
+            action_(flag_value.value());
         } else {
             action_(bind_value_.get());
         }
@@ -779,19 +779,23 @@ class ArgParser {
    public:
     ArgParser(std::string prog, std::string description)
         : program{std::move(prog)}, description(std::move(description)) {}
-    Flag<bool> &add_flag(const std::string &name,
-                         const std::string &description, bool &bind_value,
-                         flag_action_function_t<bool> action = store_true) {
-        args.push_back(std::make_unique<Flag<bool>>(
-            name, description, bind_value, std::move(action)));
-        return *dynamic_cast<Flag<bool> *>(args.back().get());
+    template <typename T>
+        requires std::same_as<T, bool> || std::same_as<std::optional<bool>, T>
+    Flag<T> &add_flag(const std::string &name, const std::string &description,
+                      T &bind_value,
+                      flag_action_function_t<T> action = store_true) {
+        args.push_back(std::make_unique<Flag<T>>(name, description, bind_value,
+                                                 std::move(action)));
+        return *dynamic_cast<Flag<T> *>(args.back().get());
     }
-    Flag<int> &add_flag(const std::string &name, const std::string &description,
-                        int &bind_value,
-                        flag_action_function_t<int> action = increment<int>) {
-        args.push_back(std::make_unique<Flag<int>>(
-            name, description, bind_value, std::move(action)));
-        return *dynamic_cast<Flag<int> *>(args.back().get());
+    template <typename T>
+        requires std::same_as<T, int> || std::same_as<std::optional<int>, T>
+    Flag<T> &add_flag(
+        const std::string &name, const std::string &description, T &bind_value,
+        flag_action_function_t<T> action = increment<action_value_type_t<T>>) {
+        args.push_back(std::make_unique<Flag<T>>(name, description, bind_value,
+                                                 std::move(action)));
+        return *dynamic_cast<Flag<T> *>(args.back().get());
     }
 
     template <typename T>
