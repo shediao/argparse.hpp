@@ -126,10 +126,10 @@ T parse_from_string(std::string const &s) {
     if constexpr (std::is_same_v<T, std::string>) {
         return s;
     }
-    if constexpr (std::convertible_to<std::string, T>) {
+    if constexpr (std::is_constructible_v<T, std::string>) {
         return T{s};
     }
-    if constexpr (std::is_constructible_v<T, std::string>) {
+    if constexpr (std::convertible_to<std::string, T>) {
         return T{s};
     }
     throw std::invalid_argument("Invalid type for parse_from_string");
