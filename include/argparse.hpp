@@ -455,8 +455,10 @@ class OptionBase : public ArgBase {
 
     OptionBase &choices(std::initializer_list<std::string> choices) {
         value_checker_.push_back(OptionValueChecker<std::string>(
-            [choices](const std::string &value) {
-                return std::ranges::find(choices, value) != choices.end();
+            [choices_ =
+                 std::vector<std::string>(choices)](const std::string &value) {
+                return std::ranges::find(choices_, value) !=
+                       std::ranges::end(choices_);
             },
             "not in choices: " + join(choices, ',')));
         return *this;
