@@ -6,6 +6,7 @@
 #define ARG_PASER_HPP
 
 #include <algorithm>
+#include <cctype>
 #include <concepts>
 #include <format>
 #include <functional>
@@ -316,7 +317,16 @@ class ArgBase {
                 continue;
             }
             if (opt_name[0] == '-') {
-                throw std::invalid_argument("Invalid option name: " + name + ", " + opt_name + " starts with '-'");
+                throw std::invalid_argument("Invalid option name: " + name +
+                                            ", " + opt_name +
+                                            " starts with '-'");
+            }
+            if (std::find_if(opt_name.begin(), opt_name.end(),
+                             [](unsigned char c) { return std::isblank(c); }) !=
+                opt_name.end()) {
+                throw std::invalid_argument("Invalid option name: " + name +
+                                            ", " + opt_name +
+                                            " contains blank");
             }
             if (opt_name.length() == 1) {
                 short_opt_names_.push_back(std::move(opt_name));
@@ -801,7 +811,8 @@ class ArgParser {
     template <BindableWithoutDelimiterType T>
     Option<T> &add_option(const std::string &name,
                           const std::string &description, T &bind_value) {
-        auto option = std::make_unique<Option<T>>(name, description, bind_value);
+        auto option =
+            std::make_unique<Option<T>>(name, description, bind_value);
         auto &ret = *(option.get());
         if (option_exist(ret)) {
             throw std::runtime_error("Option already exists: " + name);
@@ -814,8 +825,8 @@ class ArgParser {
     Option<T> &add_option(const std::string &name,
                           const std::string &description, T &bind_value,
                           char delim) {
-        auto option = std::make_unique<Option<T>>(name, description, bind_value,
-                                                  delim);
+        auto option =
+            std::make_unique<Option<T>>(name, description, bind_value, delim);
         auto &ret = *(option.get());
         if (option_exist(ret)) {
             throw std::runtime_error("Option already exists: " + name);
@@ -836,8 +847,8 @@ class ArgParser {
                 "Positional argument only support one container and it "
                 "must be the last one");
         }
-        auto positional = std::make_unique<Positional<T>>(name, description,
-                                                         bind_value);
+        auto positional =
+            std::make_unique<Positional<T>>(name, description, bind_value);
         auto &ret = *(positional.get());
         if (option_exist(ret)) {
             throw std::runtime_error("Option already exists: " + name);
@@ -1073,15 +1084,15 @@ class ArgParser {
         for (const auto &arg : args) {
             for (auto &name : arg->long_opt_names_) {
                 if (std::find(new_arg.long_opt_names_.begin(),
-                             new_arg.long_opt_names_.end(),
-                             name) != new_arg.long_opt_names_.end()) {
+                              new_arg.long_opt_names_.end(),
+                              name) != new_arg.long_opt_names_.end()) {
                     return true;
                 }
             }
             for (auto &name : arg->short_opt_names_) {
                 if (std::find(new_arg.short_opt_names_.begin(),
-                             new_arg.short_opt_names_.end(),
-                             name) != new_arg.short_opt_names_.end()) {
+                              new_arg.short_opt_names_.end(),
+                              name) != new_arg.short_opt_names_.end()) {
                     return true;
                 }
             }

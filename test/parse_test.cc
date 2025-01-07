@@ -563,19 +563,26 @@ TEST_F(ArgParserTest, DuplicateOptionsTest) {
 
     // 测试重复的短选项
     parser.add_flag("f,flag1", "First flag", flag1);
-    EXPECT_THROW(parser.add_flag("f,flag2", "Second flag", flag2), std::runtime_error);
+    EXPECT_THROW(parser.add_flag("f,flag2", "Second flag", flag2),
+                 std::runtime_error);
 
     // 测试重复的长选项
     parser.add_option("o1,option", "First option", opt1);
-    EXPECT_THROW(parser.add_option("o2,option", "Second option", opt2), std::runtime_error);
+    EXPECT_THROW(parser.add_option("o2,option", "Second option", opt2),
+                 std::runtime_error);
 
     // 测试重复的位置参数
     parser.add_positional("input", "Input file", pos1);
-    EXPECT_THROW(parser.add_positional("input", "Another input", pos2), std::runtime_error);
+    EXPECT_THROW(parser.add_positional("input", "Another input", pos2),
+                 std::runtime_error);
 
     // 测试不同类型之间的重复选项
-    EXPECT_THROW(parser.add_option("flag1", "Option with same name as flag", opt1), std::runtime_error);
-    EXPECT_THROW(parser.add_positional("option", "Positional with same name as option", pos2), std::runtime_error);
+    EXPECT_THROW(
+        parser.add_option("flag1", "Option with same name as flag", opt1),
+        std::runtime_error);
+    EXPECT_THROW(parser.add_positional(
+                     "option", "Positional with same name as option", pos2),
+                 std::runtime_error);
 }
 
 // 测试多个选项名称重复
@@ -588,13 +595,18 @@ TEST_F(ArgParserTest, MultipleNameConflictTest) {
     parser.add_flag("f,flag,flag-name", "First flag", flag1);
 
     // 测试与短选项冲突
-    EXPECT_THROW(parser.add_option("f,other-flag", "Conflicting short option", opt1), std::runtime_error);
+    EXPECT_THROW(
+        parser.add_option("f,other-flag", "Conflicting short option", opt1),
+        std::runtime_error);
 
     // 测试与长选项冲突
-    EXPECT_THROW(parser.add_option("x,flag", "Conflicting long option", opt1), std::runtime_error);
+    EXPECT_THROW(parser.add_option("x,flag", "Conflicting long option", opt1),
+                 std::runtime_error);
 
     // 测试与另一个长选项冲突
-    EXPECT_THROW(parser.add_option("x,flag-name", "Conflicting another long option", opt1), std::runtime_error);
+    EXPECT_THROW(parser.add_option("x,flag-name",
+                                   "Conflicting another long option", opt1),
+                 std::runtime_error);
 }
 
 // 测试选项名称以'-'开头时抛出异常
@@ -604,15 +616,73 @@ TEST_F(ArgParserTest, InvalidOptionNameStartWithDashTest) {
     std::string opt, pos;
 
     // 测试 Flag 的选项名称以'-'开头
-    EXPECT_THROW(parser.add_flag("-f", "Invalid flag name", flag), std::invalid_argument);
-    EXPECT_THROW(parser.add_flag("f,-flag", "Invalid flag name", flag), std::invalid_argument);
-    EXPECT_THROW(parser.add_flag("-f,-flag", "Invalid flag name", flag), std::invalid_argument);
+    EXPECT_THROW(parser.add_flag("-f", "Invalid flag name", flag),
+                 std::invalid_argument);
+    EXPECT_THROW(parser.add_flag("f,-flag", "Invalid flag name", flag),
+                 std::invalid_argument);
+    EXPECT_THROW(parser.add_flag("-f,-flag", "Invalid flag name", flag),
+                 std::invalid_argument);
 
     // 测试 Option 的选项名称以'-'开头
-    EXPECT_THROW(parser.add_option("-o", "Invalid option name", opt), std::invalid_argument);
-    EXPECT_THROW(parser.add_option("o,-option", "Invalid option name", opt), std::invalid_argument);
-    EXPECT_THROW(parser.add_option("-o,-option", "Invalid option name", opt), std::invalid_argument);
+    EXPECT_THROW(parser.add_option("-o", "Invalid option name", opt),
+                 std::invalid_argument);
+    EXPECT_THROW(parser.add_option("o,-option", "Invalid option name", opt),
+                 std::invalid_argument);
+    EXPECT_THROW(parser.add_option("-o,-option", "Invalid option name", opt),
+                 std::invalid_argument);
 
     // 测试 Positional 的选项名称以'-'开头
-    EXPECT_THROW(parser.add_positional("-input", "Invalid positional name", pos), std::invalid_argument);
+    EXPECT_THROW(
+        parser.add_positional("-input", "Invalid positional name", pos),
+        std::invalid_argument);
+}
+
+// 测试选项名称包含空白字符时抛出异常
+TEST_F(ArgParserTest, InvalidOptionNameWithWhitespaceTest) {
+    ArgParser parser("prog", "the prog description");
+    bool flag = false;
+    std::string opt, pos;
+
+    // 测试 Flag 的选项名称包含空格
+    EXPECT_THROW(parser.add_flag("f lag", "Invalid flag name", flag),
+                 std::invalid_argument);
+    EXPECT_THROW(parser.add_flag("flag name", "Invalid flag name", flag),
+                 std::invalid_argument);
+    EXPECT_THROW(parser.add_flag("f,flag name", "Invalid flag name", flag),
+                 std::invalid_argument);
+
+    // 测试 Flag 的选项名称包含制表符
+    EXPECT_THROW(parser.add_flag("f\tflag", "Invalid flag name", flag),
+                 std::invalid_argument);
+    EXPECT_THROW(parser.add_flag("flag\tname", "Invalid flag name", flag),
+                 std::invalid_argument);
+    EXPECT_THROW(parser.add_flag("f,flag\tname", "Invalid flag name", flag),
+                 std::invalid_argument);
+
+    // 测试 Option 的选项名称包含空格
+    EXPECT_THROW(parser.add_option("o ption", "Invalid option name", opt),
+                 std::invalid_argument);
+    EXPECT_THROW(parser.add_option("option name", "Invalid option name", opt),
+                 std::invalid_argument);
+    EXPECT_THROW(parser.add_option("o,option name", "Invalid option name", opt),
+                 std::invalid_argument);
+
+    // 测试 Option 的选项名称包含制表符
+    EXPECT_THROW(parser.add_option("o\tption", "Invalid option name", opt),
+                 std::invalid_argument);
+    EXPECT_THROW(parser.add_option("option\tname", "Invalid option name", opt),
+                 std::invalid_argument);
+    EXPECT_THROW(
+        parser.add_option("o,option\tname", "Invalid option name", opt),
+        std::invalid_argument);
+
+    // 测试 Positional 的选项名称包含空格
+    EXPECT_THROW(
+        parser.add_positional("input file", "Invalid positional name", pos),
+        std::invalid_argument);
+
+    // 测试 Positional 的选项名称包含制表符
+    EXPECT_THROW(
+        parser.add_positional("input\tfile", "Invalid positional name", pos),
+        std::invalid_argument);
 }
