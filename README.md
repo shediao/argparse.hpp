@@ -1,4 +1,26 @@
-# Quick start
+## Feature Comparison
+
+| Feature | argparse.hpp | [cxxopts](https://github.com/jarro2783/cxxopts) | [CLI11](https://github.com/CLIUtils/CLI11) | [Boost.Program_options](https://www.boost.org/doc/libs/1_84_0/doc/html/program_options.html) | [gflags](https://github.com/gflags/gflags) |
+|---------|-------------|-----------|--------|---------------------|---------|
+| Header-only | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Dependencies | None | None | None | Boost | None |
+| C++ Standard | C++20 | C++11 | C++11 | C++11 | C++11 |
+| GNU-style options | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Positional arguments | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Default values | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Type-safe | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Container support | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Custom types | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Subcommands | ❌ | ❌ | ✅ | ❌ | ❌ |
+| Config file | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Help generation | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Unicode support | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Combined flags (-abc) | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Required options | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Option groups | ❌ | ✅ | ✅ | ✅ | ❌ |
+| Validation | ❌ | ✅ | ✅ | ✅ | ❌ |
+
+## Quick start
 
 This is a lightweight & typesafe C++ option parser library, supporting the standard GNU style syntax for options.
 
