@@ -312,6 +312,12 @@ class ArgBase {
     ArgBase(const std::string &name, const std::string &description)
         : description_(description) {
         for (auto &&opt_name : split(name, ',', -1)) {
+            if (opt_name.empty()) {
+                continue;
+            }
+            if (opt_name[0] == '-') {
+                throw std::invalid_argument("Invalid option name: " + name + ", " + opt_name + " starts with '-'");
+            }
             if (opt_name.length() == 1) {
                 short_opt_names_.push_back(std::move(opt_name));
             } else if (opt_name.length() > 1) {

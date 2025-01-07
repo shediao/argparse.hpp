@@ -596,3 +596,23 @@ TEST_F(ArgParserTest, MultipleNameConflictTest) {
     // 测试与另一个长选项冲突
     EXPECT_THROW(parser.add_option("x,flag-name", "Conflicting another long option", opt1), std::runtime_error);
 }
+
+// 测试选项名称以'-'开头时抛出异常
+TEST_F(ArgParserTest, InvalidOptionNameStartWithDashTest) {
+    ArgParser parser("prog", "the prog description");
+    bool flag = false;
+    std::string opt, pos;
+
+    // 测试 Flag 的选项名称以'-'开头
+    EXPECT_THROW(parser.add_flag("-f", "Invalid flag name", flag), std::invalid_argument);
+    EXPECT_THROW(parser.add_flag("f,-flag", "Invalid flag name", flag), std::invalid_argument);
+    EXPECT_THROW(parser.add_flag("-f,-flag", "Invalid flag name", flag), std::invalid_argument);
+
+    // 测试 Option 的选项名称以'-'开头
+    EXPECT_THROW(parser.add_option("-o", "Invalid option name", opt), std::invalid_argument);
+    EXPECT_THROW(parser.add_option("o,-option", "Invalid option name", opt), std::invalid_argument);
+    EXPECT_THROW(parser.add_option("-o,-option", "Invalid option name", opt), std::invalid_argument);
+
+    // 测试 Positional 的选项名称以'-'开头
+    EXPECT_THROW(parser.add_positional("-input", "Invalid positional name", pos), std::invalid_argument);
+}
