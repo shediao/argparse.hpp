@@ -370,7 +370,8 @@ TEST_F(ArgParserTest, DefaultValueTest) {
     // 设置容器类型的默认值
     parser.add_option("v", "Vector value", vec_val)
         .default_value({"1", "2", "3"});
-    parser.add_option("p", "Pair value", pair_val, ':').default_value("key:100");
+    parser.add_option("p", "Pair value", pair_val, ':')
+        .default_value("key:100");
 
     // 设置位置参数的默认值
     parser.add_positional("files", "Input files", pos_val)
