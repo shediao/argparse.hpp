@@ -51,6 +51,53 @@ template <typename T>
 constexpr bool is_string_v = is_string<T>::value;
 
 template <typename T>
+concept ParseFromStringBasicType =
+    is_string_v<std::remove_cv_t<T>> || std::same_as<std::remove_cv_t<T>, bool> || std::same_as<std::remove_cv_t<T>, int> ||
+    std::same_as<std::remove_cv_t<T>, int> || std::same_as<std::remove_cv_t<T>, long> ||
+    std::same_as<std::remove_cv_t<T>, unsigned long> || std::same_as<std::remove_cv_t<T>, long long> ||
+    std::same_as<std::remove_cv_t<T>, unsigned long long> || std::same_as<std::remove_cv_t<T>, float> ||
+    std::same_as<std::remove_cv_t<T>, double> || std::same_as<std::remove_cv_t<T>, long double>;
+
+template <typename T>
+concept ParseFromStringCustomType =
+    (std::is_constructible_v<std::remove_cv_t<T>, std::string> ||
+     std::convertible_to<std::string, std::remove_cv_t<T>>) &&
+    (!ParseFromStringBasicType<std::remove_cv_t<T>>);
+
+template <typename T>
+concept ParseFromStringSingleType =
+    ParseFromStringBasicType<T> || ParseFromStringCustomType<T>;
+
+template <typename T>
+concept ParseFromStringTupleLikeType = requires {
+    std::get<0>(std::declval<T &>());
+    requires std::tuple_size_v<T> > 0;
+    typename std::tuple_element<0, T>::type;
+} && []<std::size_t... I>(std::integer_sequence<std::size_t, I...>) constexpr {
+    return (ParseFromStringSingleType<std::tuple_element_t<I, T>> && ...);
+}(std::make_index_sequence<std::tuple_size_v<T>>());
+
+template <typename T>
+concept ParseFromStringOptionalSingleType =
+    is_optional_v<T> && ParseFromStringSingleType<typename T::value_type>;
+
+template <typename T>
+concept ParseFromStringOptionalTupleLikeType =
+    is_optional_v<T> && ParseFromStringTupleLikeType<typename T::value_type>;
+
+template <typename T>
+concept ParseFromStringType =
+    ParseFromStringSingleType<T> || ParseFromStringTupleLikeType<T> ||
+    ParseFromStringOptionalSingleType<T> ||
+    ParseFromStringOptionalTupleLikeType<T>;
+
+template <typename T>
+concept ParseFromStringContainerType = requires(T t) {
+    t.insert(t.end(), std::declval<typename T::value_type>());
+    requires ParseFromStringType<typename T::value_type>;
+};
+
+template <typename T>
 concept is_tuple_like = requires(T t) {
     typename std::tuple_element<0, T>::type;
     requires std::tuple_size_v<T> > 0;
@@ -66,7 +113,7 @@ concept is_parse_from_string_basic_type =
     std::same_as<T, double> || std::same_as<T, long double> ||
     requires(std::string const &s) { T(s); };
 
-template <typename T>
+template <ParseFromStringBasicType T>
 T parse_from_string(std::string const &s) {
     size_t pos = 0;
     if constexpr (std::is_same_v<T, int>) {
@@ -126,14 +173,14 @@ T parse_from_string(std::string const &s) {
     if constexpr (std::is_same_v<T, std::string>) {
         return s;
     }
-    if constexpr (std::is_constructible_v<T, std::string>) {
-        return T{s};
-    }
-    if constexpr (std::convertible_to<std::string, T>) {
-        return T{s};
-    }
     throw std::invalid_argument("Invalid type for parse_from_string");
 }
+
+template <ParseFromStringCustomType T>
+T parse_from_string(std::string const &s) {
+    return T(s);
+}
+
 template <>
 inline bool parse_from_string<bool>(std::string const &s) {
     if (s == "true" || s == "on" || s == "1") {
@@ -183,16 +230,14 @@ T make_tuple_from_container_impl(std::vector<std::string> const &v,
         parse_from_string<std::decay_t<std::tuple_element_t<I, T>>>(v[I])...};
 }
 
-template <typename T>
-    requires is_tuple_like<T>
+template <ParseFromStringTupleLikeType T>
 T make_tuple_from_container(std::vector<std::string> const &v) {
     return make_tuple_from_container_impl<T>(
         v, std::make_index_sequence<std::tuple_size_v<std::decay_t<T>>>());
 }
 
 // for tuple like types
-template <typename T>
-    requires is_tuple_like<T>
+template <ParseFromStringTupleLikeType T>
 T parse_from_string(std::string const &s, const char delim) {
     auto v = split(s, delim, std::tuple_size_v<std::decay_t<T>>);
     if (v.size() != std::tuple_size_v<std::decay_t<T>>) {
