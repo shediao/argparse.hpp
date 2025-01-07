@@ -767,9 +767,14 @@ class ArgParser {
     Flag<T> &add_flag(
         const std::string &name, const std::string &description, T &bind_value,
         std::function<void(extract_value_type_t<T> &)> action = store_true) {
-        args.push_back(std::make_unique<Flag<T>>(name, description, bind_value,
-                                                 std::move(action)));
-        return *dynamic_cast<Flag<T> *>(args.back().get());
+        auto flag = std::make_unique<Flag<T>>(name, description, bind_value,
+                                              std::move(action));
+        auto &ret = *(flag.get());
+        if (option_exist(ret)) {
+            throw std::runtime_error("Option already exists: " + name);
+        }
+        args.push_back(std::move(flag));
+        return ret;
     }
     template <typename T>
         requires std::same_as<T, int> || std::same_as<std::optional<int>, T>
@@ -777,26 +782,40 @@ class ArgParser {
                       T &bind_value,
                       std::function<void(extract_value_type_t<T> &)> action =
                           increment<extract_value_type_t<T>>) {
-        args.push_back(std::make_unique<Flag<T>>(name, description, bind_value,
-                                                 std::move(action)));
-        return *dynamic_cast<Flag<T> *>(args.back().get());
+        auto flag = std::make_unique<Flag<T>>(name, description, bind_value,
+                                              std::move(action));
+        auto &ret = *(flag.get());
+        if (option_exist(ret)) {
+            throw std::runtime_error("Option already exists: " + name);
+        }
+        args.push_back(std::move(flag));
+        return ret;
     }
 
     template <BindableWithoutDelimiterType T>
     Option<T> &add_option(const std::string &name,
                           const std::string &description, T &bind_value) {
-        args.push_back(
-            std::make_unique<Option<T>>(name, description, bind_value));
-        return *dynamic_cast<Option<T> *>(args.back().get());
+        auto option = std::make_unique<Option<T>>(name, description, bind_value);
+        auto &ret = *(option.get());
+        if (option_exist(ret)) {
+            throw std::runtime_error("Option already exists: " + name);
+        }
+        args.push_back(std::move(option));
+        return ret;
     }
 
     template <BindableWithDelimiterType T>
     Option<T> &add_option(const std::string &name,
                           const std::string &description, T &bind_value,
                           char delim) {
-        args.push_back(
-            std::make_unique<Option<T>>(name, description, bind_value, delim));
-        return *dynamic_cast<Option<T> *>(args.back().get());
+        auto option = std::make_unique<Option<T>>(name, description, bind_value,
+                                                  delim);
+        auto &ret = *(option.get());
+        if (option_exist(ret)) {
+            throw std::runtime_error("Option already exists: " + name);
+        }
+        args.push_back(std::move(option));
+        return ret;
     }
 
     template <BindableWithoutDelimiterType T>
@@ -811,18 +830,28 @@ class ArgParser {
                 "Positional argument only support one container and it "
                 "must be the last one");
         }
-        args.push_back(
-            std::make_unique<Positional<T>>(name, description, bind_value));
-        return *dynamic_cast<Positional<T> *>(args.back().get());
+        auto positional = std::make_unique<Positional<T>>(name, description,
+                                                         bind_value);
+        auto &ret = *(positional.get());
+        if (option_exist(ret)) {
+            throw std::runtime_error("Option already exists: " + name);
+        }
+        args.push_back(std::move(positional));
+        return ret;
     }
 
     template <BindableWithDelimiterType T>
     Positional<T> &add_positional(const std::string &name,
                                   const std::string &description, T &bind_value,
                                   char delim) {
-        args.push_back(std::make_unique<Positional<T>>(name, description,
-                                                       bind_value, delim));
-        return *dynamic_cast<Positional<T> *>(args.back().get());
+        auto positional = std::make_unique<Positional<T>>(name, description,
+                                                          bind_value, delim);
+        auto &ret = *(positional.get());
+        if (option_exist(ret)) {
+            throw std::runtime_error("Option already exists: " + name);
+        }
+        args.push_back(std::move(positional));
+        return ret;
     }
 
     void print_usage() const {
@@ -1034,6 +1063,25 @@ class ArgParser {
     }
 
    private:
+    bool option_exist(ArgBase &new_arg) const {
+        for (const auto &arg : args) {
+            for (auto &name : arg->long_opt_names_) {
+                if (std::find(new_arg.long_opt_names_.begin(),
+                             new_arg.long_opt_names_.end(),
+                             name) != new_arg.long_opt_names_.end()) {
+                    return true;
+                }
+            }
+            for (auto &name : arg->short_opt_names_) {
+                if (std::find(new_arg.short_opt_names_.begin(),
+                             new_arg.short_opt_names_.end(),
+                             name) != new_arg.short_opt_names_.end()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
     std::vector<std::unique_ptr<ArgBase>> args;
     std::string version{"0.1"};
     std::string program;
