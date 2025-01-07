@@ -108,22 +108,22 @@ concept ParseFromStringContainerType = requires(T t) {
 };
 
 template <typename T>
-struct from_string_type {
+struct extract_value_type {
     using type = T;
 };
 
 template <typename T>
-struct from_string_type<std::optional<T>> {
+struct extract_value_type<std::optional<T>> {
     using type = T;
 };
 
 template <ParseFromStringContainerType T>
-struct from_string_type<T> {
+struct extract_value_type<T> {
     using type = typename T::value_type;
 };
 
 template <typename T>
-using from_string_type_t = typename from_string_type<T>::type;
+using extract_value_type_t = typename extract_value_type<T>::type;
 
 template <typename T>
 concept BindableType =
@@ -338,14 +338,6 @@ class ArgBase {
     std::string description_;
 };
 
-template <typename... T>
-struct overload : T... {
-    using T::operator()...;
-};
-
-template <typename... T>
-overload(T...) -> overload<T...>;
-
 class FlagBase : public ArgBase {
     friend class ArgParser;
 
@@ -398,7 +390,7 @@ class Flag final : public FlagBase {
           bind_value_(std::ref(bind_value)),
           parse_function_{store_true} {}
     Flag(const std::string &name, const std::string &description, T &bind_value,
-         std::function<void(from_string_type_t<T> &)> action)
+         std::function<void(extract_value_type_t<T> &)> action)
         : FlagBase(name, description),
           bind_value_(std::ref(bind_value)),
           parse_function_(std::move(action)) {}
@@ -421,7 +413,7 @@ class Flag final : public FlagBase {
 
    private:
     std::reference_wrapper<T> bind_value_;
-    std::function<void(from_string_type_t<T> &)> parse_function_;
+    std::function<void(extract_value_type_t<T> &)> parse_function_;
 };
 
 template <typename T>
@@ -562,7 +554,7 @@ class Option final : public OptionBase {
         requires BindableWithoutDelimiterType<T>
         : OptionBase(name, description),
           bind_value_(std::ref(bind_value)),
-          parse_function_(parse_from_string<from_string_type_t<T>>) {
+          parse_function_(parse_from_string<extract_value_type_t<T>>) {
         set_default_value_help<T>();
     }
     Option(const std::string &name, const std::string &description,
@@ -571,7 +563,8 @@ class Option final : public OptionBase {
         : OptionBase(name, description),
           bind_value_(std::ref(bind_value)),
           parse_function_([delim](std::string const &opt_value) {
-              return parse_from_string<from_string_type_t<T>>(opt_value, delim);
+              return parse_from_string<extract_value_type_t<T>>(opt_value,
+                                                                delim);
           }) {
         set_default_value_help<T>();
     }
@@ -640,7 +633,7 @@ class Option final : public OptionBase {
 
    private:
     std::reference_wrapper<T> bind_value_;
-    std::function<from_string_type_t<T>(std::string const &)> parse_function_;
+    std::function<extract_value_type_t<T>(std::string const &)> parse_function_;
     std::conditional_t<ParseFromStringContainerType<T>,
                        std::optional<std::vector<std::string>>,
                        std::optional<std::string>>
@@ -659,11 +652,11 @@ class Positional final : public OptionBase {
         set_default_value_help<T>();
         if constexpr (ParseFromStringContainerType<T>) {
             parse_function_ = [](std::string const &opt_value) {
-                return parse_from_string<from_string_type_t<T>>(opt_value);
+                return parse_from_string<extract_value_type_t<T>>(opt_value);
             };
         } else if constexpr (is_optional_v<T>) {
             parse_function_ = [](std::string const &opt_value) {
-                return parse_from_string<from_string_type_t<T>>(opt_value);
+                return parse_from_string<extract_value_type_t<T>>(opt_value);
             };
         } else {
             parse_function_ = [](std::string const &opt_value) {
@@ -678,13 +671,13 @@ class Positional final : public OptionBase {
         set_default_value_help<T>();
         if constexpr (ParseFromStringContainerType<T>) {
             parse_function_ = [delim](std::string const &opt_value) {
-                return parse_from_string<from_string_type_t<T>>(opt_value,
-                                                                delim);
+                return parse_from_string<extract_value_type_t<T>>(opt_value,
+                                                                  delim);
             };
         } else if constexpr (is_optional_v<T>) {
             parse_function_ = [delim](std::string const &opt_value) {
-                return parse_from_string<from_string_type_t<T>>(opt_value,
-                                                                delim);
+                return parse_from_string<extract_value_type_t<T>>(opt_value,
+                                                                  delim);
             };
         } else {
             parse_function_ = [delim](std::string const &opt_value) {
@@ -758,7 +751,7 @@ class Positional final : public OptionBase {
 
    private:
     std::reference_wrapper<T> bind_value_;
-    std::function<from_string_type_t<T>(std::string const &)> parse_function_;
+    std::function<extract_value_type_t<T>(std::string const &)> parse_function_;
     std::conditional_t<ParseFromStringContainerType<T>,
                        std::optional<std::vector<std::string>>,
                        std::optional<std::string>>
@@ -773,7 +766,7 @@ class ArgParser {
         requires std::same_as<T, bool> || std::same_as<std::optional<bool>, T>
     Flag<T> &add_flag(
         const std::string &name, const std::string &description, T &bind_value,
-        std::function<void(from_string_type_t<T> &)> action = store_true) {
+        std::function<void(extract_value_type_t<T> &)> action = store_true) {
         args.push_back(std::make_unique<Flag<T>>(name, description, bind_value,
                                                  std::move(action)));
         return *dynamic_cast<Flag<T> *>(args.back().get());
@@ -782,8 +775,8 @@ class ArgParser {
         requires std::same_as<T, int> || std::same_as<std::optional<int>, T>
     Flag<T> &add_flag(const std::string &name, const std::string &description,
                       T &bind_value,
-                      std::function<void(from_string_type_t<T> &)> action =
-                          increment<from_string_type_t<T>>) {
+                      std::function<void(extract_value_type_t<T> &)> action =
+                          increment<extract_value_type_t<T>>) {
         args.push_back(std::make_unique<Flag<T>>(name, description, bind_value,
                                                  std::move(action)));
         return *dynamic_cast<Flag<T> *>(args.back().get());
