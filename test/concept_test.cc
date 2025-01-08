@@ -29,7 +29,7 @@ TEST(ConceptTest, IsTupleLike) {
 
 // 测试 ParseFromStringBasicType concept
 TEST(ConceptTest, CanParseFromStringWithoutSplit) {
-    ASSERT_TRUE(!argparse::ParseFromStringBasicType<char>);
+    ASSERT_TRUE(argparse::ParseFromStringBasicType<char>);
     ASSERT_TRUE(!argparse::ParseFromStringBasicType<wchar_t>);
     ASSERT_TRUE(!argparse::ParseFromStringBasicType<char16_t>);
     ASSERT_TRUE(!argparse::ParseFromStringBasicType<char32_t>);
@@ -119,6 +119,7 @@ TEST(ConceptTest, CombinedScenarios) {
 TEST(ConceptTest, ParseFromStringBasicType) {
     // 基本类型测试
     ASSERT_TRUE(argparse::ParseFromStringBasicType<bool>);
+    ASSERT_TRUE(argparse::ParseFromStringBasicType<char>);
     ASSERT_TRUE(argparse::ParseFromStringBasicType<int>);
     ASSERT_TRUE(argparse::ParseFromStringBasicType<long>);
     ASSERT_TRUE(argparse::ParseFromStringBasicType<unsigned long>);
@@ -136,7 +137,6 @@ TEST(ConceptTest, ParseFromStringBasicType) {
     ASSERT_TRUE(argparse::ParseFromStringBasicType<std::u32string>);
 
     // 不支持的类型测试
-    ASSERT_FALSE(argparse::ParseFromStringBasicType<char>);
     ASSERT_FALSE(argparse::ParseFromStringBasicType<unsigned char>);
     ASSERT_FALSE(argparse::ParseFromStringBasicType<short>);
     ASSERT_FALSE(argparse::ParseFromStringBasicType<unsigned short>);

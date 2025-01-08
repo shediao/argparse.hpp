@@ -17,7 +17,6 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -35,30 +34,25 @@ template <typename T>
 constexpr bool is_optional_v = is_optional<T>::value;
 
 template <typename T>
+struct is_string : std::false_type {};
+
+template <typename charT>
+struct is_string<std::basic_string<charT>> : std::true_type {};
+
+template <typename T>
+constexpr bool is_string_v = is_string<T>::value;
+
+template <typename T>
 concept is_container = requires(T t) {
+    requires(!is_string_v<T>);
     t.insert(t.end(), std::declval<typename T::value_type>());
 };
 
 template <typename T>
-struct is_string : std::false_type {};
-
-template <>
-struct is_string<std::string> : std::true_type {};
-template <>
-struct is_string<std::wstring> : std::true_type {};
-template <>
-struct is_string<std::u8string> : std::true_type {};
-template <>
-struct is_string<std::u16string> : std::true_type {};
-template <>
-struct is_string<std::u32string> : std::true_type {};
-
-template <typename T>
-constexpr bool is_string_v = is_string<T>::value;
-template <typename T>
 concept ParseFromStringBasicType =
     is_string_v<std::remove_cv_t<T>> ||
     std::same_as<std::remove_cv_t<T>, bool> ||
+    std::same_as<std::remove_cv_t<T>, char> ||
     std::same_as<std::remove_cv_t<T>, int> ||
     std::same_as<std::remove_cv_t<T>, int> ||
     std::same_as<std::remove_cv_t<T>, long> ||
@@ -103,10 +97,9 @@ concept ParseFromStringType =
     ParseFromStringOptionalTupleLikeType<T>;
 
 template <typename T>
-concept ParseFromStringContainerType = requires(T t) {
-    t.insert(t.end(), std::declval<typename T::value_type>());
-    requires ParseFromStringType<typename T::value_type>;
-};
+concept ParseFromStringContainerType =
+    is_container<T> && (ParseFromStringSingleType<typename T::value_type> ||
+                        ParseFromStringTupleLikeType<typename T::value_type>);
 
 template <typename T>
 struct extract_value_type {
@@ -128,7 +121,9 @@ using extract_value_type_t = typename extract_value_type<T>::type;
 
 template <typename T>
 concept BindableType =
-    ParseFromStringType<T> || ParseFromStringContainerType<T>;
+    ParseFromStringContainerType<T> || ParseFromStringSingleType<T> ||
+    ParseFromStringTupleLikeType<T> || ParseFromStringOptionalSingleType<T> ||
+    ParseFromStringOptionalTupleLikeType<T>;
 
 template <typename T>
 concept BindableWithoutDelimiterType =
@@ -229,6 +224,13 @@ inline bool parse_from_string<bool>(std::string const &s) {
         return false;
     }
     throw std::invalid_argument("Invalid string for bool: " + s);
+}
+template <>
+inline char parse_from_string<char>(std::string const &s) {
+    if (s.length() == 1) {
+        return s[0];
+    }
+    throw std::invalid_argument("Invalid string for char: " + s);
 }
 
 template <typename T>

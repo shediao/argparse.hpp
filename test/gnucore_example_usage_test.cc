@@ -147,7 +147,7 @@ TEST_F(GNUCoreutilsTest, SortCommandTest) {
     bool numeric_sort = false;
     bool reverse = false;
     std::vector<std::pair<int, int>> key_positions;
-    std::string field_sep = "\0";
+    char field_sep = '\0';
     std::vector<std::string> files;
 
     ArgParser parser("sort",
@@ -165,7 +165,7 @@ TEST_F(GNUCoreutilsTest, SortCommandTest) {
     ASSERT_EQ(key_positions.size(), 1);
     EXPECT_EQ(key_positions[0].first, 2);
     EXPECT_EQ(key_positions[0].second, 2);
-    EXPECT_EQ(field_sep, ":");
+    EXPECT_EQ(field_sep, ':');
     ASSERT_EQ(files.size(), 1);
     EXPECT_EQ(files[0], "file.txt");
 }
