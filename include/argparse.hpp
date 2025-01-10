@@ -340,7 +340,6 @@ class ArgBase {
         }
     }
     size_t count() const { return count_; }
-    void require(bool required = true) { this->required_ = required; }
     virtual ~ArgBase() = default;
 
    protected:
@@ -350,7 +349,6 @@ class ArgBase {
     virtual std::string usage(int option_width) const = 0;
     const std::string &description() const { return description_; }
     size_t count_{0};
-    bool required_{false};
     std::vector<std::string> short_opt_names_;
     std::vector<std::string> long_opt_names_;
     std::string description_;
@@ -1063,17 +1061,6 @@ class ArgParser {
                 throw std::runtime_error("Too many positional arguments");
             }
             ++i;
-        }
-
-        // Check if all required arguments are provided
-        for (const auto &arg : args) {
-            if (arg->required_ && arg->count() == 0) {
-                throw std::runtime_error(
-                    "Required argument missing: " +
-                    (!arg->long_opt_names_.empty()    ? arg->long_opt_names_[0]
-                     : !arg->short_opt_names_.empty() ? arg->short_opt_names_[0]
-                                                      : ""));
-            }
         }
 
         // Handle options that were not provided but have default values

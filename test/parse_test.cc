@@ -159,17 +159,6 @@ TEST_F(ArgParserTest, UnknownOptionTest) {
     EXPECT_THROW(parser.parse(args.size(), args.data()), std::runtime_error);
 }
 
-TEST_F(ArgParserTest, RequiredOptionTest) {
-    auto args = make_args("prog");
-    std::string required;
-
-    ArgParser parser("prog", "the prog description");
-    parser.add_option("r,required", "Required option", required);
-    parser["required"].require();
-
-    EXPECT_THROW(parser.parse(args.size(), args.data()), std::runtime_error);
-}
-
 // 组合短选项测试
 TEST_F(ArgParserTest, CombinedShortOptionsTest) {
     auto args = make_args("prog", "-abc", "value");
