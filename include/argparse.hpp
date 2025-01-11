@@ -454,9 +454,9 @@ class OptionBase : public ArgBase {
         : ArgBase(name, description) {}
 
     OptionBase &choices(std::initializer_list<std::string> choices) {
+        choices_ = std::vector<std::string>(choices);
         value_checker_.push_back(OptionValueChecker<std::string>(
-            [choices_ =
-                 std::vector<std::string>(choices)](const std::string &value) {
+            [this](const std::string &value) {
                 return std::ranges::find(choices_, value) !=
                        std::ranges::end(choices_);
             },
@@ -533,6 +533,12 @@ class OptionBase : public ArgBase {
                     usage_str << default_value_string;
                 }
             }
+            if (!choices_.empty()) {
+                auto choices_string = " (choices: " + join(choices_, ',') + ")";
+                usage_str << "\n"
+                          << std::format("{0:<{1}}{2}", "", option_width,
+                                         choices_string);
+            }
         } else {
             std::string options_str{long_opt_names_[0]};
             if (is_multiple()) {
@@ -560,6 +566,7 @@ class OptionBase : public ArgBase {
     std::string value_help;
     std::vector<std::string> opt_values;
     std::vector<OptionValueChecker<std::string>> value_checker_;
+    std::vector<std::string> choices_;
 };
 
 template <BindableType T>
