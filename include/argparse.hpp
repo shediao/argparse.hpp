@@ -292,7 +292,7 @@ T parse_from_string(std::string const &s, const char delim) {
 std::string format(std::string const &option_name, int width,
                    std::string const &description) {
     std::string ret;
-    if (option_name.length() > width) {
+    if (option_name.length() > static_cast<size_t>(width)) {
         ret = option_name + " " + description;
     } else {
         ret = option_name + std::string(width - option_name.length(), ' ') +
@@ -536,7 +536,7 @@ class OptionBase : public ArgBase {
                         default_value_string.length() >
                     max_width) {
                     usage_str << "\n"
-                              << ("", option_width, default_value_string);
+                              << format("", option_width, default_value_string);
                 } else {
                     usage_str << default_value_string;
                 }
