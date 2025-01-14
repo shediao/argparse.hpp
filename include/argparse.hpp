@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <cctype>
 #include <concepts>
-#include <format>
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -290,6 +289,18 @@ T parse_from_string(std::string const &s, const char delim) {
     return make_tuple_from_container<T>(v);
 }
 
+std::string format(std::string const &option_name, int width,
+                   std::string const &description) {
+    std::string ret;
+    if (option_name.length() > width) {
+        ret = option_name + " " + description;
+    } else {
+        ret = option_name + std::string(width - option_name.length(), ' ') +
+              description;
+    }
+    return ret;
+}
+
 }  // namespace
 
 inline void store_true(bool &value) { value = true; }
@@ -386,8 +397,7 @@ class FlagBase : public ArgBase {
         if (!long_opts.empty()) {
             options_str += join(long_opts, ',');
         }
-        usage_str << std::format("{0:<{1}}{2}", options_str, option_width,
-                                 description());
+        usage_str << format(options_str, option_width, description());
         return usage_str.str();
     }
 };
@@ -517,8 +527,7 @@ class OptionBase : public ArgBase {
             if (is_multiple()) {
                 options_str += "...";
             }
-            usage_str << std::format("{0:<{1}}{2}", options_str, option_width,
-                                     description());
+            usage_str << format(options_str, option_width, description());
             if (auto default_value = get_default_value();
                 default_value.has_value()) {
                 auto default_value_string =
@@ -527,25 +536,21 @@ class OptionBase : public ArgBase {
                         default_value_string.length() >
                     max_width) {
                     usage_str << "\n"
-                              << std::format("{0:<{1}}{2}", "", option_width,
-                                             default_value_string);
+                              << ("", option_width, default_value_string);
                 } else {
                     usage_str << default_value_string;
                 }
             }
             if (!choices_.empty()) {
                 auto choices_string = " (choices: " + join(choices_, ',') + ")";
-                usage_str << "\n"
-                          << std::format("{0:<{1}}{2}", "", option_width,
-                                         choices_string);
+                usage_str << "\n" << format("", option_width, choices_string);
             }
         } else {
             std::string options_str{long_opt_names_[0]};
             if (is_multiple()) {
                 options_str += "...";
             }
-            usage_str << std::format("{0:<{1}}{2}", options_str, option_width,
-                                     description());
+            usage_str << format(options_str, option_width, description());
             if (auto default_value = get_default_value();
                 default_value.has_value()) {
                 auto default_value_string =
@@ -554,8 +559,7 @@ class OptionBase : public ArgBase {
                         default_value_string.length() >
                     max_width) {
                     usage_str << "\n"
-                              << std::format("{0:<{1}}{2}", "", option_width,
-                                             default_value_string);
+                              << format("", option_width, default_value_string);
                 } else {
                     usage_str << default_value_string;
                 }
