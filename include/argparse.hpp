@@ -10,6 +10,7 @@
 #include <concepts>
 #include <functional>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <numeric>
 #include <optional>
@@ -537,13 +538,27 @@ class OptionBase : public ArgBase {
         : ArgBase(name, description) {}
 
     OptionBase &choices(std::vector<std::string> const &choices) {
-        choices_ = std::vector<std::string>(choices);
+        return allowed(choices);
+    }
+    OptionBase &allowed(std::vector<std::string> const &allowed_values) {
+        allowed_ = std::vector<std::string>(allowed_values);
         value_checker_.push_back(OptionValueChecker<std::string>(
             [this](const std::string &value) {
-                return std::ranges::find(choices_, value) !=
-                       std::ranges::end(choices_);
+                return std::ranges::find(allowed_, value) !=
+                       std::ranges::end(allowed_);
             },
-            "not in choices: " + join(choices, ',')));
+            "not in allowed: " + join(allowed_values, ',')));
+        return *this;
+    }
+
+    OptionBase &value_help(std::string const &value_help) {
+        this->value_help_ = "<" + value_help + ">";
+        return *this;
+    }
+
+    OptionBase &allowed_help(
+        std::map<std::string, std::string> const &allowed_helps) {
+        this->allowed_help_ = allowed_helps;
         return *this;
     }
 
@@ -567,11 +582,11 @@ class OptionBase : public ArgBase {
     template <typename T>
     void set_default_value_help() {
         if constexpr (std::is_integral_v<T>) {
-            value_help = "<N>";
+            value_help_ = "<N>";
         } else if constexpr (std::is_floating_point_v<T>) {
-            value_help = "<0.0>";
+            value_help_ = "<0.0>";
         } else {
-            value_help = "<arg>";
+            value_help_ = "<arg>";
         }
     }
     std::string usage(int option_width) const override {
@@ -596,7 +611,7 @@ class OptionBase : public ArgBase {
                 opt_names_length += delimiter_of_short_and_long.length();
             }
 
-            opt_names_length += (value_help.length() + 1);
+            opt_names_length += (value_help_.length() + 1);
 
             std::vector<std::string> short_names_with_dash;
             std::vector<std::string> long_names_with_dash_dash;
@@ -616,9 +631,9 @@ class OptionBase : public ArgBase {
                                  long_names_with_dash_dash.end());
                 auto end = all_names.end() - 1;
                 for (auto it = all_names.begin(); it != end; ++it) {
-                    usage_str << *it << ' ' << value_help << '\n';
+                    usage_str << *it << ' ' << value_help_ << '\n';
                 }
-                usage_str << argparse::format(*end + " " + value_help,
+                usage_str << argparse::format(*end + " " + value_help_,
                                               option_width, description());
             } else {
                 auto s = join(short_names_with_dash, delimiter);
@@ -629,7 +644,7 @@ class OptionBase : public ArgBase {
                         std::string(delimiter_of_short_and_long.length(), ' ') +
                         l;
                     usage_str
-                        << argparse::format(options_str + " " + value_help,
+                        << argparse::format(options_str + " " + value_help_,
                                             option_width, description());
                 } else {
                     std::string options_str =
@@ -637,7 +652,7 @@ class OptionBase : public ArgBase {
                             ? s
                             : (s + delimiter_of_short_and_long + l);
                     usage_str
-                        << argparse::format(options_str + " " + value_help,
+                        << argparse::format(options_str + " " + value_help_,
                                             option_width, description());
                 }
             }
@@ -655,10 +670,17 @@ class OptionBase : public ArgBase {
                     usage_str << default_value_string;
                 }
             }
-            if (!choices_.empty()) {
-                auto choices_string = " allowed:[" + join(choices_, ',') + "]";
+            if (!allowed_.empty() && this->allowed_help_.empty()) {
+                auto choices_string = " allowed:[" + join(allowed_, ',') + "]";
                 usage_str << "\n"
                           << argparse::format("", option_width, choices_string);
+            }
+            if (!this->allowed_help_.empty()) {
+                for (auto const &[value, help] : this->allowed_help_) {
+                    usage_str << '\n'
+                              << argparse::format("    [" + value + "]",
+                                                  option_width, " " + help);
+                }
             }
         } else {
             std::string options_str{long_opt_names_[0]};
@@ -681,10 +703,11 @@ class OptionBase : public ArgBase {
         }
         return usage_str.str();
     }
-    std::string value_help;
+    std::string value_help_;
     std::vector<std::string> opt_values;
     std::vector<OptionValueChecker<std::string>> value_checker_;
-    std::vector<std::string> choices_;
+    std::vector<std::string> allowed_;
+    std::map<std::string, std::string> allowed_help_;
 };
 
 template <BindableType T>
