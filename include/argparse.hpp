@@ -397,7 +397,7 @@ class FlagBase : public ArgBase {
         if (!long_opts.empty()) {
             options_str += join(long_opts, ',');
         }
-        usage_str << format(options_str, option_width, description());
+        usage_str << argparse::format(options_str, option_width, description());
         return usage_str.str();
     }
 };
@@ -527,7 +527,8 @@ class OptionBase : public ArgBase {
             if (is_multiple()) {
                 options_str += "...";
             }
-            usage_str << format(options_str, option_width, description());
+            usage_str << argparse::format(options_str, option_width,
+                                          description());
             if (auto default_value = get_default_value();
                 default_value.has_value()) {
                 auto default_value_string =
@@ -536,21 +537,24 @@ class OptionBase : public ArgBase {
                         default_value_string.length() >
                     max_width) {
                     usage_str << "\n"
-                              << format("", option_width, default_value_string);
+                              << argparse::format("", option_width,
+                                                  default_value_string);
                 } else {
                     usage_str << default_value_string;
                 }
             }
             if (!choices_.empty()) {
-                auto choices_string = " (choices: " + join(choices_, ',') + ")";
-                usage_str << "\n" << format("", option_width, choices_string);
+                auto choices_string = " (" + join(choices_, ',') + ")";
+                usage_str << "\n"
+                          << argparse::format("", option_width, choices_string);
             }
         } else {
             std::string options_str{long_opt_names_[0]};
             if (is_multiple()) {
                 options_str += "...";
             }
-            usage_str << format(options_str, option_width, description());
+            usage_str << argparse::format(options_str, option_width,
+                                          description());
             if (auto default_value = get_default_value();
                 default_value.has_value()) {
                 auto default_value_string =
@@ -559,7 +563,8 @@ class OptionBase : public ArgBase {
                         default_value_string.length() >
                     max_width) {
                     usage_str << "\n"
-                              << format("", option_width, default_value_string);
+                              << argparse::format("", option_width,
+                                                  default_value_string);
                 } else {
                     usage_str << default_value_string;
                 }
