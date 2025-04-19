@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <initializer_list>
 #include <map>
 #include <string>
 #include <tuple>
@@ -18,11 +19,16 @@ class ArgParserTest : public ::testing::Test {
     std::vector<const char*> make_args(Args... args) {
         return {args...};
     }
+    std::vector<const char*> make_args(
+        const char* prog, std::initializer_list<const char*> args) {
+        std::vector<const char*> ret{args};
+        ret.insert(ret.begin(), prog);
+        return ret;
+    }
 };
 
-// Flag 测试
 TEST_F(ArgParserTest, BoolFlagTest) {
-    auto args = make_args("prog", "-v", "--verbose", "--no-debug");
+    auto args = make_args("prog", {"-v", "--verbose", "--no-debug"});
     bool v1 = false, v2 = false, v3 = true;
 
     ArgParser parser("prog", "the prog description");
@@ -38,14 +44,113 @@ TEST_F(ArgParserTest, BoolFlagTest) {
 }
 
 TEST_F(ArgParserTest, IntFlagTest) {
+    auto args = make_args(
+        "prog", {"-v", "-v", "--verbose", "--inc", "--inc", "--no-inc"});
+    int count1 = 0, count2 = 0, count3 = 0;
+
+    ArgParser parser("prog", "the prog description");
+    parser.add_flag("v", "Counter 1", count1);
+    parser.add_flag("verbose", "Counter 2", count2);
+    parser.add_flag("inc", "Counter 3", count3).negatable(true);
+
+    parser.parse(args.size(), args.data());
+
+    EXPECT_EQ(count1, 2);
+    EXPECT_EQ(count2, 1);
+    EXPECT_EQ(count3, 1);
+}
+
+TEST_F(ArgParserTest, NegativeBoolFlagTest) {
+    auto args = make_args("prog", {"-q", "--quiet"});
+    bool quiet1 = true, quiet2 = true;
+
+    ArgParser parser("prog", "the prog description");
+    parser.add_negative_flag("q", "Quiet mode 1", quiet1);
+    parser.add_negative_flag("quiet", "Quiet mode 2", quiet2);
+
+    parser.parse(args.size(), args.data());
+
+    EXPECT_FALSE(quiet1);
+    EXPECT_FALSE(quiet2);
+}
+
+TEST_F(ArgParserTest, NegativeIntFlagTest) {
+    auto args = make_args("prog", {"-d", "-d", "--decrease"});
+    int dec1 = 5, dec2 = 5;
+
+    ArgParser parser("prog", "the prog description");
+    parser.add_negative_flag("d", "Decrement 1", dec1);
+    parser.add_negative_flag("decrease", "Decrement 2", dec2);
+
+    parser.parse(args.size(), args.data());
+
+    EXPECT_EQ(dec1, 3);
+    EXPECT_EQ(dec2, 4);
+}
+
+TEST_F(ArgParserTest, MixedFlagTest) {
+    auto args = make_args(
+        "prog", {"-v", "--verbose", "-q", "--quiet", "--inc", "--dec"});
+    bool verbose = false, quiet = true;
+    int inc = 0, dec = 5;
+
+    ArgParser parser("prog", "the prog description");
+    parser.add_flag("v", "Verbose mode", verbose);
+    parser.add_flag("verbose", "Verbose mode long", verbose);
+    parser.add_negative_flag("q", "Quiet mode", quiet);
+    parser.add_negative_flag("quiet", "Quiet mode long", quiet);
+    parser.add_flag("inc", "Increment", inc);
+    parser.add_negative_flag("dec", "Decrement", dec);
+
+    parser.parse(args.size(), args.data());
+
+    EXPECT_TRUE(verbose);
+    EXPECT_FALSE(quiet);
+    EXPECT_EQ(inc, 1);
+    EXPECT_EQ(dec, 4);
+}
+
+TEST_F(ArgParserTest, NegativeFlagAndNegatableFlag) {
+    auto args = make_args("prog", {"--no-enable", "-dddd", "--no-d"});
+    bool enable = true;
+    int d = 5;
+
+    ArgParser parser("prog", "the prog description");
+    parser.add_flag("enable", "Enable feature", enable).negatable(true);
+    parser.add_flag("d", "Decrement", d).negatable(true);
+
+    parser.parse(args.size(), args.data());
+
+    EXPECT_FALSE(enable);
+    EXPECT_EQ(d, 8);
+}
+
+// Flag 测试
+TEST_F(ArgParserTest, BoolFlagTest2) {
+    auto args = make_args("prog", "-v", "--verbose", "--no-debug");
+    bool v1 = false, v2 = false, v3 = true;
+
+    ArgParser parser("prog", "the prog description");
+    parser.add_flag("v", "Verbose mode 1", v1);
+    parser.add_flag("verbose", "Verbose mode 2", v2);
+    parser.add_flag("debug", "Verbose mode 3", v3).negatable(true);
+
+    parser.parse(args.size(), args.data());
+
+    EXPECT_TRUE(v1);
+    EXPECT_TRUE(v2);
+    EXPECT_FALSE(v3);
+}
+
+TEST_F(ArgParserTest, IntFlagTest2) {
     auto args = make_args("prog", "-v", "-v", "--verbose", "--inc", "--inc",
                           "--no-inc");
     int count1 = 0, count2 = 0, count3 = 0;
 
     ArgParser parser("prog", "the prog description");
-    parser.add_flag("v", "Counter 1", count1, increment<int>);
-    parser.add_flag("verbose", "Counter 2", count2, increment<int>);
-    parser.add_flag("inc", "Counter 3", count3, increment<int>).negatable(true);
+    parser.add_flag("v", "Counter 1", count1);
+    parser.add_flag("verbose", "Counter 2", count2);
+    parser.add_flag("inc", "Counter 3", count3).negatable(true);
 
     parser.parse(args.size(), args.data());
 
@@ -693,7 +798,7 @@ TEST_F(ArgParserTest, CountTest) {
 
     ArgParser parser("prog", "the prog description");
     parser.add_flag("v", "Verbose flag", flag);
-    parser.add_flag("c", "Counter", count, increment<int>);
+    parser.add_flag("c", "Counter", count);
     parser.add_option("name", "Name", name);
     parser.add_option("opt-name", "Optional name", opt_name);
     parser.add_option("vec", "Vector", vec);

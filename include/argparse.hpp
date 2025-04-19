@@ -816,12 +816,9 @@ class Positional final : public OptionBase {
 };
 
 class ArgParser {
-   public:
-    ArgParser(std::string prog, std::string description)
-        : program{std::move(prog)}, description(std::move(description)) {}
     template <typename T>
         requires std::same_as<T, bool> || std::same_as<std::optional<bool>, T>
-    Flag<T> &add_flag(
+    Flag<T> &add_flag_bool(
         const std::string &name, const std::string &description, T &bind_value,
         std::function<void(extract_value_type_t<T> &)> action = store_true,
         std::function<void(extract_value_type_t<T> &)> negatable_action =
@@ -838,7 +835,7 @@ class ArgParser {
     }
     template <typename T>
         requires std::same_as<T, int> || std::same_as<std::optional<int>, T>
-    Flag<T> &add_flag(
+    Flag<T> &add_flag_int(
         const std::string &name, const std::string &description, T &bind_value,
         std::function<void(extract_value_type_t<T> &)> action =
             increment<extract_value_type_t<T>>,
@@ -853,6 +850,53 @@ class ArgParser {
         }
         args.push_back(std::move(flag));
         return ret;
+    }
+
+   public:
+    ArgParser(std::string prog, std::string description)
+        : program{std::move(prog)}, description(std::move(description)) {}
+    template <typename T>
+        requires std::same_as<T, bool> || std::same_as<std::optional<bool>, T>
+    Flag<T> &add_flag(const std::string &name, const std::string &description,
+                      T &bind_value) {
+        std::function<void(extract_value_type_t<T> &)> action = store_true;
+        std::function<void(extract_value_type_t<T> &)> negatable_action =
+            store_false;
+        return add_flag_bool(name, description, bind_value, std::move(action),
+                             std::move(negatable_action));
+    }
+    template <typename T>
+        requires std::same_as<T, int> || std::same_as<std::optional<int>, T>
+    Flag<T> &add_flag(const std::string &name, const std::string &description,
+                      T &bind_value) {
+        std::function<void(extract_value_type_t<T> &)> action =
+            increment<extract_value_type_t<T>>;
+        std::function<void(extract_value_type_t<T> &)> negatable_action =
+            decrement<extract_value_type_t<T>>;
+        return add_flag_int(name, description, bind_value, std::move(action),
+                            std::move(negatable_action));
+    }
+
+    template <typename T>
+        requires std::same_as<T, bool> || std::same_as<std::optional<bool>, T>
+    Flag<T> &add_negative_flag(const std::string &name,
+                               const std::string &description, T &bind_value) {
+        std::function<void(extract_value_type_t<T> &)> action = store_false;
+        std::function<void(extract_value_type_t<T> &)> negatable_action =
+            store_true;
+        return add_flag_bool(name, description, bind_value, std::move(action),
+                             std::move(negatable_action));
+    }
+    template <typename T>
+        requires std::same_as<T, int> || std::same_as<std::optional<int>, T>
+    Flag<T> &add_negative_flag(const std::string &name,
+                               const std::string &description, T &bind_value) {
+        std::function<void(extract_value_type_t<T> &)> action =
+            decrement<extract_value_type_t<T>>;
+        std::function<void(extract_value_type_t<T> &)> negatable_action =
+            increment<extract_value_type_t<T>>;
+        return add_flag_int(name, description, bind_value, std::move(action),
+                            std::move(negatable_action));
     }
 
     template <BindableWithoutDelimiterType T>
