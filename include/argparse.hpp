@@ -358,6 +358,11 @@ class ArgBase {
     size_t count() const { return count_; }
     virtual ~ArgBase() = default;
 
+    ArgBase &hidden(bool v = true) {
+        hidden_ = v;
+        return *this;
+    }
+
    protected:
     virtual bool is_flag() const = 0;
     virtual bool is_option() const = 0;
@@ -368,6 +373,7 @@ class ArgBase {
     std::vector<std::string> short_opt_names_;
     std::vector<std::string> long_opt_names_;
     std::string description_;
+    bool hidden_{false};
 };
 
 class FlagBase : public ArgBase {
@@ -678,9 +684,10 @@ class OptionBase : public ArgBase {
             if (!this->allowed_help_.empty()) {
                 for (auto const &[value, help] : this->allowed_help_) {
                     usage_str << '\n'
-                              << argparse::format("    [" + value + "]",
+                              << argparse::format("      [" + value + "]",
                                                   option_width, " " + help);
                 }
+                usage_str << '\n';
             }
         } else {
             std::string options_str{long_opt_names_[0]};
@@ -695,7 +702,8 @@ class OptionBase : public ArgBase {
                     max_width) {
                     usage_str << "\n"
                               << argparse::format("", option_width,
-                                                  default_value_string);
+                                                  default_value_string)
+                              << '\n';
                 } else {
                     usage_str << default_value_string;
                 }
@@ -1103,7 +1111,7 @@ class ArgParser {
             usage_str << "\n\nOptions:\n";
         }
         for (const auto &arg : args) {
-            if (arg->is_option() || arg->is_flag()) {
+            if ((arg->is_option() || arg->is_flag()) && !arg->hidden_) {
                 usage_str << " " << arg->usage(option_width) << '\n';
             }
         }
@@ -1114,7 +1122,7 @@ class ArgParser {
             usage_str << "\n\nPositionals:\n";
         }
         for (const auto &arg : args) {
-            if (arg->is_positional()) {
+            if (arg->is_positional() && !arg->hidden_) {
                 usage_str << " " << arg->usage(option_width) << '\n';
             }
         }
