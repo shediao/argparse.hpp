@@ -68,10 +68,9 @@ int main(int argc, const char* argv[]) {
     ParsedArgs args;
 
     parser.add_flag("d,debug", "Enable debug mode", args.debug);
-    parser.add_negative_flag("r,release", "Disable debug mode", args.debug);
     parser.add_flag("h,help", "Show help", args.help);
     parser.add_flag("i,interactive", "Enable interactive mode", args.interactive);
-    parser.add_flag("I", "Disable interactive mode", args.interactive);
+    parser.add_negative_flag("I", "Disable interactive mode", args.interactive);
     parser.add_flag("stream", "Enable streaming mode", args.stream).negatable(); // --no-stream
     parser.add_flag("v,verbose", "Enable verbose mode", args.verbose);
     parser.add_flag("version", "Show version", args.version);
