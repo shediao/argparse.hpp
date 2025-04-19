@@ -11,6 +11,7 @@
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <numeric>
 #include <optional>
 #include <ranges>
 #include <sstream>
@@ -292,6 +293,9 @@ T parse_from_string(std::string const &s, const char delim) {
 std::string format(std::string const &option_name, int width,
                    std::string const &description) {
     std::string ret;
+    if (description.empty()) {
+        return option_name;
+    }
     if (option_name.length() > static_cast<size_t>(width)) {
         ret = option_name + " " + description;
     } else {
@@ -383,26 +387,63 @@ class FlagBase : public ArgBase {
     virtual void negatable_parse() = 0;
     bool negatable_ = false;
     std::string usage(int option_width) const override {
+        std::string delimiter = ",";
+        std::string delimiter_of_short_and_long = ", ";
         std::stringstream usage_str;
-        std::string options_str{};
-        std::vector<std::string> short_opts;
-        std::vector<std::string> long_opts;
-        std::ranges::transform(short_opt_names_, back_inserter(short_opts),
+
+        auto flag_names_length = std::accumulate(
+            short_opt_names_.begin(), short_opt_names_.end(), 0,
+            [](int t, const std::string &s) { return t + s.length() + 1; });
+        flag_names_length = std::accumulate(
+            long_opt_names_.begin(), long_opt_names_.end(), flag_names_length,
+            [](int t, const std::string &s) { return t + s.length() + 2; });
+
+        flag_names_length +=
+            (short_opt_names_.size() + long_opt_names_.size() - 2) *
+            delimiter.length();
+
+        if (!short_opt_names_.empty() && !long_opt_names_.empty()) {
+            flag_names_length += delimiter_of_short_and_long.length();
+        }
+
+        std::vector<std::string> short_names_with_dash;
+        std::vector<std::string> long_names_with_dash_dash;
+        std::ranges::transform(short_opt_names_,
+                               back_inserter(short_names_with_dash),
                                [](auto const &s) { return "-" + s; });
-        std::ranges::transform(long_opt_names_, back_inserter(long_opts),
+        std::ranges::transform(long_opt_names_,
+                               back_inserter(long_names_with_dash_dash),
                                [](auto const &s) { return "--" + s; });
-        if (!short_opts.empty()) {
-            options_str += join(short_opts, ',');
-            if (!long_opts.empty()) {
-                options_str += ", ";
+
+        bool use_multiple_lines = flag_names_length > option_width;
+
+        if (use_multiple_lines) {
+            std::vector<std::string> all_names{short_names_with_dash};
+            all_names.insert(all_names.end(), long_names_with_dash_dash.begin(),
+                             long_names_with_dash_dash.end());
+            auto end = all_names.end() - 1;
+            for (auto it = all_names.begin(); it != end; ++it) {
+                usage_str << *it << '\n';
             }
+            usage_str << argparse::format(*end, option_width, description());
         } else {
-            options_str += "    ";
+            if (short_names_with_dash.empty()) {
+                std::string options_str =
+                    "  " +
+                    std::string(delimiter_of_short_and_long.length(), ' ') +
+                    join(long_names_with_dash_dash, delimiter);
+                usage_str << argparse::format(options_str, option_width,
+                                              description());
+            } else {
+                std::string options_str =
+                    join(short_names_with_dash, delimiter) +
+                    delimiter_of_short_and_long +
+                    join(long_names_with_dash_dash, delimiter);
+                usage_str << argparse::format(options_str, option_width,
+                                              description());
+            }
         }
-        if (!long_opts.empty()) {
-            options_str += join(long_opts, ',');
-        }
-        usage_str << argparse::format(options_str, option_width, description());
+
         return usage_str.str();
     }
 };
@@ -526,34 +567,71 @@ class OptionBase : public ArgBase {
         constexpr int max_width = 80;
         std::stringstream usage_str;
         if (is_option()) {
-            std::string options_str{};
-            std::vector<std::string> short_opts;
-            std::vector<std::string> long_opts;
-            std::ranges::transform(short_opt_names_, back_inserter(short_opts),
+            std::string delimiter = ",";
+            std::string delimiter_of_short_and_long = ", ";
+
+            auto opt_names_length = std::accumulate(
+                short_opt_names_.begin(), short_opt_names_.end(), 0,
+                [](int t, const std::string &s) { return t + s.length() + 1; });
+            opt_names_length = std::accumulate(
+                long_opt_names_.begin(), long_opt_names_.end(),
+                opt_names_length,
+                [](int t, const std::string &s) { return t + s.length() + 2; });
+
+            opt_names_length +=
+                (short_opt_names_.size() + long_opt_names_.size() - 2) *
+                delimiter.length();
+            if (!short_opt_names_.empty() && !long_opt_names_.empty()) {
+                opt_names_length += delimiter_of_short_and_long.length();
+            }
+
+            opt_names_length += (value_help.length() + 1);
+
+            std::vector<std::string> short_names_with_dash;
+            std::vector<std::string> long_names_with_dash_dash;
+            std::ranges::transform(short_opt_names_,
+                                   back_inserter(short_names_with_dash),
                                    [](auto const &s) { return "-" + s; });
-            std::ranges::transform(long_opt_names_, back_inserter(long_opts),
+            std::ranges::transform(long_opt_names_,
+                                   back_inserter(long_names_with_dash_dash),
                                    [](auto const &s) { return "--" + s; });
-            if (!short_opts.empty()) {
-                options_str += join(short_opts, ',');
-                if (!long_opts.empty()) {
-                    options_str += ", ";
+
+            bool use_multiple_lines = opt_names_length > option_width;
+
+            if (use_multiple_lines) {
+                std::vector<std::string> all_names{short_names_with_dash};
+                all_names.insert(all_names.end(),
+                                 long_names_with_dash_dash.begin(),
+                                 long_names_with_dash_dash.end());
+                auto end = all_names.end() - 1;
+                for (auto it = all_names.begin(); it != end; ++it) {
+                    usage_str << *it << ' ' << value_help << '\n';
                 }
+                usage_str << argparse::format(*end + " " + value_help,
+                                              option_width, description());
             } else {
-                options_str += "    ";
+                if (short_names_with_dash.empty()) {
+                    std::string options_str =
+                        "  " +
+                        std::string(delimiter_of_short_and_long.length(), ' ') +
+                        join(long_names_with_dash_dash, delimiter);
+                    usage_str
+                        << argparse::format(options_str + " " + value_help,
+                                            option_width, description());
+                } else {
+                    std::string options_str =
+                        join(short_names_with_dash, delimiter) +
+                        delimiter_of_short_and_long +
+                        join(long_names_with_dash_dash, delimiter);
+                    usage_str
+                        << argparse::format(options_str + " " + value_help,
+                                            option_width, description());
+                }
             }
-            if (!long_opts.empty()) {
-                options_str += join(long_opts, ',');
-            }
-            options_str += (" " + value_help);
-            if (is_multiple()) {
-                options_str += "...";
-            }
-            usage_str << argparse::format(options_str, option_width,
-                                          description());
+
             if (auto default_value = get_default_value();
                 default_value.has_value()) {
-                auto default_value_string =
-                    " (default: " + *default_value + ")";
+                auto default_value_string = " default:[" + *default_value + "]";
                 if (option_width + description().length() +
                         default_value_string.length() >
                     max_width) {
@@ -565,15 +643,13 @@ class OptionBase : public ArgBase {
                 }
             }
             if (!choices_.empty()) {
-                auto choices_string = " (" + join(choices_, ',') + ")";
+                auto choices_string =
+                    " allows one of [" + join(choices_, ',') + "]";
                 usage_str << "\n"
                           << argparse::format("", option_width, choices_string);
             }
         } else {
             std::string options_str{long_opt_names_[0]};
-            if (is_multiple()) {
-                options_str += "...";
-            }
             usage_str << argparse::format(options_str, option_width,
                                           description());
             if (auto default_value = get_default_value();
@@ -963,6 +1039,7 @@ class ArgParser {
     }
 
     void print_usage() const {
+        constexpr int option_name_width = 32;
         std::stringstream usage_str;
         if (!description.empty()) {
             usage_str << "\n";
@@ -992,7 +1069,7 @@ class ArgParser {
         }
         for (const auto &arg : args) {
             if (arg->is_option() || arg->is_flag()) {
-                usage_str << " " << arg->usage(32) << '\n';
+                usage_str << " " << arg->usage(option_name_width) << '\n';
             }
         }
 
@@ -1003,7 +1080,7 @@ class ArgParser {
         }
         for (const auto &arg : args) {
             if (arg->is_positional()) {
-                usage_str << " " << arg->usage(32) << '\n';
+                usage_str << " " << arg->usage(option_name_width) << '\n';
             }
         }
         std::cout << usage_str.str() << std::endl;
