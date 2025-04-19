@@ -22,31 +22,36 @@ class ArgParserTest : public ::testing::Test {
 
 // Flag 测试
 TEST_F(ArgParserTest, BoolFlagTest) {
-    auto args = make_args("prog", "-v", "--verbose");
-    bool v1 = false, v2 = false;
+    auto args = make_args("prog", "-v", "--verbose", "--no-debug");
+    bool v1 = false, v2 = false, v3 = true;
 
     ArgParser parser("prog", "the prog description");
     parser.add_flag("v", "Verbose mode 1", v1);
     parser.add_flag("verbose", "Verbose mode 2", v2);
+    parser.add_flag("debug", "Verbose mode 3", v3).negatable(true);
 
     parser.parse(args.size(), args.data());
 
     EXPECT_TRUE(v1);
     EXPECT_TRUE(v2);
+    EXPECT_FALSE(v3);
 }
 
 TEST_F(ArgParserTest, IntFlagTest) {
-    auto args = make_args("prog", "-v", "-v", "--verbose");
-    int count1 = 0, count2 = 0;
+    auto args = make_args("prog", "-v", "-v", "--verbose", "--inc", "--inc",
+                          "--no-inc");
+    int count1 = 0, count2 = 0, count3 = 0;
 
     ArgParser parser("prog", "the prog description");
     parser.add_flag("v", "Counter 1", count1, increment<int>);
     parser.add_flag("verbose", "Counter 2", count2, increment<int>);
+    parser.add_flag("inc", "Counter 3", count3, increment<int>).negatable(true);
 
     parser.parse(args.size(), args.data());
 
     EXPECT_EQ(count1, 2);
     EXPECT_EQ(count2, 1);
+    EXPECT_EQ(count3, 1);
 }
 
 // Option 测试

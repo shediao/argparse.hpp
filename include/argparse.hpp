@@ -372,11 +372,16 @@ class FlagBase : public ArgBase {
     FlagBase(const std::string &name, const std::string &description)
         : ArgBase(name, description) {}
 
+    void negatable(bool v = true) { this->negatable_ = v; }
+    bool is_negatable() { return this->negatable_; }
+
    protected:
     bool is_flag() const override final { return true; }
     bool is_option() const override final { return false; }
     bool is_positional() const override final { return false; }
     virtual void parse() = 0;
+    virtual void negatable_parse() = 0;
+    bool negatable_ = false;
     std::string usage(int option_width) const override {
         std::stringstream usage_str;
         std::string options_str{};
@@ -414,12 +419,15 @@ class Flag final : public FlagBase {
     Flag(const std::string &name, const std::string &description, T &bind_value)
         : FlagBase(name, description),
           bind_value_(std::ref(bind_value)),
-          parse_function_{store_true} {}
+          parse_function_{store_true},
+          parse_negatable_function_{store_false} {}
     Flag(const std::string &name, const std::string &description, T &bind_value,
-         std::function<void(extract_value_type_t<T> &)> action)
+         std::function<void(extract_value_type_t<T> &)> action,
+         std::function<void(extract_value_type_t<T> &)> negatable_action)
         : FlagBase(name, description),
           bind_value_(std::ref(bind_value)),
-          parse_function_(std::move(action)) {}
+          parse_function_(std::move(action)),
+          parse_negatable_function_(std::move(negatable_action)) {}
 
     T const &value() const { return bind_value_; }
 
@@ -436,10 +444,23 @@ class Flag final : public FlagBase {
         }
         count_++;
     }
+    void negatable_parse() override {
+        if constexpr (is_optional_v<T>) {
+            auto &flag_value = bind_value_.get();
+            if (!flag_value.has_value()) {
+                flag_value = typename T::value_type{};
+            }
+            parse_negatable_function_(flag_value.value());
+        } else {
+            parse_negatable_function_(bind_value_.get());
+        }
+        count_++;
+    }
 
    private:
     std::reference_wrapper<T> bind_value_;
     std::function<void(extract_value_type_t<T> &)> parse_function_;
+    std::function<void(extract_value_type_t<T> &)> parse_negatable_function_;
 };
 
 template <typename T>
@@ -463,7 +484,7 @@ class OptionBase : public ArgBase {
     OptionBase(const std::string &name, const std::string &description)
         : ArgBase(name, description) {}
 
-    OptionBase &choices(std::initializer_list<std::string> choices) {
+    OptionBase &choices(std::vector<std::string> const &choices) {
         choices_ = std::vector<std::string>(choices);
         value_checker_.push_back(OptionValueChecker<std::string>(
             [this](const std::string &value) {
@@ -802,9 +823,12 @@ class ArgParser {
         requires std::same_as<T, bool> || std::same_as<std::optional<bool>, T>
     Flag<T> &add_flag(
         const std::string &name, const std::string &description, T &bind_value,
-        std::function<void(extract_value_type_t<T> &)> action = store_true) {
+        std::function<void(extract_value_type_t<T> &)> action = store_true,
+        std::function<void(extract_value_type_t<T> &)> negatable_action =
+            store_false) {
         auto flag = std::make_unique<Flag<T>>(name, description, bind_value,
-                                              std::move(action));
+                                              std::move(action),
+                                              std::move(negatable_action));
         auto &ret = *(flag.get());
         if (option_exist(ret)) {
             throw std::runtime_error("Option already exists: " + name);
@@ -814,12 +838,15 @@ class ArgParser {
     }
     template <typename T>
         requires std::same_as<T, int> || std::same_as<std::optional<int>, T>
-    Flag<T> &add_flag(const std::string &name, const std::string &description,
-                      T &bind_value,
-                      std::function<void(extract_value_type_t<T> &)> action =
-                          increment<extract_value_type_t<T>>) {
+    Flag<T> &add_flag(
+        const std::string &name, const std::string &description, T &bind_value,
+        std::function<void(extract_value_type_t<T> &)> action =
+            increment<extract_value_type_t<T>>,
+        std::function<void(extract_value_type_t<T> &)> negatable_action =
+            decrement<extract_value_type_t<T>>) {
         auto flag = std::make_unique<Flag<T>>(name, description, bind_value,
-                                              std::move(action));
+                                              std::move(action),
+                                              std::move(negatable_action));
         auto &ret = *(flag.get());
         if (option_exist(ret)) {
             throw std::runtime_error("Option already exists: " + name);
@@ -1009,6 +1036,17 @@ class ArgParser {
                         } else {
                             throw std::runtime_error(
                                 "Missing value for option: " + name);
+                        }
+                    }
+                } else if (name.length() > 3 && name.substr(0, 3) == "no-") {
+                    name = name.substr(3);
+                    if (auto *option = get(name)) {
+                        if (option->is_flag() &&
+                            dynamic_cast<FlagBase *>(option)->is_negatable()) {
+                            auto *flag = dynamic_cast<FlagBase *>(option);
+                            flag->negatable_parse();
+                        } else {
+                            throw std::runtime_error("Unknown option: " + name);
                         }
                     }
                 } else {
