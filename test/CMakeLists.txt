@@ -8,6 +8,11 @@ FetchContent_Declare(
   GIT_REPOSITORY https://github.com/google/googletest.git
   GIT_TAG v1.15.2)
 
+if(NOT CMAKE_HOST_SYSTEM_NAME MATCHES "Windows" AND MSVC)
+  set(gtest_disable_pthreads
+      OFF ON
+      CACHE BOOL "" FORCE)
+endif()
 FetchContent_MakeAvailable(googletest)
 
 function(add_argparse_test test_name)
@@ -16,6 +21,9 @@ function(add_argparse_test test_name)
      OR AppleClang
      OR GNU)
     target_compile_options(${test_name} PRIVATE -Wall -Wextra -Werror)
+  endif()
+  if(MSVC)
+    target_compile_options(${test_name} PRIVATE /utf-8 /EHsc /W4)
   endif()
   target_link_libraries(${test_name} PRIVATE argparse::argparse GTest::gtest
                                              GTest::gtest_main)

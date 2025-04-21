@@ -493,6 +493,11 @@ class Flag final : public FlagBase {
           parse_function_(std::move(action)),
           parse_negatable_function_(std::move(negatable_action)) {}
 
+    Flag<T> &callback(std::function<void(extract_value_type_t<T>)> cb) {
+        callback_ = std::move(cb);
+        return *this;
+    }
+
     T const &value() const { return bind_value_; }
 
    protected:
@@ -503,8 +508,14 @@ class Flag final : public FlagBase {
                 flag_value = typename T::value_type{};
             }
             parse_function_(flag_value.value());
+            if (callback_) {
+                callback_(flag_value.value());
+            }
         } else {
             parse_function_(bind_value_.get());
+            if (callback_) {
+                callback_(bind_value_.get());
+            }
         }
         count_++;
     }
@@ -515,8 +526,14 @@ class Flag final : public FlagBase {
                 flag_value = typename T::value_type{};
             }
             parse_negatable_function_(flag_value.value());
+            if (callback_) {
+                callback_(flag_value.value());
+            }
         } else {
             parse_negatable_function_(bind_value_.get());
+            if (callback_) {
+                callback_(bind_value_.get());
+            }
         }
         count_++;
     }
@@ -525,6 +542,7 @@ class Flag final : public FlagBase {
     std::reference_wrapper<T> bind_value_;
     std::function<void(extract_value_type_t<T> &)> parse_function_;
     std::function<void(extract_value_type_t<T> &)> parse_negatable_function_;
+    std::function<void(extract_value_type_t<T>)> callback_;
 };
 
 template <typename T>
@@ -762,6 +780,11 @@ class Option final : public OptionBase {
         return *this;
     }
 
+    Option<T> &callback(std::function<void(T const &)> cb) {
+        callback_ = std::move(cb);
+        return *this;
+    }
+
     T const &value() const { return bind_value_; }
 
    protected:
@@ -774,6 +797,9 @@ class Option final : public OptionBase {
                                      parse_function_(opt_value));
         } else {
             bind_value_.get() = parse_function_(opt_value);
+        }
+        if (callback_) {
+            callback_(bind_value_.get());
         }
     }
     bool is_multiple() const override {
@@ -820,6 +846,7 @@ class Option final : public OptionBase {
                        std::optional<std::vector<std::string>>,
                        std::optional<std::string>>
         default_value_;
+    std::function<void(T const &)> callback_;
 };
 
 template <BindableType T>
@@ -882,6 +909,10 @@ class Positional final : public OptionBase {
         return *this;
     }
 
+    Positional<T> &callback(std::function<void(T const &)> cb) {
+        callback_ = std::move(cb);
+    }
+
     T const &value() const { return bind_value_; }
 
    protected:
@@ -894,6 +925,9 @@ class Positional final : public OptionBase {
                                      parse_function_(opt_value));
         } else {
             bind_value_.get() = parse_function_(opt_value);
+        }
+        if (callback_) {
+            callback_(bind_value_.get());
         }
     }
     bool is_multiple() const override {
@@ -940,6 +974,7 @@ class Positional final : public OptionBase {
                        std::optional<std::vector<std::string>>,
                        std::optional<std::string>>
         default_value_;
+    std::function<void(T const &)> callback_;
 };
 
 class Command {
@@ -1315,7 +1350,7 @@ class Command {
     }
 
     void print_usage(int option_width = OPTION_NAME_WIDTH) const {
-        std::cout << usage(false) << "\n";
+        std::cout << usage(false, option_width) << "\n";
     }
 
     std::string const &command() const { return command_; }

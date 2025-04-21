@@ -923,3 +923,22 @@ TEST_F(ArgParserTest, SubCmdTest2) {
     ASSERT_EQ(files[1], "e/f/g");
     parser.print_usage();
 }
+
+TEST_F(ArgParserTest, Callback) {
+    auto args = make_args("prog", {"--help"});
+    ArgParser parser("prog", "test prog command");
+    bool show_help{false};
+
+    bool help_flag_is_set{false};
+    parser.add_flag("h,help", "show help msg", show_help)
+        .callback([&help_flag_is_set](bool x) {
+            ASSERT_TRUE(x);
+            if (x) {
+                help_flag_is_set = true;
+            }
+        });
+    parser.parse(args.size(), args.data());
+
+    ASSERT_TRUE(show_help);
+    ASSERT_TRUE(help_flag_is_set);
+}
