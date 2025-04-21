@@ -1293,25 +1293,29 @@ class Command {
         if (std::ranges::find_if(args_, [](const auto &arg) {
                 return arg->is_option() || arg->is_flag();
             }) != args_.end()) {
-            usage_str << "\n\nOptions:\n";
+            usage_str << "\n\nOptions:";
         }
         for (const auto &arg : args_) {
             if ((arg->is_option() || arg->is_flag()) && !arg->hidden_) {
-                usage_str << " " << arg->usage(option_width) << '\n';
+                usage_str << "\n " << arg->usage(option_width);
             }
         }
 
         if (std::ranges::find_if(args_, [](const auto &arg) {
                 return arg->is_positional();
             }) != args_.end()) {
-            usage_str << "\nPositionals:\n";
+            usage_str << "\n\nPositionals:";
         }
         for (const auto &arg : args_) {
             if (arg->is_positional() && !arg->hidden_) {
-                usage_str << " " << arg->usage(option_width) << '\n';
+                usage_str << "\n " << arg->usage(option_width);
             }
         }
         return usage_str.str();
+    }
+
+    void print_usage(int option_width = OPTION_NAME_WIDTH) const {
+        std::cout << usage(false) << "\n";
     }
 
     std::string const &command() const { return command_; }
@@ -1358,7 +1362,7 @@ class ArgParser : public Command {
         usage_str << this->usage(false, option_width);
 
         if (!subcommands_.empty()) {
-            usage_str << "\nsubcommands:\n";
+            usage_str << "\n\nSubcommands:";
             for (auto const &cmd : subcommands_) {
                 usage_str << "\n " << cmd->usage(true, option_width);
             }

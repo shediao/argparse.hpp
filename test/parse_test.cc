@@ -921,4 +921,5 @@ TEST_F(ArgParserTest, SubCmdTest2) {
     ASSERT_EQ(files.size(), 2);
     ASSERT_EQ(files[0], "a/b/c");
     ASSERT_EQ(files[1], "e/f/g");
+    parser.print_usage();
 }
