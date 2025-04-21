@@ -877,3 +877,48 @@ TEST_F(ArgParserTest, CountWithMultipleValuesTest) {
     EXPECT_EQ(vec.size(), 3);
     EXPECT_EQ(pairs.size(), 2);
 }
+
+TEST_F(ArgParserTest, SubCmdTest1) {
+    auto args = make_args(
+        "git", {"-c", "user.name=Haha", "-c", "user.email=haha@xx.com",
+                "commit", "-m", "commit message"});
+    std::map<std::string, std::string> configs;
+    std::string commit_msg;
+
+    ArgParser parser("git", "the git description");
+    parser.add_option("c", "set git config", configs, '=');
+
+    parser.add_command("commit", "git commit")
+        .add_option("m", "commit message", commit_msg);
+
+    parser.parse(args.size(), args.data());
+
+    EXPECT_EQ(2, configs.size());
+    EXPECT_EQ(configs.at("user.name"), "Haha");
+    EXPECT_EQ(configs.at("user.email"), "haha@xx.com");
+    EXPECT_EQ(commit_msg, "commit message");
+}
+
+TEST_F(ArgParserTest, SubCmdTest2) {
+    auto args = make_args(
+        "git", {"-c", "user.name=Haha", "-c", "user.email=haha@xx.com", "add",
+                "--", "a/b/c", "e/f/g"});
+    std::map<std::string, std::string> configs;
+    std::vector<std::string> files;
+
+    ArgParser parser("git", "the git description");
+    parser.add_option("c", "set git config", configs, '=');
+
+    parser.add_command("add", "add file to stage")
+        .add_positional("files", "files", files);
+
+    parser.parse(args.size(), args.data());
+
+    EXPECT_EQ(2, configs.size());
+    EXPECT_EQ(configs.at("user.name"), "Haha");
+    EXPECT_EQ(configs.at("user.email"), "haha@xx.com");
+
+    ASSERT_EQ(files.size(), 2);
+    ASSERT_EQ(files[0], "a/b/c");
+    ASSERT_EQ(files[1], "e/f/g");
+}

@@ -23,6 +23,8 @@
 
 namespace argparse {
 
+static constexpr int OPTION_NAME_WIDTH = 32;
+
 namespace {
 
 template <typename T>
@@ -325,6 +327,7 @@ inline void decrement(T &value) {
 }
 
 class ArgBase {
+    friend class Command;
     friend class ArgParser;
 
    public:
@@ -377,6 +380,7 @@ class ArgBase {
 };
 
 class FlagBase : public ArgBase {
+    friend class Command;
     friend class ArgParser;
 
    public:
@@ -472,6 +476,7 @@ template <typename T = bool>
               (std::integral<typename T::value_type> ||
                std::is_same_v<typename T::value_type, bool>))
 class Flag final : public FlagBase {
+    friend class Command;
     friend class ArgParser;
 
    public:
@@ -537,6 +542,7 @@ class OptionValueChecker {
 };
 
 class OptionBase : public ArgBase {
+    friend class Command;
     friend class ArgParser;
 
    public:
@@ -720,6 +726,7 @@ class OptionBase : public ArgBase {
 
 template <BindableType T>
 class Option final : public OptionBase {
+    friend class Command;
     friend class ArgParser;
 
    public:
@@ -817,6 +824,7 @@ class Option final : public OptionBase {
 
 template <BindableType T>
 class Positional final : public OptionBase {
+    friend class Command;
     friend class ArgParser;
 
    public:
@@ -934,7 +942,7 @@ class Positional final : public OptionBase {
         default_value_;
 };
 
-class ArgParser {
+class Command {
     template <typename T>
         requires std::same_as<T, bool> || std::same_as<std::optional<bool>, T>
     Flag<T> &add_flag_bool(
@@ -949,7 +957,7 @@ class ArgParser {
         if (option_exist(ret)) {
             throw std::runtime_error("Option already exists: " + name);
         }
-        args.push_back(std::move(flag));
+        args_.push_back(std::move(flag));
         return ret;
     }
     template <typename T>
@@ -967,13 +975,13 @@ class ArgParser {
         if (option_exist(ret)) {
             throw std::runtime_error("Option already exists: " + name);
         }
-        args.push_back(std::move(flag));
+        args_.push_back(std::move(flag));
         return ret;
     }
 
    public:
-    ArgParser(std::string prog, std::string description)
-        : program{std::move(prog)}, description(std::move(description)) {}
+    Command(std::string prog, std::string description)
+        : command_{std::move(prog)}, description_(std::move(description)) {}
     template <typename T>
         requires std::same_as<T, bool> || std::same_as<std::optional<bool>, T>
     Flag<T> &add_flag(const std::string &name, const std::string &description,
@@ -1027,7 +1035,7 @@ class ArgParser {
         if (option_exist(ret)) {
             throw std::runtime_error("Option already exists: " + name);
         }
-        args.push_back(std::move(option));
+        args_.push_back(std::move(option));
         return ret;
     }
 
@@ -1041,7 +1049,7 @@ class ArgParser {
         if (option_exist(ret)) {
             throw std::runtime_error("Option already exists: " + name);
         }
-        args.push_back(std::move(option));
+        args_.push_back(std::move(option));
         return ret;
     }
 
@@ -1049,10 +1057,14 @@ class ArgParser {
     Positional<T> &add_positional(const std::string &name,
                                   const std::string &description,
                                   T &bind_value) {
-        if (std::ranges::find_if(args, [](const auto &arg) {
+        if (!subcommands_.empty()) {
+            throw std::runtime_error(
+                "Cannot add positional parameter when there are sub commands");
+        }
+        if (std::ranges::find_if(args_, [](const auto &arg) {
                 return arg->is_positional() &&
                        dynamic_cast<OptionBase *>(arg.get())->is_multiple();
-            }) != args.end()) {
+            }) != args_.end()) {
             throw std::runtime_error(
                 "Positional argument only support one container and it "
                 "must be the last one");
@@ -1063,7 +1075,7 @@ class ArgParser {
         if (option_exist(ret)) {
             throw std::runtime_error("Option already exists: " + name);
         }
-        args.push_back(std::move(positional));
+        args_.push_back(std::move(positional));
         return ret;
     }
 
@@ -1071,81 +1083,35 @@ class ArgParser {
     Positional<T> &add_positional(const std::string &name,
                                   const std::string &description, T &bind_value,
                                   char delim) {
+        if (!subcommands_.empty()) {
+            throw std::runtime_error(
+                "Cannot add positional parameter when there are sub commands");
+        }
         auto positional = std::make_unique<Positional<T>>(name, description,
                                                           bind_value, delim);
         auto &ret = *(positional.get());
         if (option_exist(ret)) {
             throw std::runtime_error("Option already exists: " + name);
         }
-        args.push_back(std::move(positional));
+        args_.push_back(std::move(positional));
         return ret;
     }
 
-    static constexpr int OPTION_NAME_WIDTH = 32;
-    void print_usage(int option_width = OPTION_NAME_WIDTH) const {
-        std::stringstream usage_str;
-        if (!description.empty()) {
-            usage_str << "\n";
-            usage_str << description;
-            usage_str << "\n\n";
-        }
-        usage_str << "Usage: \n  " << program;
-        if (std::ranges::find_if(args, [](const auto &arg) {
-                return arg->is_option() || arg->is_flag();
-            }) != args.end()) {
-            usage_str << " [options]...";
-        }
-        auto positionals = args | std::views::filter([](const auto &arg) {
-                               return arg->is_positional();
-                           });
-        for (const auto &arg : positionals) {
-            if (dynamic_cast<OptionBase *>(arg.get())->is_multiple()) {
-                usage_str << " <" << arg->long_opt_names_.front() << ">...";
-            } else {
-                usage_str << " <" << arg->long_opt_names_.front() << ">";
-            }
-        }
-        if (std::ranges::find_if(args, [](const auto &arg) {
-                return arg->is_option() || arg->is_flag();
-            }) != args.end()) {
-            usage_str << "\n\nOptions:\n";
-        }
-        for (const auto &arg : args) {
-            if ((arg->is_option() || arg->is_flag()) && !arg->hidden_) {
-                usage_str << " " << arg->usage(option_width) << '\n';
-            }
-        }
-
-        if (std::ranges::find_if(args, [](const auto &arg) {
-                return arg->is_positional();
-            }) != args.end()) {
-            usage_str << "\n\nPositionals:\n";
-        }
-        for (const auto &arg : args) {
-            if (arg->is_positional() && !arg->hidden_) {
-                usage_str << " " << arg->usage(option_width) << '\n';
-            }
-        }
-        std::cout << usage_str.str() << std::endl;
-    }
-    void print_version() const {
-        std::cout << "Version: " << version << std::endl;
-    }
     ArgBase *get(const std::string &name) {
         if (name.length() == 1) {
-            auto it = std::ranges::find_if(args, [name](const auto &arg) {
+            auto it = std::ranges::find_if(args_, [name](const auto &arg) {
                 return std::find(arg->short_opt_names_.begin(),
                                  arg->short_opt_names_.end(),
                                  name) != arg->short_opt_names_.end();
             });
-            return it != args.end() ? it->get() : nullptr;
+            return it != args_.end() ? it->get() : nullptr;
         } else {
-            auto it = std::ranges::find_if(args, [name](const auto &arg) {
+            auto it = std::ranges::find_if(args_, [name](const auto &arg) {
                 return std::find(arg->long_opt_names_.begin(),
                                  arg->long_opt_names_.end(),
                                  name) != arg->long_opt_names_.end();
             });
-            return it != args.end() ? it->get() : nullptr;
+            return it != args_.end() ? it->get() : nullptr;
         }
     }
     ArgBase &operator[](const std::string &name) {
@@ -1165,7 +1131,7 @@ class ArgParser {
         std::vector<ArgBase *> positionals;
 
         // Collect all positional arguments
-        for (const auto &arg : args) {
+        for (const auto &arg : args_) {
             if (arg->is_positional()) {
                 positionals.push_back(arg.get());
             }
@@ -1262,7 +1228,16 @@ class ArgParser {
                         pos_index++;
                     }
                 } else {
-                    throw std::runtime_error("Too many positional arguments");
+                    auto subcmd_ptr_it = std::find_if(
+                        begin(subcommands_), end(subcommands_),
+                        [&arg](auto sub) { return sub->command_ == arg; });
+                    if (!subcommands_.empty() &&
+                        subcmd_ptr_it != end(subcommands_)) {
+                        return (*subcmd_ptr_it)->parse(argc - i, argv + i);
+                    } else {
+                        throw std::runtime_error(
+                            "Too many positional arguments");
+                    }
                 }
             }
             ++i;
@@ -1282,7 +1257,7 @@ class ArgParser {
         }
 
         // Handle options that were not provided but have default values
-        for (const auto &arg : args) {
+        for (const auto &arg : args_) {
             if ((arg->is_option() || arg->is_positional()) &&
                 arg->count() == 0) {
                 dynamic_cast<OptionBase *>(arg.get())->use_default_if_needed();
@@ -1290,9 +1265,60 @@ class ArgParser {
         }
     }
 
-   private:
+    std::string usage(bool short_msg,
+                      int option_width = OPTION_NAME_WIDTH) const {
+        std::stringstream usage_str;
+
+        if (short_msg) {
+            usage_str << argparse::format(command_, option_width, description_);
+            return usage_str.str();
+        }
+
+        usage_str << command_;
+        if (std::ranges::find_if(args_, [](const auto &arg) {
+                return arg->is_option() || arg->is_flag();
+            }) != args_.end()) {
+            usage_str << " [options]...";
+        }
+        auto positionals = args_ | std::views::filter([](const auto &arg) {
+                               return arg->is_positional();
+                           });
+        for (const auto &arg : positionals) {
+            if (dynamic_cast<OptionBase *>(arg.get())->is_multiple()) {
+                usage_str << " <" << arg->long_opt_names_.front() << ">...";
+            } else {
+                usage_str << " <" << arg->long_opt_names_.front() << ">";
+            }
+        }
+        if (std::ranges::find_if(args_, [](const auto &arg) {
+                return arg->is_option() || arg->is_flag();
+            }) != args_.end()) {
+            usage_str << "\n\nOptions:\n";
+        }
+        for (const auto &arg : args_) {
+            if ((arg->is_option() || arg->is_flag()) && !arg->hidden_) {
+                usage_str << " " << arg->usage(option_width) << '\n';
+            }
+        }
+
+        if (std::ranges::find_if(args_, [](const auto &arg) {
+                return arg->is_positional();
+            }) != args_.end()) {
+            usage_str << "\nPositionals:\n";
+        }
+        for (const auto &arg : args_) {
+            if (arg->is_positional() && !arg->hidden_) {
+                usage_str << " " << arg->usage(option_width) << '\n';
+            }
+        }
+        return usage_str.str();
+    }
+
+    std::string const &command() const { return command_; }
+
+   protected:
     bool option_exist(ArgBase &new_arg) const {
-        for (const auto &arg : args) {
+        for (const auto &arg : args_) {
             for (auto &name : arg->long_opt_names_) {
                 if (std::find(new_arg.long_opt_names_.begin(),
                               new_arg.long_opt_names_.end(),
@@ -1310,10 +1336,80 @@ class ArgParser {
         }
         return false;
     }
-    std::vector<std::unique_ptr<ArgBase>> args;
+    std::vector<std::unique_ptr<ArgBase>> args_;
+    std::string command_;
+    std::string description_;
+    std::vector<std::shared_ptr<Command>> subcommands_;
+};
+
+class ArgParser : public Command {
+   public:
+    ArgParser(std::string prog, std::string description)
+        : Command(prog, description) {}
+    using Command::add_flag;
+    using Command::add_option;
+    using Command::add_positional;
+    void print_usage(int option_width = OPTION_NAME_WIDTH) const {
+        std::stringstream usage_str;
+        if (!description_.empty()) {
+            usage_str << description_;
+        }
+        usage_str << "\nUsage: \n  ";
+        usage_str << this->usage(false, option_width);
+
+        if (!subcommands_.empty()) {
+            usage_str << "\nsubcommands:\n";
+            for (auto const &cmd : subcommands_) {
+                usage_str << "\n " << cmd->usage(true, option_width);
+            }
+        }
+        std::cout << usage_str.str() << std::endl;
+    }
+    void print_version() const {
+        std::cout << "Version: " << version << std::endl;
+    }
+    void parse(int argc, const char *argv[]) {
+        if (subcommands_.empty()) {
+            return Command::parse(argc, argv);
+        }
+        auto begin = argv + 1;
+        auto end = argv + argc;
+        auto non_dash_arg = std::find_if(begin, end, [](auto *a) {
+            if (a != nullptr && a[0] != '-') {
+                return true;
+            }
+            return false;
+        });
+        if (non_dash_arg != end) {
+            auto subcmd = std::find_if(subcommands_.begin(), subcommands_.end(),
+                                       [non_dash_arg](auto const &s) {
+                                           return s->command() == *non_dash_arg;
+                                       });
+            if (subcmd != subcommands_.end()) {
+                Command::parse(non_dash_arg - argv, argv);
+                (*subcmd)->parse(argc - (non_dash_arg - argv), non_dash_arg);
+            } else {
+                Command::parse(argc, argv);
+            }
+        } else {
+            Command::parse(argc, argv);
+        }
+    }
+
+    Command &add_command(std::string const &cmd,
+                         std::string const &description) {
+        if (std::any_of(begin(args_), end(args_),
+                        [](auto const &a) { return a->is_positional(); })) {
+            throw std::runtime_error(
+                "Cannot add sub command when there are positionals");
+        }
+        auto cmd_ptr = std::make_shared<Command>(cmd, description);
+        subcommands_.push_back(cmd_ptr);
+        return *cmd_ptr;
+    }
+
+   private:
     std::string version{"0.1"};
-    std::string program;
-    std::string description;
 };
 
 }  // namespace argparse
