@@ -2,6 +2,7 @@
 
 #include <initializer_list>
 #include <map>
+#include <stdexcept>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -941,4 +942,37 @@ TEST_F(ArgParserTest, Callback) {
 
     ASSERT_TRUE(show_help);
     ASSERT_TRUE(help_flag_is_set);
+}
+
+TEST_F(ArgParserTest, SubCmdTest3) {
+    auto args = make_args("prog", {"command1"});
+    ArgParser parser("prog", "test prog command");
+    bool show_help{false};
+
+    parser.add_flag("h,help", "show help msg", show_help);
+
+    try {
+        parser.parse(args.size(), args.data());
+    } catch (std::runtime_error const& e) {
+        ASSERT_STREQ(e.what(), "Too many positional arguments");
+    } catch (...) {
+        ASSERT_TRUE(false);
+    }
+}
+
+TEST_F(ArgParserTest, SubCmdTest4) {
+    auto args = make_args("prog", {"command1"});
+    ArgParser parser("prog", "test prog command");
+    bool show_help{false};
+
+    parser.add_flag("h,help", "show help msg", show_help);
+    parser.add_command("subcmd", "");
+
+    try {
+        parser.parse(args.size(), args.data());
+    } catch (std::runtime_error const& e) {
+        ASSERT_STREQ(e.what(), "unkonwn subcommand: command1");
+    } catch (...) {
+        ASSERT_TRUE(false);
+    }
 }

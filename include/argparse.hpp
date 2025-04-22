@@ -1263,12 +1263,16 @@ class Command {
                         pos_index++;
                     }
                 } else {
-                    auto subcmd_ptr_it = std::find_if(
-                        begin(subcommands_), end(subcommands_),
-                        [&arg](auto sub) { return sub->command_ == arg; });
-                    if (!subcommands_.empty() &&
-                        subcmd_ptr_it != end(subcommands_)) {
-                        return (*subcmd_ptr_it)->parse(argc - i, argv + i);
+                    if (!subcommands_.empty()) {
+                        auto subcmd_ptr_it = std::find_if(
+                            begin(subcommands_), end(subcommands_),
+                            [&arg](auto sub) { return sub->command_ == arg; });
+                        if (subcmd_ptr_it != end(subcommands_)) {
+                            return (*subcmd_ptr_it)->parse(argc - i, argv + i);
+                        } else {
+                            throw std::runtime_error("unkonwn subcommand: " +
+                                                     arg);
+                        }
                     } else {
                         throw std::runtime_error(
                             "Too many positional arguments");
