@@ -8,7 +8,11 @@ set("PROJECT_DESCRIPTION"
     "A header-only lightweight C++ command line option parser")
 set("PROJECT_HOMEPAGE_URL" "https://github.com/shediao/argparse.hpp")
 
-option(ARGPARSE_BUILD_TESTS "Set to ON to build tests" OFF)
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+  option(ARGPARSE_BUILD_TESTS "Set to ON to build tests" ON)
+else()
+  option(ARGPARSE_BUILD_TESTS "Set to OFF to build tests" OFF)
+endif()
 
 add_library(argparse INTERFACE)
 
