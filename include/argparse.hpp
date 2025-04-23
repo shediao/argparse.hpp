@@ -21,6 +21,17 @@
 #include <utility>
 #include <vector>
 
+#if defined(ARG_PARSE_DEBUG)
+#define ARG_PARSER_DEBUG(msg)                       \
+    do {                                            \
+        std::cerr << "[ArgParser] " << msg << '\n'; \
+    } while (0)
+#else
+#define ARG_PARSER_DEBUG(msg) \
+    do {                      \
+    } while (0)
+#endif
+
 namespace argparse {
 
 static constexpr int OPTION_NAME_WIDTH = 32;
@@ -1178,6 +1189,8 @@ class Command {
     void parse(int argc, const char *argv[]) {
         Defer defer{callback_};
         std::vector<const char *> commands{argv, argv + argc};
+        ARG_PARSER_DEBUG(
+            join(std::vector<std::string>{argv, argv + argc}, ' '));
         size_t i = 1;  // Skip program name
         if (!commands.empty() && commands[0] != nullptr &&
             commands[0][0] == '-') {
@@ -1211,13 +1224,18 @@ class Command {
                 if (auto *option = get(name)) {
                     if (option->is_flag()) {
                         auto *flag = dynamic_cast<FlagBase *>(option);
+                        ARG_PARSER_DEBUG("flag: " << name);
                         flag->parse();
                     } else if (option->is_option()) {
                         auto *opt = dynamic_cast<OptionBase *>(option);
                         if (eq_pos != std::string::npos) {
+                            ARG_PARSER_DEBUG("option: " << name << "="
+                                                        << value);
                             opt->parse(value);
                         } else if (i + 1 < commands.size()) {
-                            opt->parse(commands[++i]);
+                            auto val = commands[++i];
+                            ARG_PARSER_DEBUG("option: " << name << "=" << val);
+                            opt->parse(val);
                         } else {
                             throw std::runtime_error(
                                 "Missing value for option: " + name);
@@ -1248,16 +1266,23 @@ class Command {
                     if (auto *option = get(name)) {
                         if (option->is_flag()) {
                             auto *flag = dynamic_cast<FlagBase *>(option);
+                            ARG_PARSER_DEBUG("flag: " << name);
                             flag->parse();
                         } else if (option->is_option()) {
                             auto *opt = dynamic_cast<OptionBase *>(option);
                             if (j < opts.size() - 1) {
+                                ARG_PARSER_DEBUG("option: "
+                                                 << name << "="
+                                                 << opts.substr(j + 1));
                                 // If not the last character, use the rest as
                                 // value
                                 opt->parse(opts.substr(j + 1));
                                 break;
                             } else if (i + 1 < commands.size()) {
-                                opt->parse(commands[++i]);
+                                auto val = commands[++i];
+                                ARG_PARSER_DEBUG("option: " << name << "="
+                                                            << val);
+                                opt->parse(val);
                             } else {
                                 throw std::runtime_error(
                                     "Missing value for option: " + name);
@@ -1278,6 +1303,8 @@ class Command {
                 if (pos_index < positionals.size()) {
                     auto *pos =
                         dynamic_cast<OptionBase *>(positionals[pos_index]);
+                    ARG_PARSER_DEBUG("positional: " << pos_index << ": "
+                                                    << arg);
                     pos->parse(arg);
                     if (!pos->is_multiple()) {
                         pos_index++;
@@ -1288,6 +1315,10 @@ class Command {
                             begin(subcommands_), end(subcommands_),
                             [&arg](auto sub) { return sub->command_ == arg; });
                         if (subcmd_ptr_it != end(subcommands_)) {
+                            ARG_PARSER_DEBUG("subcmd: " << join(
+                                                 std::vector<std::string>{
+                                                     argv + i, argv + argc},
+                                                 ' '));
                             return (*subcmd_ptr_it)->parse(argc - i, argv + i);
                         } else {
                             throw std::runtime_error("unkonwn subcommand: " +
@@ -1305,6 +1336,8 @@ class Command {
         while (i < commands.size()) {
             if (pos_index < positionals.size()) {
                 auto *pos = dynamic_cast<OptionBase *>(positionals[pos_index]);
+                ARG_PARSER_DEBUG("positional: " << pos_index << ": "
+                                                << commands[i]);
                 pos->parse(commands[i]);
                 if (!pos->is_multiple()) {
                     pos_index++;
