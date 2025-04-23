@@ -1,9 +1,9 @@
 //
-// Created by shediao on 24-12-29.
+// Created by shediao.xsd on 24-12-29.
 //
 
-#ifndef ARG_PASER_HPP
-#define ARG_PASER_HPP
+#ifndef __ARG_PARSE_HPP__
+#define __ARG_PARSE_HPP__
 
 #include <algorithm>
 #include <cctype>
@@ -701,7 +701,7 @@ class OptionBase : public ArgBase {
                 }
             }
             if (!allowed_.empty() && this->allowed_help_.empty()) {
-                auto choices_string = " allowed:[" + join(allowed_, ',') + "]";
+                auto choices_string = " [" + join(allowed_, ',') + "]";
                 usage_str << "\n"
                           << argparse::format("", option_width, choices_string);
             }
@@ -1478,4 +1478,4 @@ class ArgParser : public Command {
 
 }  // namespace argparse
 
-#endif  // ARG_PASER_HPP
+#endif  // __ARG_PARSE_HPP__
