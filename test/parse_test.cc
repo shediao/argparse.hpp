@@ -976,3 +976,15 @@ TEST_F(ArgParserTest, SubCmdTest4) {
         ASSERT_TRUE(false);
     }
 }
+
+TEST_F(ArgParserTest, SubCmdTest5) {
+    auto args = make_args("prog", {"subcmd"});
+    ArgParser parser("prog", "test prog command");
+    bool subcmd_is_call{false};
+    parser.add_command("subcmd", "").callback([&subcmd_is_call]() {
+        subcmd_is_call = true;
+    });
+
+    parser.parse(args.size(), args.data());
+    ASSERT_TRUE(subcmd_is_call);
+}

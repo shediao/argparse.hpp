@@ -978,6 +978,19 @@ class Positional final : public OptionBase {
 };
 
 class Command {
+    template <typename F>
+    class Defer {
+       public:
+        Defer(F &f) : f(f) {}
+        ~Defer() {
+            if (f) {
+                f();
+            }
+        }
+
+       private:
+        F &f;
+    };
     template <typename T>
         requires std::same_as<T, bool> || std::same_as<std::optional<bool>, T>
     Flag<T> &add_flag_bool(
@@ -1156,7 +1169,14 @@ class Command {
             throw std::runtime_error("Unknown option: " + name);
         }
     }
+
+    Command &callback(std::function<void()> cb) {
+        this->callback_ = std::move(cb);
+        return *this;
+    }
+
     void parse(int argc, const char *argv[]) {
+        Defer defer{callback_};
         std::vector<const char *> commands{argv, argv + argc};
         size_t i = 1;  // Skip program name
         if (!commands.empty() && commands[0] != nullptr &&
@@ -1383,6 +1403,7 @@ class Command {
     std::string command_;
     std::string description_;
     std::vector<std::shared_ptr<Command>> subcommands_;
+    std::function<void()> callback_{nullptr};
 };
 
 class ArgParser : public Command {
