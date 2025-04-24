@@ -1039,8 +1039,8 @@ class Command {
     }
 
    public:
-    Command(std::string prog, std::string description)
-        : command_{std::move(prog)}, description_(std::move(description)) {}
+    Command(std::string cmd, std::string description)
+        : command_{std::move(cmd)}, description_(std::move(description)) {}
     template <typename T>
         requires std::same_as<T, bool> || std::same_as<std::optional<bool>, T>
     Flag<T> &add_flag(const std::string &name, const std::string &description,
@@ -1411,6 +1411,9 @@ class Command {
     }
 
     std::string const &command() const { return command_; }
+    std::string const &name() const { return command_; }
+    void set_parent(Command *parent) { parent_ = parent; }
+    bool has_parent() { return parent_ != nullptr; }
 
    protected:
     bool option_exist(ArgBase &new_arg) const {
@@ -1436,6 +1439,7 @@ class Command {
     std::string command_;
     std::string description_;
     std::vector<std::shared_ptr<Command>> subcommands_;
+    Command *parent_{nullptr};
     std::function<void()> callback_{nullptr};
 };
 
@@ -1465,10 +1469,7 @@ class ArgParser : public Command {
     void print_version() const {
         std::cout << "Version: " << version << std::endl;
     }
-    void parse(int argc, const char *argv[]) {
-        if (subcommands_.empty()) {
-            return Command::parse(argc, argv);
-        }
+    Command &parse(int argc, const char *argv[]) {
         auto begin = argv + 1;
         auto end = argv + argc;
         auto non_dash_arg = std::find_if(begin, end, [](auto *a) {
@@ -1485,11 +1486,14 @@ class ArgParser : public Command {
             if (subcmd != subcommands_.end()) {
                 Command::parse(non_dash_arg - argv, argv);
                 (*subcmd)->parse(argc - (non_dash_arg - argv), non_dash_arg);
+                return **subcmd;
             } else {
                 Command::parse(argc, argv);
+                return *this;
             }
         } else {
             Command::parse(argc, argv);
+            return *this;
         }
     }
 
@@ -1501,6 +1505,7 @@ class ArgParser : public Command {
                 "Cannot add sub command when there are positionals");
         }
         auto cmd_ptr = std::make_shared<Command>(cmd, description);
+        cmd_ptr->set_parent(this);
         subcommands_.push_back(cmd_ptr);
         return *cmd_ptr;
     }
