@@ -1120,6 +1120,13 @@ class Command {
                             std::move(negatable_action));
     }
 
+    Flag<bool> add_alias(const std::string &name,
+                         const std::string &description) {
+        static bool alias_flag{false};
+        return add_flag_bool(name, description, alias_flag, store_true,
+                             store_false);
+    }
+
     template <BindableWithoutDelimiterType T>
     Option<T> &add_option(const std::string &name,
                           const std::string &description, T &bind_value) {
