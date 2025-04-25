@@ -988,3 +988,15 @@ TEST_F(ArgParserTest, SubCmdTest5) {
     parser.parse(args.size(), args.data());
     ASSERT_TRUE(subcmd_is_call);
 }
+
+TEST_F(ArgParserTest, SubCmdTest6) {
+    auto args = make_args("prog", {"cmd", "-h"});
+    ArgParser parser("prog", "test prog command");
+    bool show_help{false};
+
+    parser.add_flag("h,help", "show help msg", show_help);
+    parser.add_command("cmd", "");
+
+    parser.parse(args.size(), args.data());
+    ASSERT_TRUE(show_help);
+}
