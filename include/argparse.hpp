@@ -10,6 +10,7 @@
 #include <concepts>
 #include <functional>
 #include <iostream>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <numeric>
@@ -1459,6 +1460,17 @@ class Command {
             return usage_str.str();
         }
 
+        if (parent_ != nullptr) {
+            std::vector<std::string> parent_cmds;
+            Command *p = parent_;
+            while (p != nullptr) {
+                parent_cmds.push_back(p->command());
+                p = p->parent_;
+            }
+            std::copy(parent_cmds.rbegin(), parent_cmds.rend(),
+                      std::ostream_iterator<std::string>(usage_str, " "));
+        }
+
         usage_str << command_;
         if (std::ranges::find_if(args_, [](const auto &arg) {
                 return arg->is_option() || arg->is_flag();
@@ -1509,7 +1521,7 @@ class Command {
     std::string const &command() const { return command_; }
     std::string const &name() const { return command_; }
     void set_parent(Command *parent) { parent_ = parent; }
-    bool has_parent() { return parent_ != nullptr; }
+    bool has_parent() const { return parent_ != nullptr; }
 
    protected:
     bool option_exist(ArgBase &new_arg) const {
