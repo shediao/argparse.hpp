@@ -1198,21 +1198,27 @@ class Command {
         return ret;
     }
 
-    ArgBase *get(const std::string &name) {
+    ArgBase *get(const std::string &name, bool find_from_parent = true) {
         if (name.length() == 1) {
             auto it = std::ranges::find_if(args_, [name](const auto &arg) {
                 return std::find(arg->short_opt_names_.begin(),
                                  arg->short_opt_names_.end(),
                                  name) != arg->short_opt_names_.end();
             });
-            return it != args_.end() ? it->get() : nullptr;
+            return it != args_.end()
+                       ? it->get()
+                       : ((find_from_parent && parent_) ? parent_->get(name)
+                                                        : nullptr);
         } else {
             auto it = std::ranges::find_if(args_, [name](const auto &arg) {
                 return std::find(arg->long_opt_names_.begin(),
                                  arg->long_opt_names_.end(),
                                  name) != arg->long_opt_names_.end();
             });
-            return it != args_.end() ? it->get() : nullptr;
+            return it != args_.end()
+                       ? it->get()
+                       : ((find_from_parent && parent_) ? parent_->get(name)
+                                                        : nullptr);
         }
     }
     ArgBase &operator[](const std::string &name) {
