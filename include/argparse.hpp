@@ -1421,6 +1421,9 @@ class Command {
             }) != args_.end()) {
             usage_str << " [options]...";
         }
+        if (!subcommands_.empty()) {
+            usage_str << " [cmd] [options]...";
+        }
         auto positionals = args_ | std::views::filter([](const auto &arg) {
                                return arg->is_positional();
                            });
