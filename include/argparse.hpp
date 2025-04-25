@@ -580,6 +580,7 @@ class OptionValueChecker {
 class OptionBase : public ArgBase {
     friend class Command;
     friend class ArgParser;
+    friend class OptionAlias;
 
    public:
     OptionBase(const std::string &name, const std::string &description)
@@ -889,6 +890,32 @@ class Option final : public OptionBase {
     std::function<void(T const &)> callback_;
 };
 
+class OptionAlias : public FlagBase {
+   public:
+    OptionAlias(std::string const &name, OptionBase *option,
+                std::string const &opt_value)
+        : FlagBase(name, "same as " +
+                             (option->long_opt_names_.empty()
+                                  ? (option->short_opt_names_.empty()
+                                         ? std::string("")
+                                         : ("-" + option->short_opt_names_[0]))
+                                  : ("--" + option->long_opt_names_[0])) +
+                             " " + opt_value),
+          option_{option},
+          opt_value_{opt_value} {}
+    void parse() override {
+        if (option_) {
+            option_->parse(opt_value_);
+        }
+    }
+
+    void negatable_parse() override {}
+
+   private:
+    OptionBase *option_{nullptr};
+    std::string opt_value_{};
+};
+
 template <BindableType T>
 class Positional final : public OptionBase {
     friend class Command;
@@ -1120,11 +1147,22 @@ class Command {
                             std::move(negatable_action));
     }
 
-    Flag<bool> add_alias(const std::string &name,
-                         const std::string &description) {
-        static bool alias_flag{false};
-        return add_flag_bool(name, description, alias_flag, store_true,
-                             store_false);
+    FlagBase &add_alias(const std::string &name, const std::string &opt_name,
+                        const std::string &opt_value) {
+        auto *opt = get(opt_name);
+        if (!opt) {
+            throw std::runtime_error("Not found option: " + opt_name);
+        }
+        if (!opt->is_option()) {
+            throw std::runtime_error("Not an option: " + opt_name);
+        }
+
+        auto alias =
+            std::make_unique<OptionAlias>(name, (OptionBase *)opt, opt_value);
+
+        auto &ret = *(alias.get());
+        args_.push_back(std::move(alias));
+        return ret;
     }
 
     template <BindableWithoutDelimiterType T>

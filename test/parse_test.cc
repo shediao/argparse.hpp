@@ -1000,3 +1000,14 @@ TEST_F(ArgParserTest, SubCmdTest6) {
     parser.parse(args.size(), args.data());
     ASSERT_TRUE(show_help);
 }
+
+TEST_F(ArgParserTest, OptionAliasTest) {
+    auto args = make_args("prog", {"--google"});
+    ArgParser parser("prog", "test prog command");
+    std::string url;
+    parser.add_option("url", "", url);
+    parser.add_alias("google", "url", "https://www.google.com");
+
+    parser.parse(args.size(), args.data());
+    ASSERT_EQ("https://www.google.com", url);
+}
