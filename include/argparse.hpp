@@ -378,6 +378,12 @@ class ArgBase {
     }
 
    protected:
+    ArgBase &env(std::string const &env) {
+        env_key_ = env;
+        return *this;
+    }
+
+   protected:
     virtual bool is_flag() const = 0;
     virtual bool is_option() const = 0;
     virtual bool is_positional() const = 0;
@@ -387,6 +393,7 @@ class ArgBase {
     std::vector<std::string> short_opt_names_;
     std::vector<std::string> long_opt_names_;
     std::string description_;
+    std::string env_key_;
     bool hidden_{false};
 };
 
@@ -602,6 +609,10 @@ class OptionBase : public ArgBase {
         this->allowed_help_ = allowed_helps;
         return *this;
     }
+    OptionBase &env(std::string const &env) {
+        ArgBase::env(env);
+        return *this;
+    }
 
    protected:
     bool is_flag() const override final { return false; }
@@ -628,6 +639,19 @@ class OptionBase : public ArgBase {
             value_help_ = "<0.0>";
         } else {
             value_help_ = "<arg>";
+        }
+    }
+
+    void use_env_if_needed() {
+        if (count() != 0 || env_key_.empty()) {
+            return;
+        }
+        if (auto *env = std::getenv(env_key_.c_str()); env != nullptr) {
+            std::string_view e{env};
+            if (auto i = e.find('='); i != std::string_view::npos) {
+                auto val = e.substr(i);
+                parse(std::string(val));
+            }
         }
     }
     std::string usage(int option_width) const override {
@@ -795,6 +819,10 @@ class Option final : public OptionBase {
         callback_ = std::move(cb);
         return *this;
     }
+    Option<T> &env(std::string const &env) {
+        OptionBase::env(env);
+        return *this;
+    }
 
     T const &value() const { return bind_value_; }
 
@@ -820,6 +848,7 @@ class Option final : public OptionBase {
             return false;
         }
     }
+    void use_env_if_needed() { OptionBase::use_env_if_needed(); }
     void use_default_if_needed() override {
         if (count() != 0) {
             return;
@@ -926,6 +955,11 @@ class Positional final : public OptionBase {
 
     T const &value() const { return bind_value_; }
 
+    Positional<T> &env(std::string const &env) {
+        OptionBase::env(env);
+        return *this;
+    }
+
    protected:
     bool is_option() const override final { return false; }
     bool is_positional() const override final { return true; }
@@ -948,6 +982,7 @@ class Positional final : public OptionBase {
             return false;
         }
     }
+    void use_env_if_needed() { OptionBase::use_env_if_needed(); }
     void use_default_if_needed() override {
         if (count() != 0) {
             return;
@@ -1348,6 +1383,13 @@ class Command {
             ++i;
         }
 
+        // Handle environment
+        for (const auto &arg : args_) {
+            if ((arg->is_option() || arg->is_positional()) &&
+                arg->count() == 0) {
+                dynamic_cast<OptionBase *>(arg.get())->use_env_if_needed();
+            }
+        }
         // Handle options that were not provided but have default values
         for (const auto &arg : args_) {
             if ((arg->is_option() || arg->is_positional()) &&
