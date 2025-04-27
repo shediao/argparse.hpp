@@ -1,6 +1,6 @@
 ## Feature Comparison
 
-| Feature               | argparse.hpp | [cxxopts](https://github.com/jarro2783/cxxopts) | [CLI11](https://github.com/CLIUtils/CLI11) | [Boost.Program_options](https://www.boost.org/doc/libs/1_84_0/doc/html/program_options.html) | [gflags](https://github.com/gflags/gflags) |
+| Feature               | argparse.hpp | [cxxopts](https://github.com/jarro2783/cxxopts) | [CLI11](https://github.com/CLIUtils/CLI11) | [Boost](https://www.boost.org/doc/libs/1_84_0/doc/html/program_options.html) | [gflags](https://github.com/gflags/gflags) |
 | --------------------- | ------------ | ----------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------- | ------------------------------------------ |
 | Header-only           | ✅           | ✅                                              | ✅                                         | ❌                                                                                           | ❌                                         |
 | Dependencies          | None         | None                                            | None                                       | Boost                                                                                        | None                                       |
@@ -18,7 +18,7 @@
 | Combined flags (-abc) | ✅           | ✅                                              | ✅                                         | ✅                                                                                           | ❌                                         |
 | Required options      | ✅           | ✅                                              | ✅                                         | ✅                                                                                           | ✅                                         |
 | Option groups         | ❌           | ✅                                              | ✅                                         | ✅                                                                                           | ❌                                         |
-| Validation            | ❌           | ✅                                              | ✅                                         | ✅                                                                                           | ❌                                         |
+| Validation            | ✅           | ✅                                              | ✅                                         | ✅                                                                                           | ❌                                         |
 
 ## Quick start
 
@@ -37,6 +37,13 @@ Options can be given as:
 where c takes an argument, but a and b do not.
 
 Additionally, anything after `--` will be parsed as a positional argument.
+
+Each flag, option, and positional argument is bound to an actual variable, which can be of the following types:
+- Fundamental C++ types (`bool`, `int`, `long`, `double`, etc.)
+- Custom types (must be constructible from `std::string`)
+- Tuple-like types (`std::pair`, `std::tuple`, `std::array`)
+- Containers of any of the above element types
+- std::optional<T>, T is any of the above types(Fundamental,string-constructible,tuple-like,container)
 
 ## Basics
 
