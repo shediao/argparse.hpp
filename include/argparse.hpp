@@ -1274,6 +1274,7 @@ class Command {
     }
 
     void parse(int argc, const char *argv[]) {
+        this->is_parsed_ = true;
         Defer defer{callback_};
         std::vector<const char *> commands{argv, argv + argc};
         ARG_PARSER_DEBUG(
@@ -1522,6 +1523,7 @@ class Command {
     std::string const &name() const { return command_; }
     void set_parent(Command *parent) { parent_ = parent; }
     bool has_parent() const { return parent_ != nullptr; }
+    bool is_parsed() { return is_parsed_; }
 
    protected:
     bool option_exist(ArgBase &new_arg) const {
@@ -1549,6 +1551,7 @@ class Command {
     std::vector<std::shared_ptr<Command>> subcommands_;
     Command *parent_{nullptr};
     std::function<void()> callback_{nullptr};
+    bool is_parsed_{false};
 };
 
 class ArgParser : public Command {
@@ -1578,31 +1581,14 @@ class ArgParser : public Command {
         std::cout << "Version: " << version << std::endl;
     }
     Command &parse(int argc, const char *argv[]) {
-        auto begin = argv + 1;
-        auto end = argv + argc;
-        auto non_dash_arg = std::find_if(begin, end, [](auto *a) {
-            if (a != nullptr && a[0] != '-') {
-                return true;
-            }
-            return false;
-        });
-        if (non_dash_arg != end) {
-            auto subcmd = std::find_if(subcommands_.begin(), subcommands_.end(),
-                                       [non_dash_arg](auto const &s) {
-                                           return s->command() == *non_dash_arg;
-                                       });
-            if (subcmd != subcommands_.end()) {
-                Command::parse(non_dash_arg - argv, argv);
-                (*subcmd)->parse(argc - (non_dash_arg - argv), non_dash_arg);
-                return **subcmd;
-            } else {
-                Command::parse(argc, argv);
-                return *this;
-            }
-        } else {
-            Command::parse(argc, argv);
-            return *this;
+        Command::parse(argc, argv);
+        auto it =
+            std::find_if(begin(subcommands_), end(subcommands_),
+                         [](auto &cmdptr) { return cmdptr->is_parsed(); });
+        if (it != end(subcommands_)) {
+            return **it;
         }
+        return *this;
     }
 
     Command &add_command(std::string const &cmd,
