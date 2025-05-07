@@ -68,7 +68,7 @@ concept ParseFromStringBasicType =
     is_string_v<std::remove_cv_t<T>> ||
     std::same_as<std::remove_cv_t<T>, bool> ||
     std::same_as<std::remove_cv_t<T>, char> ||
-    std::same_as<std::remove_cv_t<T>, int> ||
+    std::same_as<std::remove_cv_t<T>, unsigned int> ||
     std::same_as<std::remove_cv_t<T>, int> ||
     std::same_as<std::remove_cv_t<T>, long> ||
     std::same_as<std::remove_cv_t<T>, unsigned long> ||
