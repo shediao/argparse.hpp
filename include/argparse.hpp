@@ -1564,7 +1564,7 @@ class ArgParser : public Command {
     void print_usage(int option_width = OPTION_NAME_WIDTH) const {
         std::stringstream usage_str;
         if (!description_.empty()) {
-            usage_str << description_;
+            usage_str << description_ << "\n";
         }
         usage_str << "\nUsage: \n  ";
         usage_str << this->usage(false, option_width);
