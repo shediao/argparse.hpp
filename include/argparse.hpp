@@ -635,12 +635,16 @@ class OptionBase : public ArgBase {
 
     template <typename T>
     void set_default_value_help() {
-        if constexpr (std::is_integral_v<T>) {
-            value_help_ = "<N>";
-        } else if constexpr (std::is_floating_point_v<T>) {
-            value_help_ = "<0.0>";
+        if constexpr (is_optional_v<T>) {
+            set_default_value_help<typename T::value_type>();
         } else {
-            value_help_ = "<arg>";
+            if constexpr (std::is_integral_v<T>) {
+                value_help_ = "<N>";
+            } else if constexpr (std::is_floating_point_v<T>) {
+                value_help_ = "<0.0>";
+            } else {
+                value_help_ = "<arg>";
+            }
         }
     }
 
