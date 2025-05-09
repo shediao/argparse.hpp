@@ -1570,11 +1570,12 @@ class ArgParser : public Command {
         usage_str << this->usage(false, option_width);
 
         if (!subcommands_.empty()) {
-            usage_str << "\n\nSubcommands:";
+            usage_str << "\n\nAvailable Commands:";
             for (auto const &cmd : subcommands_) {
                 usage_str << "\n " << cmd->usage(true, option_width);
             }
         }
+
         std::cout << usage_str.str() << std::endl;
     }
     void print_version() const {
