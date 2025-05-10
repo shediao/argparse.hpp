@@ -142,3 +142,7 @@ add_subdirectory(/path/to/argparse.hpp)
 ### 2. others
 
 copy `argparse.hpp` to myproject/dir/include
+
+
+## docs
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/shediao/argparse.hpp)
