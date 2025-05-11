@@ -1277,7 +1277,7 @@ class Command {
         return *this;
     }
 
-    void parse(int argc, const char *argv[]) {
+    void parse(int argc, char const *const *argv) {
         this->is_parsed_ = true;
         Defer defer{callback_};
         std::vector<const char *> commands{argv, argv + argc};
