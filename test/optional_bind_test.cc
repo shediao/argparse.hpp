@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include "argparse.hpp"
+#include "argparse/argparse.hpp"
 
 class OptionalBindTest : public ::testing::Test {
    protected:

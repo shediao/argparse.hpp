@@ -6,7 +6,7 @@
 
 #include <array>
 
-#include "argparse.hpp"
+#include "argparse/argparse.hpp"
 
 using namespace argparse;
 

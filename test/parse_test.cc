@@ -7,7 +7,7 @@
 #include <tuple>
 #include <vector>
 
-#include "argparse.hpp"
+#include "argparse/argparse.hpp"
 
 using namespace argparse;
 
