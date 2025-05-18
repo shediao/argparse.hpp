@@ -17,9 +17,9 @@ FetchContent_MakeAvailable(googletest)
 
 function(add_argparse_test test_name)
   add_executable(${test_name} ${test_name}.cc)
-  if(Clang
-     OR AppleClang
-     OR GNU)
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
+     OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
+     OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
     target_compile_options(${test_name} PRIVATE -Wall -Wextra -Werror)
   endif()
   if(MSVC)
