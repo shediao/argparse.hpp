@@ -48,10 +48,12 @@ Each flag, option, and positional argument is bound to an actual variable, which
 ## Basics
 
 ```cpp
-#include <argparse.hpp>
+#include <argparse/argparse.hpp>  // cmake Dependencies
+#include "argparse.hpp"           // copy to your project
 ```
 
 ```cpp
+
 struct ParsedArgs {
     std::string prompt;
     std::optional<std::string> system_prompt;
@@ -70,44 +72,38 @@ struct ParsedArgs {
 };
 
 int main(int argc, const char* argv[]) {
-
-    argparse::ArgParser parser("openai-cli", "OpenAI API Compatible Command Line Chatbot")
+    argparse::ArgParser parser("openai-cli",
+                               "OpenAI API Compatible Command Line Chatbot");
     ParsedArgs args;
 
     parser.add_flag("d,debug", "Enable debug mode", args.debug);
     parser.add_flag("h,help", "Show help", args.help);
-    parser.add_flag("i,interactive", "Enable interactive mode", args.interactive);
+    parser.add_flag("i,interactive", "Enable interactive mode",
+                    args.interactive);
     parser.add_negative_flag("I", "Disable interactive mode", args.interactive);
-    parser.add_flag("stream", "Enable streaming mode", args.stream).negatable(); // --no-stream
+    parser.add_flag("stream", "Enable streaming mode", args.stream)
+        .negatable();  // --no-stream
     parser.add_flag("v,verbose", "Enable verbose mode", args.verbose);
     parser.add_flag("version", "Show version", args.version);
 
     parser.add_option("k,key", "OpenAI API key", args.api_key);
     parser.add_option("m,model", "Model to use", args.model)
-      .default_value("gpt-3.5-turbo");
+        .default_value("gpt-3.5-turbo");
     parser.add_option("p,prompt", "Prompt", args.prompt);
     parser.add_option("proxy", "Use proxy", args.proxy);
     parser.add_option("s,system-prompt", "System prompt", args.system_prompt);
     parser.add_option("t,temperature", "Model temperature", args.temperature);
     parser.add_option("top-p", "Model top-p parameter", args.top_p);
     parser.add_option("u,url", "OpenAI API Compatible URL", args.api_url)
-      .default_value("https://api.openai.com/v1/chat/completions");
+        .default_value("https://api.openai.com/v1/chat/completions");
     parser.add_positional("prompt", "Prompt", args.prompt);
 
-
     try {
-        parser.parse_args(argc, argv);
-    } catch (const std::execption& err) {
+        parser.parse(argc, argv);
+    } catch (const std::exception& err) {
         std::cerr << err.what() << std::endl;
         return 1;
     }
-
-    if (args.help) {
-        parser.print_help();
-        return 0;
-    }
-
-    return 0;
 }
 ```
 
@@ -119,7 +115,7 @@ int main(int argc, const char* argv[]) {
 FetchContent_Declare(
     argparse
     GIT_REPOSITORY https://github.com/shediao/argparse.hpp
-    GIT_TAG v0.0.1
+    GIT_TAG v0.0.5
 )
 FetchContent_MakeAvailable(argparse)
 
@@ -142,7 +138,6 @@ add_subdirectory(/path/to/argparse.hpp)
 ### 2. others
 
 copy `argparse.hpp` to myproject/dir/include
-
 
 ## docs
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/shediao/argparse.hpp)
