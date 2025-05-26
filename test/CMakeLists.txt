@@ -1,5 +1,4 @@
 set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_EXTENSIONS OFF)
 
 include(FetchContent)
 
@@ -20,7 +19,9 @@ function(add_argparse_test test_name)
   if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
      OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
      OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
-    target_compile_options(${test_name} PRIVATE -Wall -Wextra -Werror)
+    if(NOT MSVC)
+      target_compile_options(${test_name} PRIVATE -Wall -Wextra -Werror)
+    endif()
   endif()
   if(MSVC)
     target_compile_options(${test_name} PRIVATE /utf-8 /EHsc /W4)
