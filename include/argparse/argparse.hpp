@@ -389,7 +389,9 @@ class ArgBase {
     virtual bool is_flag() const = 0;
     virtual bool is_option() const = 0;
     virtual bool is_positional() const = 0;
-    virtual std::string usage(int option_width) const = 0;
+    virtual std::string usage() const = 0;
+    int option_width() const { return option_width_; }
+    void set_option_width(int width) { option_width_ = width; }
     const std::string &description() const { return description_; }
     size_t count_{0};
     std::vector<std::string> short_opt_names_;
@@ -397,6 +399,7 @@ class ArgBase {
     std::string description_;
     std::string env_key_;
     bool hidden_{false};
+    int option_width_{OPTION_NAME_WIDTH};
 };
 
 class FlagBase : public ArgBase {
@@ -417,7 +420,7 @@ class FlagBase : public ArgBase {
     virtual void parse() = 0;
     virtual void negatable_parse() = 0;
     bool negatable_ = false;
-    std::string usage(int option_width) const override {
+    std::string usage() const override {
         std::string delimiter = ",";
         std::string delimiter_of_short_and_long = ", ";
         std::stringstream usage_str;
@@ -456,7 +459,7 @@ class FlagBase : public ArgBase {
                 return negatable ? ("--[no-]" + s) : ("--" + s);
             });
 
-        bool use_multiple_lines = flag_names_length > option_width;
+        bool use_multiple_lines = flag_names_length > option_width();
 
         if (use_multiple_lines) {
             std::vector<std::string> all_names{short_names_with_dash};
@@ -466,7 +469,7 @@ class FlagBase : public ArgBase {
             for (auto it = all_names.begin(); it != end; ++it) {
                 usage_str << *it << '\n';
             }
-            usage_str << argparse::format(*end, option_width, description());
+            usage_str << argparse::format(*end, option_width(), description());
         } else {
             auto s = join(short_names_with_dash, delimiter);
             auto l = join(long_names_with_dash_dash, delimiter);
@@ -474,14 +477,14 @@ class FlagBase : public ArgBase {
                 std::string options_str =
                     "  " +
                     std::string(delimiter_of_short_and_long.length(), ' ') + l;
-                usage_str << argparse::format(options_str, option_width,
+                usage_str << argparse::format(options_str, option_width(),
                                               description());
             } else {
                 std::string options_str =
                     long_names_with_dash_dash.empty()
                         ? s
                         : (s + delimiter_of_short_and_long + l);
-                usage_str << argparse::format(options_str, option_width,
+                usage_str << argparse::format(options_str, option_width(),
                                               description());
             }
         }
@@ -661,7 +664,7 @@ class OptionBase : public ArgBase {
             }
         }
     }
-    std::string usage(int option_width) const override {
+    std::string usage() const override {
         constexpr int max_width = 80;
         std::stringstream usage_str;
         if (is_option()) {
@@ -694,7 +697,7 @@ class OptionBase : public ArgBase {
                                    back_inserter(long_names_with_dash_dash),
                                    [](auto const &s) { return "--" + s; });
 
-            bool use_multiple_lines = opt_names_length > option_width;
+            bool use_multiple_lines = opt_names_length > option_width();
 
             if (use_multiple_lines) {
                 std::vector<std::string> all_names{short_names_with_dash};
@@ -706,7 +709,7 @@ class OptionBase : public ArgBase {
                     usage_str << *it << ' ' << value_help_ << '\n';
                 }
                 usage_str << argparse::format(*end + " " + value_help_,
-                                              option_width, description());
+                                              option_width(), description());
             } else {
                 auto s = join(short_names_with_dash, delimiter);
                 auto l = join(long_names_with_dash_dash, delimiter);
@@ -717,7 +720,7 @@ class OptionBase : public ArgBase {
                         l;
                     usage_str
                         << argparse::format(options_str + " " + value_help_,
-                                            option_width, description());
+                                            option_width(), description());
                 } else {
                     std::string options_str =
                         long_names_with_dash_dash.empty()
@@ -725,18 +728,18 @@ class OptionBase : public ArgBase {
                             : (s + delimiter_of_short_and_long + l);
                     usage_str
                         << argparse::format(options_str + " " + value_help_,
-                                            option_width, description());
+                                            option_width(), description());
                 }
             }
 
             if (auto default_value = get_default_value();
                 default_value.has_value()) {
                 auto default_value_string = " (default:" + *default_value + ")";
-                if (option_width + description().length() +
+                if (option_width() + description().length() +
                         default_value_string.length() >
                     max_width) {
                     usage_str << "\n"
-                              << argparse::format("", option_width,
+                              << argparse::format("", option_width(),
                                                   default_value_string);
                 } else {
                     usage_str << default_value_string;
@@ -745,29 +748,30 @@ class OptionBase : public ArgBase {
             if (!allowed_.empty() && this->allowed_help_.empty()) {
                 auto choices_string = " [" + join(allowed_, ',') + "]";
                 usage_str << "\n"
-                          << argparse::format("", option_width, choices_string);
+                          << argparse::format("", option_width(),
+                                              choices_string);
             }
             if (!this->allowed_help_.empty()) {
                 for (auto const &[value, help] : this->allowed_help_) {
                     usage_str << '\n'
                               << argparse::format("      [" + value + "]",
-                                                  option_width, " " + help);
+                                                  option_width(), " " + help);
                 }
                 usage_str << '\n';
             }
         } else {
             std::string options_str{long_opt_names_[0]};
-            usage_str << argparse::format(options_str, option_width,
+            usage_str << argparse::format(options_str, option_width(),
                                           description());
             if (auto default_value = get_default_value();
                 default_value.has_value()) {
                 auto default_value_string =
                     " (default: " + *default_value + ")";
-                if (option_width + description().length() +
+                if (option_width() + description().length() +
                         default_value_string.length() >
                     max_width) {
                     usage_str << "\n"
-                              << argparse::format("", option_width,
+                              << argparse::format("", option_width(),
                                                   default_value_string)
                               << '\n';
                 } else {
@@ -1461,14 +1465,8 @@ class Command {
         }
     }
 
-    std::string usage(bool short_msg,
-                      int option_width = OPTION_NAME_WIDTH) const {
+    virtual std::string usage() const {
         std::stringstream usage_str;
-
-        if (short_msg) {
-            usage_str << argparse::format(command_, option_width, description_);
-            return usage_str.str();
-        }
 
         if (parent_ != nullptr) {
             std::vector<std::string> parent_cmds;
@@ -1507,7 +1505,7 @@ class Command {
         }
         for (const auto &arg : args_) {
             if ((arg->is_option() || arg->is_flag()) && !arg->hidden_) {
-                usage_str << "\n " << arg->usage(option_width);
+                usage_str << "\n " << arg->usage();
             }
         }
 
@@ -1518,9 +1516,14 @@ class Command {
         }
         for (const auto &arg : args_) {
             if (arg->is_positional() && !arg->hidden_) {
-                usage_str << "\n " << arg->usage(option_width);
+                usage_str << "\n " << arg->usage();
             }
         }
+        return usage_str.str();
+    }
+    std::string oneline_usage() {
+        std::stringstream usage_str;
+        usage_str << argparse::format(command_, option_width(), description_);
         return usage_str.str();
     }
     void add_default_help_flag() {
@@ -1534,6 +1537,7 @@ class Command {
             }
             auto &f = add_flag(help_name, "Display this help information",
                                default_help);
+            f.set_option_width(this->option_width());
             f.callback([this](bool v) {
                 if (v) {
                     print_usage();
@@ -1543,9 +1547,7 @@ class Command {
         }
     }
 
-    virtual void print_usage(int option_width = OPTION_NAME_WIDTH) const {
-        std::cerr << usage(false, option_width) << "\n";
-    }
+    virtual void print_usage() const { std::cerr << usage() << "\n"; }
 
     std::string const &command() const { return command_; }
     std::string const &name() const { return command_; }
@@ -1554,6 +1556,16 @@ class Command {
     bool is_parsed() { return is_parsed_; }
 
    protected:
+    int option_width() { return option_width_; }
+    void set_option_width(int width) {
+        option_width_ = width;
+        for (auto &arg : args_) {
+            arg->set_option_width(width);
+        }
+        for (auto &cmd : subcommands_) {
+            cmd->set_option_width(width);
+        }
+    }
     bool flag_or_option_exists(ArgBase &new_arg) const {
         return flag_exists(new_arg) || option_exists(new_arg);
     }
@@ -1601,6 +1613,7 @@ class Command {
     Command *parent_{nullptr};
     std::function<void()> callback_{nullptr};
     bool is_parsed_{false};
+    int option_width_{OPTION_NAME_WIDTH};
 };
 
 class ArgParser : public Command {
@@ -1611,23 +1624,24 @@ class ArgParser : public Command {
     using Command::add_flag;
     using Command::add_option;
     using Command::add_positional;
-    void print_usage(int option_width = OPTION_NAME_WIDTH) const override {
+    std::string usage() const override {
         std::stringstream usage_str;
         if (!description_.empty()) {
             usage_str << description_ << "\n";
         }
         usage_str << "\nUsage: \n  ";
-        usage_str << this->usage(false, option_width);
+        usage_str << this->Command::usage();
 
         if (!subcommands_.empty()) {
             usage_str << "\n\nAvailable Commands:";
             for (auto const &cmd : subcommands_) {
-                usage_str << "\n " << cmd->usage(true, option_width);
+                usage_str << "\n " << cmd->oneline_usage();
             }
         }
 
-        std::cerr << usage_str.str() << std::endl;
+        return usage_str.str();
     }
+    void print_usage() const override { std::cerr << this->usage() << '\n'; }
     void print_version() const {
         std::cerr << "Version: " << version << std::endl;
     }
@@ -1658,6 +1672,7 @@ class ArgParser : public Command {
         subcommands_.push_back(cmd_ptr);
         return *cmd_ptr;
     }
+    void set_option_width(int width) { this->Command::set_option_width(width); }
 
    private:
     std::string version{"0.1"};
