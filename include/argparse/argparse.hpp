@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cctype>
 #include <concepts>
+#include <cstdlib>
 #include <functional>
 #include <iostream>
 #include <iterator>
@@ -1519,6 +1520,24 @@ class Command {
         }
         return usage_str.str();
     }
+    void add_default_help_flag() {
+        static bool default_help{false};
+        auto *const help = get("help", false);
+        if (nullptr == help) {
+            auto *const h = get("h", false);
+            std::string help_name = "help";
+            if (nullptr == h) {
+                help_name = "h,help";
+            }
+            auto &f = add_flag(help_name, "show this help info", default_help);
+            f.callback([this](bool v) {
+                if (v) {
+                    print_usage();
+                    std::exit(0);
+                }
+            });
+        }
+    }
 
     virtual void print_usage(int option_width = OPTION_NAME_WIDTH) const {
         std::cout << usage(false, option_width) << "\n";
@@ -1588,6 +1607,10 @@ class ArgParser : public Command {
         std::cout << "Version: " << version << std::endl;
     }
     Command &parse(int argc, const char *argv[]) {
+        add_default_help_flag();
+        for (auto &sc : subcommands_) {
+            sc->add_default_help_flag();
+        }
         Command::parse(argc, argv);
         auto it =
             std::find_if(begin(subcommands_), end(subcommands_),
