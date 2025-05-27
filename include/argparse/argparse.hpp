@@ -1081,8 +1081,8 @@ class Command {
                                               std::move(action),
                                               std::move(negatable_action));
         auto &ret = *(flag.get());
-        if (option_exist(ret)) {
-            throw std::runtime_error("Option already exists: " + name);
+        if (flag_or_option_exists(ret)) {
+            throw std::runtime_error("Flag or Option already exists: " + name);
         }
         args_.push_back(std::move(flag));
         return ret;
@@ -1099,8 +1099,8 @@ class Command {
                                               std::move(action),
                                               std::move(negatable_action));
         auto &ret = *(flag.get());
-        if (option_exist(ret)) {
-            throw std::runtime_error("Option already exists: " + name);
+        if (flag_or_option_exists(ret)) {
+            throw std::runtime_error("Flag or Option already exists: " + name);
         }
         args_.push_back(std::move(flag));
         return ret;
@@ -1168,6 +1168,9 @@ class Command {
             std::make_unique<OptionAlias>(name, (OptionBase *)opt, opt_value);
 
         auto &ret = *(alias.get());
+        if (flag_or_option_exists(ret)) {
+            throw std::runtime_error("Flag or Option already exists: " + name);
+        }
         args_.push_back(std::move(alias));
         return ret;
     }
@@ -1178,8 +1181,8 @@ class Command {
         auto option =
             std::make_unique<Option<T>>(name, description, bind_value);
         auto &ret = *(option.get());
-        if (option_exist(ret)) {
-            throw std::runtime_error("Option already exists: " + name);
+        if (flag_or_option_exists(ret)) {
+            throw std::runtime_error("Flag or Option already exists: " + name);
         }
         args_.push_back(std::move(option));
         return ret;
@@ -1192,8 +1195,8 @@ class Command {
         auto option =
             std::make_unique<Option<T>>(name, description, bind_value, delim);
         auto &ret = *(option.get());
-        if (option_exist(ret)) {
-            throw std::runtime_error("Option already exists: " + name);
+        if (flag_or_option_exists(ret)) {
+            throw std::runtime_error("Flag or Option already exists: " + name);
         }
         args_.push_back(std::move(option));
         return ret;
@@ -1218,8 +1221,8 @@ class Command {
         auto positional =
             std::make_unique<Positional<T>>(name, description, bind_value);
         auto &ret = *(positional.get());
-        if (option_exist(ret)) {
-            throw std::runtime_error("Option already exists: " + name);
+        if (positional_exists(ret)) {
+            throw std::runtime_error("Positional already exists: " + name);
         }
         args_.push_back(std::move(positional));
         return ret;
@@ -1236,8 +1239,8 @@ class Command {
         auto positional = std::make_unique<Positional<T>>(name, description,
                                                           bind_value, delim);
         auto &ret = *(positional.get());
-        if (option_exist(ret)) {
-            throw std::runtime_error("Option already exists: " + name);
+        if (positional_exists(ret)) {
+            throw std::runtime_error("Positional already exists: " + name);
         }
         args_.push_back(std::move(positional));
         return ret;
@@ -1529,7 +1532,8 @@ class Command {
             if (nullptr == h) {
                 help_name = "h,help";
             }
-            auto &f = add_flag(help_name, "show this help info", default_help);
+            auto &f = add_flag(help_name, "Display this help information",
+                               default_help);
             f.callback([this](bool v) {
                 if (v) {
                     print_usage();
@@ -1540,7 +1544,7 @@ class Command {
     }
 
     virtual void print_usage(int option_width = OPTION_NAME_WIDTH) const {
-        std::cout << usage(false, option_width) << "\n";
+        std::cerr << usage(false, option_width) << "\n";
     }
 
     std::string const &command() const { return command_; }
@@ -1550,8 +1554,29 @@ class Command {
     bool is_parsed() { return is_parsed_; }
 
    protected:
-    bool option_exist(ArgBase &new_arg) const {
+    bool flag_or_option_exists(ArgBase &new_arg) const {
+        return flag_exists(new_arg) || option_exists(new_arg);
+    }
+    bool flag_exists(ArgBase &new_arg) const {
+        return option_name_exists(new_arg, 0);
+    }
+    bool option_exists(ArgBase &new_arg) const {
+        return option_name_exists(new_arg, 1);
+    }
+    bool positional_exists(ArgBase &new_arg) const {
+        return option_name_exists(new_arg, 2);
+    }
+    bool option_name_exists(ArgBase &new_arg, int type) const {
         for (const auto &arg : args_) {
+            if (type == 0 && !arg->is_flag()) {
+                continue;
+            }
+            if (type == 1 && !arg->is_option()) {
+                continue;
+            }
+            if (type == 2 && !arg->is_positional()) {
+                continue;
+            }
             for (auto &name : arg->long_opt_names_) {
                 if (std::find(new_arg.long_opt_names_.begin(),
                               new_arg.long_opt_names_.end(),
@@ -1601,10 +1626,10 @@ class ArgParser : public Command {
             }
         }
 
-        std::cout << usage_str.str() << std::endl;
+        std::cerr << usage_str.str() << std::endl;
     }
     void print_version() const {
-        std::cout << "Version: " << version << std::endl;
+        std::cerr << "Version: " << version << std::endl;
     }
     Command &parse(int argc, const char *argv[]) {
         add_default_help_flag();
