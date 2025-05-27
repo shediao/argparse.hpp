@@ -1108,6 +1108,7 @@ class Command {
    public:
     Command(std::string cmd, std::string description)
         : command_{std::move(cmd)}, description_(std::move(description)) {}
+    virtual ~Command() {}
     template <typename T>
         requires std::same_as<T, bool> || std::same_as<std::optional<bool>, T>
     Flag<T> &add_flag(const std::string &name, const std::string &description,
@@ -1519,7 +1520,7 @@ class Command {
         return usage_str.str();
     }
 
-    void print_usage(int option_width = OPTION_NAME_WIDTH) const {
+    virtual void print_usage(int option_width = OPTION_NAME_WIDTH) const {
         std::cout << usage(false, option_width) << "\n";
     }
 
@@ -1562,10 +1563,11 @@ class ArgParser : public Command {
    public:
     ArgParser(std::string prog, std::string description)
         : Command(prog, description) {}
+    virtual ~ArgParser() {}
     using Command::add_flag;
     using Command::add_option;
     using Command::add_positional;
-    void print_usage(int option_width = OPTION_NAME_WIDTH) const {
+    void print_usage(int option_width = OPTION_NAME_WIDTH) const override {
         std::stringstream usage_str;
         if (!description_.empty()) {
             usage_str << description_ << "\n";
