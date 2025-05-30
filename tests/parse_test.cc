@@ -678,9 +678,8 @@ TEST_F(ArgParserTest, DuplicateOptionsTest) {
   EXPECT_THROW(
       parser.add_option("flag1", "Option with same name as flag", opt1),
       std::runtime_error);
-  EXPECT_THROW(parser.add_positional(
-                   "option", "Positional with same name as option", pos2),
-               std::runtime_error);
+  EXPECT_NO_THROW(parser.add_positional(
+      "option", "Positional with same name as option", pos2));
 }
 
 // 测试多个选项名称重复

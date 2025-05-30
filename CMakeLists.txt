@@ -25,7 +25,7 @@ add_library(argparse::argparse ALIAS argparse)
 
 if(ARGPARSE_BUILD_TESTS)
   enable_testing()
-  add_subdirectory(test)
+  add_subdirectory(tests)
 endif()
 
 install(

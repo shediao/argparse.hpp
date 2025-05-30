@@ -9,7 +9,7 @@
 #include <stdexcept>
 
 using namespace argparse;
-TEST(ArgParserTest, PrintUsaeg) {
+TEST(argparse, PrintUsaeg) {
   std::vector<const char*> args{"prog", nullptr};
   ArgParser parser{"prog", "the prog description"};
   struct Configs {
@@ -32,7 +32,7 @@ TEST(ArgParserTest, PrintUsaeg) {
   parser.print_usage();
 }
 
-TEST(ArgParserTest, DefaultHelpFlag) {
+TEST(argparse, DefaultHelpFlag) {
   std::vector<const char*> args{"prog", "-h"};
   ArgParser parser{"prog", "the prog description"};
   ASSERT_EXIT(parser.parse(args.size(), args.data()),
@@ -40,7 +40,7 @@ TEST(ArgParserTest, DefaultHelpFlag) {
               ".*-h, --help.*Display this help information.*");
 }
 
-TEST(ArgParserTest, FlagAlreadyExists) {
+TEST(argparse, FlagAlreadyExists) {
   ArgParser parser{"prog", "the prog description"};
   bool flag;
   parser.add_flag("f,flag", "", flag);
@@ -48,14 +48,14 @@ TEST(ArgParserTest, FlagAlreadyExists) {
 
   ASSERT_THROW(parser.add_option("f", "", flag), std::runtime_error);
 }
-TEST(ArgParserTest, AliasAlreadyExists) {
+TEST(argparse, AliasAlreadyExists) {
   ArgParser parser{"prog", "the prog description"};
   bool flag;
   parser.add_option("o,option", "", flag);
   parser.add_option("o2,option2", "", flag);
   ASSERT_THROW(parser.add_alias("o2", "", "option"), std::runtime_error);
 }
-TEST(ArgParserTest, OptionAlreadyExists) {
+TEST(argparse, OptionAlreadyExists) {
   ArgParser parser{"prog", "the prog description"};
   bool flag;
   parser.add_option("f,flag", "", flag);
@@ -63,7 +63,7 @@ TEST(ArgParserTest, OptionAlreadyExists) {
 
   ASSERT_THROW(parser.add_flag("f", "", flag), std::runtime_error);
 }
-TEST(ArgParserTest, PositionalAlreadyExists) {
+TEST(argparse, PositionalAlreadyExists) {
   ArgParser parser{"prog", "the prog description"};
   std::string val;
   parser.add_positional("positional", "", val);

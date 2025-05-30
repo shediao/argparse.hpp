@@ -14,8 +14,8 @@ if(NOT CMAKE_HOST_SYSTEM_NAME MATCHES "Windows" AND MSVC)
 endif()
 FetchContent_MakeAvailable(googletest)
 
-function(add_argparse_test test_name)
-  add_executable(${test_name} ${test_name}.cc)
+function(add_argparse_test test_name test_files)
+  add_executable(${test_name} ${test_files})
   if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
      OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
      OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
@@ -35,5 +35,7 @@ file(GLOB test_files "*.cc")
 
 foreach(test_file ${test_files})
   get_filename_component(test_name ${test_file} NAME_WE)
-  add_argparse_test(${test_name})
+  add_argparse_test(${test_name} ${test_file})
 endforeach()
+
+add_argparse_test(all_test "${test_files}")
