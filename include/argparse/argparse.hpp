@@ -20,6 +20,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -48,6 +49,10 @@ struct is_optional<std::optional<T>> : std::true_type {};
 
 template <typename T>
 constexpr bool is_optional_v = is_optional<T>::value;
+
+template <typename T>
+constexpr bool is_integral_v =
+    std::is_integral_v<T> && !std::is_same_v<bool, T>;
 
 template <typename T>
 struct is_string : std::false_type {};
@@ -488,8 +493,8 @@ class FlagBase : public ArgBase {
 };
 
 template <typename T = bool>
-  requires std::integral<T> || std::is_same_v<T, bool> ||
-           (is_optional_v<T> && (std::integral<typename T::value_type> ||
+  requires is_integral_v<T> || std::is_same_v<T, bool> ||
+           (is_optional_v<T> && (is_integral_v<typename T::value_type> ||
                                  std::is_same_v<typename T::value_type, bool>))
 class Flag final : public FlagBase {
   friend class Command;
@@ -1068,7 +1073,8 @@ class Command {
     return ret;
   }
   template <typename T>
-    requires std::same_as<T, int> || std::same_as<std::optional<int>, T>
+    requires is_integral_v<T> ||
+             (is_optional_v<T> && is_integral_v<typename T::value_type>)
   Flag<T> &add_flag_int(
       const std::string &name, const std::string &description, T &bind_value,
       std::function<void(extract_value_type_t<T> &)> action =
@@ -1101,7 +1107,8 @@ class Command {
                          std::move(negatable_action));
   }
   template <typename T>
-    requires std::same_as<T, int> || std::same_as<std::optional<int>, T>
+    requires is_integral_v<T> ||
+             (is_optional_v<T> && is_integral_v<typename T::value_type>)
   Flag<T> &add_flag(const std::string &name, const std::string &description,
                     T &bind_value) {
     std::function<void(extract_value_type_t<T> &)> action =

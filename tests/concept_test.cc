@@ -2,8 +2,6 @@
 
 #include <array>
 #include <deque>
-#include <forward_list>
-#include <initializer_list>
 #include <list>
 #include <map>
 #include <optional>
@@ -11,11 +9,23 @@
 #include <tuple>
 #include <unordered_map>
 #include <unordered_set>
-#include <variant>
 #include <vector>
 
 #include "argparse/argparse.hpp"
 
+TEST(ConceptTest, IsIntegral) {
+  ASSERT_FALSE(argparse::is_integral_v<bool>);
+  ASSERT_FALSE(argparse::is_integral_v<std::string>);
+  ASSERT_FALSE(argparse::is_integral_v<char*>);
+  ASSERT_TRUE(argparse::is_integral_v<int>);
+  ASSERT_TRUE(argparse::is_integral_v<short>);
+  ASSERT_TRUE(argparse::is_integral_v<long>);
+  ASSERT_TRUE(argparse::is_integral_v<long long>);
+  ASSERT_TRUE(argparse::is_integral_v<unsigned int>);
+  ASSERT_TRUE(argparse::is_integral_v<unsigned short>);
+  ASSERT_TRUE(argparse::is_integral_v<unsigned long>);
+  ASSERT_TRUE(argparse::is_integral_v<unsigned long long>);
+}
 // 测试 ParseFromStringTupleLikeType concept
 TEST(ConceptTest, IsTupleLike) {
   ASSERT_TRUE(
