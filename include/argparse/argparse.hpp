@@ -593,11 +593,10 @@ class OptionBase : public ArgBase {
     return allowed(choices);
   }
   OptionBase &allowed(std::vector<std::string> const &allowed_values) {
-    allowed_ = std::vector<std::string>(allowed_values);
-    value_checker_.push_back(OptionValueChecker<std::string>(
-        [this](const std::string &value) {
-          return std::ranges::find(allowed_, value) !=
-                 std::ranges::end(allowed_);
+    parse_befor_value_checker_.push_back(OptionValueChecker<std::string>(
+        [allowed = std::vector<std::string>(allowed_values)](
+            const std::string &value) {
+          return std::ranges::find(allowed, value) != std::ranges::end(allowed);
         },
         "not in allowed: " + join(allowed_values, ',')));
     return *this;
@@ -608,9 +607,9 @@ class OptionBase : public ArgBase {
     return *this;
   }
 
-  OptionBase &allowed_help(
-      std::map<std::string, std::string> const &allowed_helps) {
-    this->allowed_help_ = allowed_helps;
+  OptionBase &allowed_description(
+      std::map<std::string, std::string> const &allowed_desc) {
+    this->allowed_description_ = allowed_desc;
     return *this;
   }
   OptionBase &env(std::string const &env) {
@@ -621,7 +620,7 @@ class OptionBase : public ArgBase {
  protected:
   bool is_flag() const override final { return false; }
   virtual void parse(const std::string &opt_value) {
-    for (const auto &checker : value_checker_) {
+    for (const auto &checker : parse_befor_value_checker_) {
       if (!checker(opt_value)) {
         throw std::invalid_argument("check failed: (" + opt_value +
                                     "): " + checker.error_message());
@@ -724,7 +723,11 @@ class OptionBase : public ArgBase {
       }
 
       if (auto default_value = get_default_value(); default_value.has_value()) {
-        auto default_value_string = " (default:" + *default_value + ")";
+        auto default_value_string = " (default:" + *default_value;
+        if (!env_key_.empty()) {
+          default_value_string += ", ENV:" + env_key_;
+        }
+        default_value_string += ")";
         if (option_width() + description().length() +
                 default_value_string.length() >
             max_width) {
@@ -735,13 +738,8 @@ class OptionBase : public ArgBase {
           usage_str << default_value_string;
         }
       }
-      if (!allowed_.empty() && this->allowed_help_.empty()) {
-        auto choices_string = " [" + join(allowed_, ',') + "]";
-        usage_str << "\n"
-                  << argparse::format("", option_width(), choices_string);
-      }
-      if (!this->allowed_help_.empty()) {
-        for (auto const &[value, help] : this->allowed_help_) {
+      if (!this->allowed_description_.empty()) {
+        for (auto const &[value, help] : this->allowed_description_) {
           usage_str << '\n'
                     << argparse::format("      [" + value + "]", option_width(),
                                         " " + help);
@@ -769,9 +767,8 @@ class OptionBase : public ArgBase {
   }
   std::string value_help_;
   std::vector<std::string> opt_values;
-  std::vector<OptionValueChecker<std::string>> value_checker_;
-  std::vector<std::string> allowed_;
-  std::map<std::string, std::string> allowed_help_;
+  std::vector<OptionValueChecker<std::string>> parse_befor_value_checker_;
+  std::map<std::string, std::string> allowed_description_;
 };
 
 template <BindableType T>
@@ -819,6 +816,22 @@ class Option final : public OptionBase {
     return *this;
   }
 
+  Option<T> &checker(std::function<bool(const T &)> check_function,
+                     std::string description) {
+    value_checker_.push_back(OptionValueChecker<T>(std::move(check_function),
+                                                   std::move(description)));
+    return *this;
+  }
+
+  Option<T> &range(T min, T max)
+    requires std::is_arithmetic_v<T>
+  {
+    value_checker_.push_back(OptionValueChecker<T>(
+        [min, max](const T &val) { return min <= val && val <= max; },
+        "[" + std::to_string(min) + "~" + std::to_string(max) + "]"));
+    return *this;
+  }
+
   T const &value() const { return bind_value_; }
 
  protected:
@@ -831,6 +844,12 @@ class Option final : public OptionBase {
                                parse_function_(opt_value));
     } else {
       bind_value_.get() = parse_function_(opt_value);
+    }
+    for (const auto &checker : value_checker_) {
+      if (!checker(bind_value_.get())) {
+        throw std::invalid_argument("check failed: (" + opt_value +
+                                    "): " + checker.error_message());
+      }
     }
     if (callback_) {
       callback_(bind_value_.get());
@@ -882,6 +901,7 @@ class Option final : public OptionBase {
                      std::optional<std::string>>
       default_value_;
   std::function<void(T const &)> callback_;
+  std::vector<OptionValueChecker<T>> value_checker_;
 };
 
 class OptionAlias : public FlagBase {
