@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <optional>
 #include <stdexcept>
 
 #include "argparse/argparse.hpp"
@@ -31,12 +32,34 @@ TEST_F(ArgsMaker, Allowed) {
   args = make_args("prog", "-t", "debug");
   ASSERT_NO_THROW(parser.parse(args.size(), args.data()));
 }
+TEST_F(ArgsMaker, AllowedOptional) {
+  auto args = make_args("prog", "-t", "xx");
+
+  argparse::ArgParser parser("prog", "");
+  std::optional<std::string> type;
+  parser.add_option("t", "type", type).allowed({"debug", "release"});
+
+  ASSERT_THROW(parser.parse(args.size(), args.data()), std::invalid_argument);
+  args = make_args("prog", "-t", "debug");
+  ASSERT_NO_THROW(parser.parse(args.size(), args.data()));
+}
 
 TEST_F(ArgsMaker, Range) {
   auto args = make_args("prog", "-t", "2.0");
 
   argparse::ArgParser parser("prog", "");
   float t;
+  parser.add_option("t", "", t).range(0.0f, 1.0f);
+  ASSERT_THROW(parser.parse(args.size(), args.data()), std::invalid_argument);
+  args = make_args("prog", "-t", "0.5");
+  ASSERT_NO_THROW(parser.parse(args.size(), args.data()));
+}
+
+TEST_F(ArgsMaker, RangeOptional) {
+  auto args = make_args("prog", "-t", "2.0");
+
+  argparse::ArgParser parser("prog", "");
+  std::optional<float> t;
   parser.add_option("t", "", t).range(0.0f, 1.0f);
   ASSERT_THROW(parser.parse(args.size(), args.data()), std::invalid_argument);
   args = make_args("prog", "-t", "0.5");
@@ -50,6 +73,22 @@ TEST_F(ArgsMaker, Checker) {
   float t;
   parser.add_option("t", "", t)
       .checker([](float const& v) { return v > 0.0f && v < 1.0f; }, "");
+  ASSERT_THROW(parser.parse(args.size(), args.data()), std::invalid_argument);
+  args = make_args("prog", "-t", "0.5");
+  ASSERT_NO_THROW(parser.parse(args.size(), args.data()));
+}
+
+TEST_F(ArgsMaker, CheckerOptional) {
+  auto args = make_args("prog", "-t", "2.0");
+
+  argparse::ArgParser parser("prog", "");
+  std::optional<float> t;
+  parser.add_option("t", "", t)
+      .checker(
+          [](std::optional<float> const& v) {
+            return v.value() > 0.0f && v.value() < 1.0f;
+          },
+          "");
   ASSERT_THROW(parser.parse(args.size(), args.data()), std::invalid_argument);
   args = make_args("prog", "-t", "0.5");
   ASSERT_NO_THROW(parser.parse(args.size(), args.data()));

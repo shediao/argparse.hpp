@@ -823,12 +823,19 @@ class Option final : public OptionBase {
     return *this;
   }
 
-  Option<T> &range(T min, T max)
-    requires std::is_arithmetic_v<T>
+  Option<T> &range(extract_value_type_t<T> r_min, extract_value_type_t<T> r_max)
+    requires std::is_arithmetic_v<T> ||
+             (is_optional_v<T> && std::is_arithmetic_v<typename T::value_type>)
   {
     value_checker_.push_back(OptionValueChecker<T>(
-        [min, max](const T &val) { return min <= val && val <= max; },
-        "[" + std::to_string(min) + "~" + std::to_string(max) + "]"));
+        [r_min, r_max](const T &val) {
+          if constexpr (is_optional_v<T>) {
+            return r_min <= val.value() && val.value() <= r_max;
+          } else {
+            return r_min <= val && val <= r_max;
+          }
+        },
+        "[" + std::to_string(r_min) + "~" + std::to_string(r_max) + "]"));
     return *this;
   }
 
@@ -997,6 +1004,29 @@ class Positional final : public OptionBase {
     OptionBase::env(env);
     return *this;
   }
+  Positional<T> &checker(std::function<bool(const T &)> check_function,
+                         std::string description) {
+    value_checker_.push_back(OptionValueChecker<T>(std::move(check_function),
+                                                   std::move(description)));
+    return *this;
+  }
+
+  Positional<T> &range(extract_value_type_t<T> r_min,
+                       extract_value_type_t<T> r_max)
+    requires std::is_arithmetic_v<T> ||
+             (is_optional_v<T> && std::is_arithmetic_v<typename T::value_type>)
+  {
+    value_checker_.push_back(OptionValueChecker<T>(
+        [r_min, r_max](const T &val) {
+          if constexpr (is_optional_v<T>) {
+            return r_min <= val.value() && val.value() <= r_max;
+          } else {
+            return r_min <= val && val <= r_max;
+          }
+        },
+        "[" + std::to_string(r_min) + "~" + std::to_string(r_max) + "]"));
+    return *this;
+  }
 
  protected:
   bool is_option() const override final { return false; }
@@ -1059,6 +1089,7 @@ class Positional final : public OptionBase {
                      std::optional<std::string>>
       default_value_;
   std::function<void(T const &)> callback_;
+  std::vector<OptionValueChecker<T>> value_checker_;
 };
 
 class Command {
