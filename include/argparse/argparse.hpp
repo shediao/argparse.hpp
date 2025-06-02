@@ -594,16 +594,24 @@ class OptionBase : public ArgBase {
   OptionBase(const std::string &name, const std::string &description)
       : ArgBase(name, description) {}
 
-  OptionBase &choices(std::vector<std::string> const &choices) {
-    return allowed(choices);
+  OptionBase &pre_checker(std::function<bool(std::string const &)> f,
+                          std::string description = "") {
+    parse_befor_value_checker_.push_back(
+        OptionValueChecker<std::string>(std::move(f), std::move(description)));
+
+    return *this;
   }
-  OptionBase &allowed(std::vector<std::string> const &allowed_values) {
-    parse_befor_value_checker_.push_back(OptionValueChecker<std::string>(
+
+  OptionBase &choices_string(std::vector<std::string> const &choices) {
+    return OptionBase::allowed_string(choices);
+  }
+  OptionBase &allowed_string(std::vector<std::string> const &allowed_values) {
+    OptionBase::pre_checker(
         [allowed = std::vector<std::string>(allowed_values)](
             const std::string &value) {
           return std::ranges::find(allowed, value) != std::ranges::end(allowed);
         },
-        "not in allowed: " + join(allowed_values, ',')));
+        "not in allowed: " + join(allowed_values, ','));
     return *this;
   }
 
@@ -828,7 +836,7 @@ class Option final : public OptionBase {
 
   Option<T> &checker(
       std::function<bool(const parsed_value_type &)> check_function,
-      std::string description) {
+      std::string description = "") {
     value_checker_.push_back(OptionValueChecker<parsed_value_type>(
         std::move(check_function), std::move(description)));
     return *this;
@@ -842,6 +850,19 @@ class Option final : public OptionBase {
           return r_min <= val && val <= r_max;
         },
         "[" + std::to_string(r_min) + "~" + std::to_string(r_max) + "]"));
+    return *this;
+  }
+
+  Option<T> &choices(std::vector<parsed_value_type> const &choices) {
+    return Option<T>::allowed(choices);
+  }
+  Option<T> &allowed(std::vector<parsed_value_type> const &allowed_values) {
+    Option<T>::checker(
+        [allowed_values](parsed_value_type const &val) {
+          return std::find(begin(allowed_values), end(allowed_values), val) !=
+                 end(allowed_values);
+        },
+        "");
     return *this;
   }
 
@@ -1022,7 +1043,7 @@ class Positional final : public OptionBase {
   }
   Positional<T> &checker(
       std::function<bool(const parsed_value_type &)> check_function,
-      std::string description) {
+      std::string description = "") {
     value_checker_.push_back(OptionValueChecker<parsed_value_type>(
         std::move(check_function), std::move(description)));
     return *this;
@@ -1036,6 +1057,19 @@ class Positional final : public OptionBase {
           return r_min <= val && val <= r_max;
         },
         "[" + std::to_string(r_min) + "~" + std::to_string(r_max) + "]"));
+    return *this;
+  }
+
+  Positional<T> &choices(std::vector<parsed_value_type> const &choices) {
+    return Option<T>::allowed(choices);
+  }
+  Positional<T> &allowed(std::vector<parsed_value_type> const &allowed_values) {
+    Positional<T>::checker(
+        [allowed_values](parsed_value_type const &val) {
+          return std::find(begin(allowed_values), end(allowed_values), val) !=
+                 end(allowed_values);
+        },
+        "");
     return *this;
   }
 

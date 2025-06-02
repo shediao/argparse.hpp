@@ -251,6 +251,7 @@ TEST_F(CheckerArgsMaker, Checker5) {
   std::vector<std::pair<std::string, int>> p;
   int count = 0;
   parser.add_option("p", "", p, ',')
+      .allowed({{"s1", 1}, {"s2", 2}, {"s3", 3}, {"s4", 4}})
       .checker(
           [&](std::vector<std::pair<std::string, int>>::value_type const& p) {
             count++;
