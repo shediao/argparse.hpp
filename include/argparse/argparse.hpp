@@ -2,8 +2,8 @@
 // Created by shediao.xsd on 24-12-29.
 //
 
-#ifndef __ARG_PARSE_HPP__
-#define __ARG_PARSE_HPP__
+#ifndef __ARGPARSE_ARGPARSE_HPP__
+#define __ARGPARSE_ARGPARSE_HPP__
 
 #include <algorithm>
 #include <cctype>
@@ -1716,4 +1716,4 @@ class ArgParser : public Command {
 
 }  // namespace argparse
 
-#endif  // __ARG_PARSE_HPP__
+#endif  // __ARGPARSE_ARGPARSE_HPP__
