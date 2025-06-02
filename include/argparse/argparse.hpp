@@ -501,20 +501,25 @@ class Flag final : public FlagBase {
   friend class ArgParser;
 
  public:
+  using value_type =
+      std::conditional_t<is_optional_v<T>, extract_value_type_t<T>, T>;
+  using parsed_value_type = extract_value_type_t<T>;
+
+ public:
   Flag(const std::string &name, const std::string &description, T &bind_value)
       : FlagBase(name, description),
         bind_value_(std::ref(bind_value)),
         parse_function_{store_true},
         parse_negatable_function_{store_false} {}
   Flag(const std::string &name, const std::string &description, T &bind_value,
-       std::function<void(extract_value_type_t<T> &)> action,
-       std::function<void(extract_value_type_t<T> &)> negatable_action)
+       std::function<void(parsed_value_type &)> action,
+       std::function<void(parsed_value_type &)> negatable_action)
       : FlagBase(name, description),
         bind_value_(std::ref(bind_value)),
         parse_function_(std::move(action)),
         parse_negatable_function_(std::move(negatable_action)) {}
 
-  Flag<T> &callback(std::function<void(extract_value_type_t<T>)> cb) {
+  Flag<T> &callback(std::function<void(parsed_value_type)> cb) {
     callback_ = std::move(cb);
     return *this;
   }
@@ -561,9 +566,9 @@ class Flag final : public FlagBase {
 
  private:
   std::reference_wrapper<T> bind_value_;
-  std::function<void(extract_value_type_t<T> &)> parse_function_;
-  std::function<void(extract_value_type_t<T> &)> parse_negatable_function_;
-  std::function<void(extract_value_type_t<T>)> callback_;
+  std::function<void(parsed_value_type &)> parse_function_;
+  std::function<void(parsed_value_type &)> parse_negatable_function_;
+  std::function<void(parsed_value_type)> callback_;
 };
 
 template <typename T>
@@ -777,11 +782,16 @@ class Option final : public OptionBase {
   friend class ArgParser;
 
  public:
+  using value_type =
+      std::conditional_t<is_optional_v<T>, extract_value_type_t<T>, T>;
+  using parsed_value_type = extract_value_type_t<T>;
+
+ public:
   Option(const std::string &name, const std::string &description, T &bind_value)
     requires BindableWithoutDelimiterType<T>
       : OptionBase(name, description),
         bind_value_(std::ref(bind_value)),
-        parse_function_(parse_from_string<extract_value_type_t<T>>) {
+        parse_function_(parse_from_string<parsed_value_type>) {
     set_default_value_help<T>();
   }
   Option(const std::string &name, const std::string &description, T &bind_value,
@@ -790,7 +800,7 @@ class Option final : public OptionBase {
       : OptionBase(name, description),
         bind_value_(std::ref(bind_value)),
         parse_function_([delim](std::string const &opt_value) {
-          return parse_from_string<extract_value_type_t<T>>(opt_value, delim);
+          return parse_from_string<parsed_value_type>(opt_value, delim);
         }) {
     set_default_value_help<T>();
   }
@@ -807,7 +817,7 @@ class Option final : public OptionBase {
     return *this;
   }
 
-  Option<T> &callback(std::function<void(T const &)> cb) {
+  Option<T> &callback(std::function<void(value_type const &)> cb) {
     callback_ = std::move(cb);
     return *this;
   }
@@ -816,24 +826,20 @@ class Option final : public OptionBase {
     return *this;
   }
 
-  Option<T> &checker(std::function<bool(const T &)> check_function,
-                     std::string description) {
-    value_checker_.push_back(OptionValueChecker<T>(std::move(check_function),
-                                                   std::move(description)));
+  Option<T> &checker(
+      std::function<bool(const parsed_value_type &)> check_function,
+      std::string description) {
+    value_checker_.push_back(OptionValueChecker<parsed_value_type>(
+        std::move(check_function), std::move(description)));
     return *this;
   }
 
-  Option<T> &range(extract_value_type_t<T> r_min, extract_value_type_t<T> r_max)
-    requires std::is_arithmetic_v<T> ||
-             (is_optional_v<T> && std::is_arithmetic_v<typename T::value_type>)
+  Option<T> &range(parsed_value_type r_min, parsed_value_type r_max)
+    requires std::is_arithmetic_v<parsed_value_type>
   {
-    value_checker_.push_back(OptionValueChecker<T>(
-        [r_min, r_max](const T &val) {
-          if constexpr (is_optional_v<T>) {
-            return r_min <= val.value() && val.value() <= r_max;
-          } else {
-            return r_min <= val && val <= r_max;
-          }
+    value_checker_.push_back(OptionValueChecker<parsed_value_type>(
+        [r_min, r_max](const parsed_value_type &val) {
+          return r_min <= val && val <= r_max;
         },
         "[" + std::to_string(r_min) + "~" + std::to_string(r_max) + "]"));
     return *this;
@@ -846,20 +852,25 @@ class Option final : public OptionBase {
   bool is_positional() const override final { return false; }
   void parse(const std::string &opt_value) override {
     OptionBase::parse(opt_value);
-    if constexpr (ParseFromStringContainerType<T>) {
-      bind_value_.get().insert(bind_value_.get().end(),
-                               parse_function_(opt_value));
-    } else {
-      bind_value_.get() = parse_function_(opt_value);
-    }
+    auto parsed_value = parse_function_(opt_value);
     for (const auto &checker : value_checker_) {
-      if (!checker(bind_value_.get())) {
+      if (!checker(parsed_value)) {
         throw std::invalid_argument("check failed: (" + opt_value +
                                     "): " + checker.error_message());
       }
     }
+    if constexpr (ParseFromStringContainerType<T>) {
+      bind_value_.get().insert(bind_value_.get().end(),
+                               std::move(parsed_value));
+    } else {
+      bind_value_.get() = std::move(parsed_value);
+    }
     if (callback_) {
-      callback_(bind_value_.get());
+      if constexpr (is_optional_v<T>) {
+        callback_(bind_value_.get().value());
+      } else {
+        callback_(bind_value_.get());
+      }
     }
   }
   bool is_multiple() const override {
@@ -902,13 +913,13 @@ class Option final : public OptionBase {
 
  private:
   std::reference_wrapper<T> bind_value_;
-  std::function<extract_value_type_t<T>(std::string const &)> parse_function_;
+  std::function<parsed_value_type(std::string const &)> parse_function_;
   std::conditional_t<ParseFromStringContainerType<T>,
                      std::optional<std::vector<std::string>>,
                      std::optional<std::string>>
       default_value_;
-  std::function<void(T const &)> callback_;
-  std::vector<OptionValueChecker<T>> value_checker_;
+  std::function<void(value_type const &)> callback_;
+  std::vector<OptionValueChecker<parsed_value_type>> value_checker_;
 };
 
 class OptionAlias : public FlagBase {
@@ -943,6 +954,11 @@ class Positional final : public OptionBase {
   friend class ArgParser;
 
  public:
+  using value_type =
+      std::conditional_t<is_optional_v<T>, extract_value_type_t<T>, T>;
+  using parsed_value_type = extract_value_type_t<T>;
+
+ public:
   Positional(const std::string &name, const std::string &description,
              T &bind_value)
     requires BindableWithoutDelimiterType<T>
@@ -950,11 +966,11 @@ class Positional final : public OptionBase {
     set_default_value_help<T>();
     if constexpr (ParseFromStringContainerType<T>) {
       parse_function_ = [](std::string const &opt_value) {
-        return parse_from_string<extract_value_type_t<T>>(opt_value);
+        return parse_from_string<parsed_value_type>(opt_value);
       };
     } else if constexpr (is_optional_v<T>) {
       parse_function_ = [](std::string const &opt_value) {
-        return parse_from_string<extract_value_type_t<T>>(opt_value);
+        return parse_from_string<parsed_value_type>(opt_value);
       };
     } else {
       parse_function_ = [](std::string const &opt_value) {
@@ -969,11 +985,11 @@ class Positional final : public OptionBase {
     set_default_value_help<T>();
     if constexpr (ParseFromStringContainerType<T>) {
       parse_function_ = [delim](std::string const &opt_value) {
-        return parse_from_string<extract_value_type_t<T>>(opt_value, delim);
+        return parse_from_string<parsed_value_type>(opt_value, delim);
       };
     } else if constexpr (is_optional_v<T>) {
       parse_function_ = [delim](std::string const &opt_value) {
-        return parse_from_string<extract_value_type_t<T>>(opt_value, delim);
+        return parse_from_string<parsed_value_type>(opt_value, delim);
       };
     } else {
       parse_function_ = [delim](std::string const &opt_value) {
@@ -994,7 +1010,7 @@ class Positional final : public OptionBase {
     return *this;
   }
 
-  Positional<T> &callback(std::function<void(T const &)> cb) {
+  Positional<T> &callback(std::function<void(value_type const &)> cb) {
     callback_ = std::move(cb);
   }
 
@@ -1004,25 +1020,20 @@ class Positional final : public OptionBase {
     OptionBase::env(env);
     return *this;
   }
-  Positional<T> &checker(std::function<bool(const T &)> check_function,
-                         std::string description) {
-    value_checker_.push_back(OptionValueChecker<T>(std::move(check_function),
-                                                   std::move(description)));
+  Positional<T> &checker(
+      std::function<bool(const parsed_value_type &)> check_function,
+      std::string description) {
+    value_checker_.push_back(OptionValueChecker<parsed_value_type>(
+        std::move(check_function), std::move(description)));
     return *this;
   }
 
-  Positional<T> &range(extract_value_type_t<T> r_min,
-                       extract_value_type_t<T> r_max)
-    requires std::is_arithmetic_v<T> ||
-             (is_optional_v<T> && std::is_arithmetic_v<typename T::value_type>)
+  Positional<T> &range(parsed_value_type r_min, parsed_value_type r_max)
+    requires std::is_arithmetic_v<parsed_value_type>
   {
-    value_checker_.push_back(OptionValueChecker<T>(
-        [r_min, r_max](const T &val) {
-          if constexpr (is_optional_v<T>) {
-            return r_min <= val.value() && val.value() <= r_max;
-          } else {
-            return r_min <= val && val <= r_max;
-          }
+    value_checker_.push_back(OptionValueChecker<parsed_value_type>(
+        [r_min, r_max](const parsed_value_type &val) {
+          return r_min <= val && val <= r_max;
         },
         "[" + std::to_string(r_min) + "~" + std::to_string(r_max) + "]"));
     return *this;
@@ -1033,14 +1044,25 @@ class Positional final : public OptionBase {
   bool is_positional() const override final { return true; }
   void parse(const std::string &opt_value) override {
     OptionBase::parse(opt_value);
+    auto parsed_value = parse_function_(opt_value);
+    for (const auto &checker : value_checker_) {
+      if (!checker(parsed_value)) {
+        throw std::invalid_argument("check failed: (" + opt_value +
+                                    "): " + checker.error_message());
+      }
+    }
     if constexpr (ParseFromStringContainerType<T>) {
       bind_value_.get().insert(bind_value_.get().end(),
-                               parse_function_(opt_value));
+                               std::move(parsed_value));
     } else {
-      bind_value_.get() = parse_function_(opt_value);
+      bind_value_.get() = std::move(parsed_value);
     }
     if (callback_) {
-      callback_(bind_value_.get());
+      if constexpr (is_optional_v<T>) {
+        callback_(bind_value_.get().value());
+      } else {
+        callback_(bind_value_.get());
+      }
     }
   }
   bool is_multiple() const override {
@@ -1083,13 +1105,13 @@ class Positional final : public OptionBase {
 
  private:
   std::reference_wrapper<T> bind_value_;
-  std::function<extract_value_type_t<T>(std::string const &)> parse_function_;
+  std::function<parsed_value_type(std::string const &)> parse_function_;
   std::conditional_t<ParseFromStringContainerType<T>,
                      std::optional<std::vector<std::string>>,
                      std::optional<std::string>>
       default_value_;
-  std::function<void(T const &)> callback_;
-  std::vector<OptionValueChecker<T>> value_checker_;
+  std::function<void(value_type const &)> callback_;
+  std::vector<OptionValueChecker<parsed_value_type>> value_checker_;
 };
 
 class Command {
