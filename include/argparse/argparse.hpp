@@ -602,10 +602,7 @@ class OptionBase : public ArgBase {
     return *this;
   }
 
-  OptionBase &choices_string(std::vector<std::string> const &choices) {
-    return OptionBase::allowed_string(choices);
-  }
-  OptionBase &allowed_string(std::vector<std::string> const &allowed_values) {
+  OptionBase &choices_string(std::vector<std::string> const &allowed_values) {
     OptionBase::pre_checker(
         [allowed = std::vector<std::string>(allowed_values)](
             const std::string &value) {
@@ -620,9 +617,9 @@ class OptionBase : public ArgBase {
     return *this;
   }
 
-  OptionBase &allowed_description(
-      std::map<std::string, std::string> const &allowed_desc) {
-    this->allowed_description_ = allowed_desc;
+  OptionBase &choices_description(
+      std::map<std::string, std::string> const &choices_description) {
+    this->choices_descriptions_ = choices_description;
     return *this;
   }
   OptionBase &env(std::string const &env) {
@@ -751,8 +748,8 @@ class OptionBase : public ArgBase {
           usage_str << default_value_string;
         }
       }
-      if (!this->allowed_description_.empty()) {
-        for (auto const &[value, help] : this->allowed_description_) {
+      if (!this->choices_descriptions_.empty()) {
+        for (auto const &[value, help] : this->choices_descriptions_) {
           usage_str << '\n'
                     << argparse::format("      [" + value + "]", option_width(),
                                         " " + help);
@@ -781,7 +778,7 @@ class OptionBase : public ArgBase {
   std::string value_help_;
   std::vector<std::string> opt_values;
   std::vector<OptionValueChecker<std::string>> parse_befor_value_checker_;
-  std::map<std::string, std::string> allowed_description_;
+  std::map<std::string, std::string> choices_descriptions_;
 };
 
 template <BindableType T>
@@ -853,10 +850,7 @@ class Option final : public OptionBase {
     return *this;
   }
 
-  Option<T> &choices(std::vector<parsed_value_type> const &choices) {
-    return Option<T>::allowed(choices);
-  }
-  Option<T> &allowed(std::vector<parsed_value_type> const &allowed_values) {
+  Option<T> &choices(std::vector<parsed_value_type> const &allowed_values) {
     Option<T>::checker(
         [allowed_values](parsed_value_type const &val) {
           return std::find(begin(allowed_values), end(allowed_values), val) !=
@@ -1060,10 +1054,7 @@ class Positional final : public OptionBase {
     return *this;
   }
 
-  Positional<T> &choices(std::vector<parsed_value_type> const &choices) {
-    return Option<T>::allowed(choices);
-  }
-  Positional<T> &allowed(std::vector<parsed_value_type> const &allowed_values) {
+  Positional<T> &choices(std::vector<parsed_value_type> const &allowed_values) {
     Positional<T>::checker(
         [allowed_values](parsed_value_type const &val) {
           return std::find(begin(allowed_values), end(allowed_values), val) !=
