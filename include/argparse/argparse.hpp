@@ -380,7 +380,6 @@ class ArgBase {
     return *this;
   }
 
- protected:
   ArgBase &env(std::string const &env) {
     env_key_ = env;
     return *this;
@@ -594,39 +593,6 @@ class OptionBase : public ArgBase {
   OptionBase(const std::string &name, const std::string &description)
       : ArgBase(name, description) {}
 
-  OptionBase &pre_checker(std::function<bool(std::string const &)> f,
-                          std::string description = "") {
-    parse_befor_value_checker_.push_back(
-        OptionValueChecker<std::string>(std::move(f), std::move(description)));
-
-    return *this;
-  }
-
-  OptionBase &choices_string(std::vector<std::string> const &allowed_values) {
-    OptionBase::pre_checker(
-        [allowed = std::vector<std::string>(allowed_values)](
-            const std::string &value) {
-          return std::ranges::find(allowed, value) != std::ranges::end(allowed);
-        },
-        "not in allowed: " + join(allowed_values, ','));
-    return *this;
-  }
-
-  OptionBase &value_help(std::string const &value_help) {
-    this->value_help_ = "<" + value_help + ">";
-    return *this;
-  }
-
-  OptionBase &choices_description(
-      std::map<std::string, std::string> const &choices_description) {
-    this->choices_descriptions_ = choices_description;
-    return *this;
-  }
-  OptionBase &env(std::string const &env) {
-    ArgBase::env(env);
-    return *this;
-  }
-
  protected:
   bool is_flag() const override final { return false; }
   virtual void parse(const std::string &opt_value) {
@@ -781,8 +747,50 @@ class OptionBase : public ArgBase {
   std::map<std::string, std::string> choices_descriptions_;
 };
 
+template <typename Derived>
+class OptionBaseCRTP : public OptionBase {
+ public:
+  using OptionBase::OptionBase;
+  Derived &pre_checker(std::function<bool(std::string const &)> f,
+                       std::string description = "") {
+    parse_befor_value_checker_.push_back(
+        OptionValueChecker<std::string>(std::move(f), std::move(description)));
+
+    return static_cast<Derived &>(*this);
+  }
+
+  Derived &choices_string(std::vector<std::string> const &allowed_values) {
+    pre_checker(
+        [allowed = std::vector<std::string>(allowed_values)](
+            const std::string &value) {
+          return std::ranges::find(allowed, value) != std::ranges::end(allowed);
+        },
+        "not in allowed: " + join(allowed_values, ','));
+    return static_cast<Derived &>(*this);
+  }
+
+  Derived &value_help(std::string const &value_help) {
+    this->value_help_ = "<" + value_help + ">";
+    return static_cast<Derived &>(*this);
+  }
+
+  Derived &choices_description(
+      std::map<std::string, std::string> const &choices_description) {
+    this->choices_descriptions_ = choices_description;
+    return static_cast<Derived &>(*this);
+  }
+  Derived &hidden(bool v = true) {
+    ArgBase::hidden(v);
+    return static_cast<Derived &>(*this);
+  }
+  Derived &env(std::string const &env) {
+    ArgBase::env(env);
+    return static_cast<Derived &>(*this);
+  }
+};
+
 template <BindableType T>
-class Option final : public OptionBase {
+class Option final : public OptionBaseCRTP<Option<T>> {
   friend class Command;
   friend class ArgParser;
 
@@ -794,20 +802,20 @@ class Option final : public OptionBase {
  public:
   Option(const std::string &name, const std::string &description, T &bind_value)
     requires BindableWithoutDelimiterType<T>
-      : OptionBase(name, description),
+      : OptionBaseCRTP<Option<T>>(name, description),
         bind_value_(std::ref(bind_value)),
         parse_function_(parse_from_string<parsed_value_type>) {
-    set_default_value_help<T>();
+    OptionBase::set_default_value_help<T>();
   }
   Option(const std::string &name, const std::string &description, T &bind_value,
          char delim)
     requires BindableWithDelimiterType<T>
-      : OptionBase(name, description),
+      : OptionBaseCRTP<Option<T>>(name, description),
         bind_value_(std::ref(bind_value)),
         parse_function_([delim](std::string const &opt_value) {
           return parse_from_string<parsed_value_type>(opt_value, delim);
         }) {
-    set_default_value_help<T>();
+    OptionBase::set_default_value_help<T>();
   }
   Option<T> &default_value(const std::string &default_value)
     requires(!ParseFromStringContainerType<T>)
@@ -824,10 +832,6 @@ class Option final : public OptionBase {
 
   Option<T> &callback(std::function<void(value_type const &)> cb) {
     callback_ = std::move(cb);
-    return *this;
-  }
-  Option<T> &env(std::string const &env) {
-    OptionBase::env(env);
     return *this;
   }
 
@@ -866,7 +870,7 @@ class Option final : public OptionBase {
   bool is_option() const override final { return true; }
   bool is_positional() const override final { return false; }
   void parse(const std::string &opt_value) override {
-    OptionBase::parse(opt_value);
+    OptionBaseCRTP<Option<T>>::parse(opt_value);
     auto parsed_value = parse_function_(opt_value);
     for (const auto &checker : value_checker_) {
       if (!checker(parsed_value)) {
@@ -895,9 +899,8 @@ class Option final : public OptionBase {
       return false;
     }
   }
-  void use_env_if_needed() { OptionBase::use_env_if_needed(); }
   void use_default_if_needed() override {
-    if (count() != 0) {
+    if (ArgBase::count() != 0) {
       return;
     }
     if constexpr (ParseFromStringContainerType<T>) {
@@ -911,7 +914,7 @@ class Option final : public OptionBase {
         parse(default_value_.value());
       }
     }
-    count_ = 0;
+    ArgBase::count_ = 0;
   }
   std::optional<std::string> get_default_value() const override {
     if constexpr (ParseFromStringContainerType<T>) {
@@ -964,7 +967,7 @@ class OptionAlias : public FlagBase {
 };
 
 template <BindableType T>
-class Positional final : public OptionBase {
+class Positional final : public OptionBaseCRTP<Positional<T>> {
   friend class Command;
   friend class ArgParser;
 
@@ -977,8 +980,9 @@ class Positional final : public OptionBase {
   Positional(const std::string &name, const std::string &description,
              T &bind_value)
     requires BindableWithoutDelimiterType<T>
-      : OptionBase(name, description), bind_value_(std::ref(bind_value)) {
-    set_default_value_help<T>();
+      : OptionBaseCRTP<Positional<T>>(name, description),
+        bind_value_(std::ref(bind_value)) {
+    OptionBase::set_default_value_help<T>();
     if constexpr (ParseFromStringContainerType<T>) {
       parse_function_ = [](std::string const &opt_value) {
         return parse_from_string<parsed_value_type>(opt_value);
@@ -996,8 +1000,9 @@ class Positional final : public OptionBase {
   Positional(const std::string &name, const std::string &description,
              T &bind_value, char delim)
     requires BindableWithDelimiterType<T>
-      : OptionBase(name, description), bind_value_(std::ref(bind_value)) {
-    set_default_value_help<T>();
+      : OptionBaseCRTP<Positional<T>>(name, description),
+        bind_value_(std::ref(bind_value)) {
+    OptionBase::set_default_value_help<T>();
     if constexpr (ParseFromStringContainerType<T>) {
       parse_function_ = [delim](std::string const &opt_value) {
         return parse_from_string<parsed_value_type>(opt_value, delim);
@@ -1031,10 +1036,6 @@ class Positional final : public OptionBase {
 
   T const &value() const { return bind_value_; }
 
-  Positional<T> &env(std::string const &env) {
-    OptionBase::env(env);
-    return *this;
-  }
   Positional<T> &checker(
       std::function<bool(const parsed_value_type &)> check_function,
       std::string description = "") {
@@ -1068,7 +1069,7 @@ class Positional final : public OptionBase {
   bool is_option() const override final { return false; }
   bool is_positional() const override final { return true; }
   void parse(const std::string &opt_value) override {
-    OptionBase::parse(opt_value);
+    OptionBaseCRTP<Positional<T>>::parse(opt_value);
     auto parsed_value = parse_function_(opt_value);
     for (const auto &checker : value_checker_) {
       if (!checker(parsed_value)) {
@@ -1097,9 +1098,8 @@ class Positional final : public OptionBase {
       return false;
     }
   }
-  void use_env_if_needed() { OptionBase::use_env_if_needed(); }
   void use_default_if_needed() override {
-    if (count() != 0) {
+    if (ArgBase::count() != 0) {
       return;
     }
     if constexpr (ParseFromStringContainerType<T>) {
@@ -1113,7 +1113,7 @@ class Positional final : public OptionBase {
         parse(default_value_.value());
       }
     }
-    count_ = 0;
+    ArgBase::count_ = 0;
   }
   std::optional<std::string> get_default_value() const override {
     if constexpr (ParseFromStringContainerType<T>) {

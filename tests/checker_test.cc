@@ -257,7 +257,8 @@ TEST_F(CheckerArgsMaker, Checker5) {
             count++;
             return p.second == count;
           },
-          "");
+          "")
+      .choices_string({"s1,1", "s2,2", "s3,3", "s4,4"});
 
   ASSERT_NO_THROW(parser.parse(args.size(), args.data()));
   ASSERT_EQ(4, p.size());
