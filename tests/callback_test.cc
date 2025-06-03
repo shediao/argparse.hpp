@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <map>
+#include <stdexcept>
 #include <vector>
 
 #include "argparse/argparse.hpp"
@@ -166,4 +167,34 @@ TEST_F(CallbackArgsMaker, Callback5) {
   ASSERT_EQ(2, p[1].second);
   ASSERT_EQ(3, p[2].second);
   ASSERT_EQ(4, p[3].second);
+}
+
+TEST_F(CallbackArgsMaker, Callback6) {
+  auto args = make_args("prog", "-m", "0");
+
+  argparse::ArgParser parser("prog", "");
+  std::string m;
+
+  parser.add_option("m", "", m).choices({"1", "2", "3"});
+
+  bool callback_is_called{false};
+  parser.callback([&callback_is_called]() { callback_is_called = true; });
+
+  ASSERT_THROW(parser.parse(args.size(), args.data()), std::invalid_argument);
+  ASSERT_FALSE(callback_is_called);
+}
+
+TEST_F(CallbackArgsMaker, Callback7) {
+  auto args = make_args("prog", "-m", "1");
+
+  argparse::ArgParser parser("prog", "");
+  std::string m;
+
+  parser.add_option("m", "", m).choices({"1", "2", "3"});
+
+  bool callback_is_called{false};
+  parser.callback([&callback_is_called]() { callback_is_called = true; });
+
+  ASSERT_NO_THROW(parser.parse(args.size(), args.data()));
+  ASSERT_TRUE(callback_is_called);
 }

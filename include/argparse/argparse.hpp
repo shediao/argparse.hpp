@@ -1155,19 +1155,6 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
 };
 
 class Command {
-  template <typename F>
-  class Defer {
-   public:
-    Defer(F &f) : f(f) {}
-    ~Defer() {
-      if (f) {
-        f();
-      }
-    }
-
-   private:
-    F &f;
-  };
   template <typename T>
     requires std::same_as<T, bool> || std::same_as<std::optional<bool>, T>
   Flag<T> &add_flag_bool(
@@ -1381,7 +1368,6 @@ class Command {
 
   void parse(int argc, char const *const *argv) {
     this->is_parsed_ = true;
-    Defer defer{callback_};
     std::vector<const char *> commands{argv, argv + argc};
     ARG_PARSER_DEBUG(join(std::vector<std::string>{argv, argv + argc}, ' '));
     size_t i = 1;  // Skip program name
@@ -1540,6 +1526,9 @@ class Command {
       if ((arg->is_option() || arg->is_positional()) && arg->count() == 0) {
         dynamic_cast<OptionBase *>(arg.get())->use_default_if_needed();
       }
+    }
+    if (callback_) {
+      callback_();
     }
   }
 
