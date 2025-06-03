@@ -311,16 +311,29 @@ T parse_from_string(std::string const &s, const char delim) {
 
 std::string format(std::string const &option_name, int width,
                    std::string const &description) {
-  std::string ret;
-  if (description.empty()) {
-    return option_name;
+  std::string ret = option_name;
+
+  int last_option_name_width = option_name.length();
+  if (auto p = option_name.rfind('\n'); p != std::string::npos) {
+    last_option_name_width = option_name.length() - p - 1;
   }
-  if (option_name.length() > static_cast<size_t>(width)) {
-    ret = option_name + " " + description;
+
+  if (last_option_name_width >= width) {
+    ret += " ";
   } else {
-    ret = option_name + std::string(width - option_name.length(), ' ') +
-          description;
+    ret += std::string(width - last_option_name_width, ' ');
   }
+
+  size_t pos = 0;
+  auto desc = description;
+  auto replacement = "\n" + std::string(width, ' ');
+  while ((pos = desc.find("\n", pos)) != std::string::npos) {
+    desc.replace(pos, 1, replacement);
+    pos += replacement.length();
+  }
+
+  ret += desc;
+
   return ret;
 }
 
