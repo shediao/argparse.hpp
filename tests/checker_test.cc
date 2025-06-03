@@ -251,14 +251,17 @@ TEST_F(CheckerArgsMaker, Checker5) {
   std::vector<std::pair<std::string, int>> p;
   int count = 0;
   parser.add_option("p", "", p, ',')
-      .choices({{"s1", 1}, {"s2", 2}, {"s3", 3}, {"s4", 4}})
+      .choices({std::pair<std::string, int>{"s1", 1},
+                {"s2", 2},
+                {"s3", 3},
+                {"s4", 4}})
       .checker(
           [&](std::vector<std::pair<std::string, int>>::value_type const& p) {
             count++;
             return p.second == count;
           },
           "")
-      .choices_string({"s1,1", "s2,2", "s3,3", "s4,4"});
+      .choices({"s1,1", "s2,2", "s3,3", "s4,4"});
 
   ASSERT_NO_THROW(parser.parse(args.size(), args.data()));
   ASSERT_EQ(4, p.size());

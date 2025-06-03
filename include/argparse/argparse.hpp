@@ -759,11 +759,11 @@ class OptionBaseCRTP : public OptionBase {
     return static_cast<Derived &>(*this);
   }
 
-  Derived &choices_string(std::vector<std::string> const &allowed_values) {
+  Derived &choices(std::vector<std::string> const &allowed_values) {
     pre_checker(
-        [allowed = std::vector<std::string>(allowed_values)](
-            const std::string &value) {
-          return std::ranges::find(allowed, value) != std::ranges::end(allowed);
+        [allowed_values](const std::string &value) {
+          return std::ranges::find(allowed_values, value) !=
+                 std::ranges::end(allowed_values);
         },
         "not in allowed: " + join(allowed_values, ','));
     return static_cast<Derived &>(*this);
@@ -854,6 +854,7 @@ class Option final : public OptionBaseCRTP<Option<T>> {
     return *this;
   }
 
+  using OptionBaseCRTP<Option<T>>::choices;
   Option<T> &choices(std::vector<parsed_value_type> const &allowed_values) {
     Option<T>::checker(
         [allowed_values](parsed_value_type const &val) {
@@ -1055,6 +1056,7 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
     return *this;
   }
 
+  using OptionBaseCRTP<Positional<T>>::choices;
   Positional<T> &choices(std::vector<parsed_value_type> const &allowed_values) {
     Positional<T>::checker(
         [allowed_values](parsed_value_type const &val) {
