@@ -41,6 +41,9 @@ static constexpr int OPTION_NAME_WIDTH = 32;
 
 namespace {
 
+template <typename...>
+using void_t = void;
+
 template <typename T>
 struct is_optional : std::false_type {};
 
@@ -68,6 +71,16 @@ concept is_container = requires(T t) {
   requires(!is_string_v<T>);
   t.insert(t.end(), std::declval<typename T::value_type>());
 };
+
+template <typename T, typename = void>
+struct has_std_to_string : std::false_type {};
+
+template <typename T>
+struct has_std_to_string<T, void_t<decltype(std::to_string(std::declval<T>()))>>
+    : std::is_same<decltype(std::to_string(std::declval<T>())), std::string> {};
+
+template <typename T>
+constexpr bool has_std_to_string_v = has_std_to_string<T>::value;
 
 template <typename T>
 concept ParseFromStringBasicType =
@@ -611,8 +624,13 @@ class OptionBase : public ArgBase {
   virtual void parse(const std::string &opt_value) {
     for (const auto &checker : parse_befor_value_checker_) {
       if (!checker(opt_value)) {
-        throw std::invalid_argument("check failed: (" + opt_value +
-                                    "): " + checker.error_message());
+        std::string err_msg = "check failed: ";
+        err_msg += join(long_opt_names_, ',');
+        err_msg += join(short_opt_names_, ',');
+        err_msg += "==> ";
+        err_msg += opt_value;
+        err_msg += " is a invalid value. ";
+        throw std::invalid_argument(err_msg + checker.error_message());
       }
     }
     this->opt_values.push_back(opt_value);
@@ -764,8 +782,8 @@ template <typename Derived>
 class OptionBaseCRTP : public OptionBase {
  public:
   using OptionBase::OptionBase;
-  Derived &pre_checker(std::function<bool(std::string const &)> f,
-                       std::string description = "") {
+  Derived &checker(std::function<bool(std::string const &)> f,
+                   std::string description = "") {
     parse_befor_value_checker_.push_back(
         OptionValueChecker<std::string>(std::move(f), std::move(description)));
 
@@ -773,12 +791,12 @@ class OptionBaseCRTP : public OptionBase {
   }
 
   Derived &choices(std::vector<std::string> const &allowed_values) {
-    pre_checker(
+    OptionBaseCRTP<Derived>::checker(
         [allowed_values](const std::string &value) {
           return std::ranges::find(allowed_values, value) !=
                  std::ranges::end(allowed_values);
         },
-        "not in allowed: " + join(allowed_values, ','));
+        "not in choices: [" + join(allowed_values, ',') + "]");
     return static_cast<Derived &>(*this);
   }
 
@@ -848,6 +866,7 @@ class Option final : public OptionBaseCRTP<Option<T>> {
     return *this;
   }
 
+  using OptionBaseCRTP<Option<T>>::checker;
   Option<T> &checker(
       std::function<bool(const parsed_value_type &)> check_function,
       std::string description = "") {
@@ -863,18 +882,35 @@ class Option final : public OptionBaseCRTP<Option<T>> {
         [r_min, r_max](const parsed_value_type &val) {
           return r_min <= val && val <= r_max;
         },
-        "[" + std::to_string(r_min) + "~" + std::to_string(r_max) + "]"));
+        "not in range: [" + std::to_string(r_min) + "~" +
+            std::to_string(r_max) + "]"));
     return *this;
   }
 
   using OptionBaseCRTP<Option<T>>::choices;
   Option<T> &choices(std::vector<parsed_value_type> const &allowed_values) {
+    std::string err_msg{};
+    if constexpr (std::is_same_v<parsed_value_type, std::string> ||
+                  has_std_to_string_v<parsed_value_type> ||
+                  std::is_constructible_v<parsed_value_type, std::string>) {
+      std::vector<std::string> tmp;
+      std::transform(begin(allowed_values), end(allowed_values),
+                     std::back_inserter(tmp),
+                     [](parsed_value_type const &v) -> std::string {
+                       if constexpr (has_std_to_string_v<parsed_value_type>) {
+                         return std::to_string(v);
+                       } else {
+                         return v;
+                       }
+                     });
+      err_msg = "not in choices: [" + join(tmp, ',') + "]";
+    }
     Option<T>::checker(
         [allowed_values](parsed_value_type const &val) {
           return std::find(begin(allowed_values), end(allowed_values), val) !=
                  end(allowed_values);
         },
-        "");
+        err_msg);
     return *this;
   }
 
@@ -888,8 +924,13 @@ class Option final : public OptionBaseCRTP<Option<T>> {
     auto parsed_value = parse_function_(opt_value);
     for (const auto &checker : value_checker_) {
       if (!checker(parsed_value)) {
-        throw std::invalid_argument("check failed: (" + opt_value +
-                                    "): " + checker.error_message());
+        std::string err_msg = "check failed: ";
+        err_msg += join(ArgBase::long_opt_names_, ',');
+        err_msg += join(ArgBase::short_opt_names_, ',');
+        err_msg += ": `";
+        err_msg += opt_value;
+        err_msg += "` is a invalid value. ";
+        throw std::invalid_argument(err_msg + checker.error_message());
       }
     }
     if constexpr (ParseFromStringContainerType<T>) {
@@ -1065,18 +1106,35 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
         [r_min, r_max](const parsed_value_type &val) {
           return r_min <= val && val <= r_max;
         },
-        "[" + std::to_string(r_min) + "~" + std::to_string(r_max) + "]"));
+        "not in range: [" + std::to_string(r_min) + "~" +
+            std::to_string(r_max) + "]"));
     return *this;
   }
 
   using OptionBaseCRTP<Positional<T>>::choices;
   Positional<T> &choices(std::vector<parsed_value_type> const &allowed_values) {
+    std::string err_msg{};
+    if constexpr (std::is_same_v<parsed_value_type, std::string> ||
+                  has_std_to_string_v<parsed_value_type> ||
+                  std::is_constructible_v<parsed_value_type, std::string>) {
+      std::vector<std::string> tmp;
+      std::transform(begin(allowed_values), end(allowed_values),
+                     std::back_inserter(tmp),
+                     [](parsed_value_type const &v) -> std::string {
+                       if constexpr (has_std_to_string_v<parsed_value_type>) {
+                         return std::to_string(v);
+                       } else {
+                         return v;
+                       }
+                     });
+      err_msg = "not in choices: [" + join(tmp, ',') + "]";
+    }
     Positional<T>::checker(
         [allowed_values](parsed_value_type const &val) {
           return std::find(begin(allowed_values), end(allowed_values), val) !=
                  end(allowed_values);
         },
-        "");
+        err_msg);
     return *this;
   }
 
@@ -1088,8 +1146,13 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
     auto parsed_value = parse_function_(opt_value);
     for (const auto &checker : value_checker_) {
       if (!checker(parsed_value)) {
-        throw std::invalid_argument("check failed: (" + opt_value +
-                                    "): " + checker.error_message());
+        std::string err_msg = "check failed: ";
+        err_msg += join(ArgBase::long_opt_names_, ',');
+        err_msg += join(ArgBase::short_opt_names_, ',');
+        err_msg += ": `";
+        err_msg += opt_value;
+        err_msg += "` is a invalid value. ";
+        throw std::invalid_argument(err_msg + checker.error_message());
       }
     }
     if constexpr (ParseFromStringContainerType<T>) {
