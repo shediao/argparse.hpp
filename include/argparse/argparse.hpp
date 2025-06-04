@@ -37,7 +37,7 @@
 
 namespace argparse {
 
-static constexpr int OPTION_NAME_WIDTH = 32;
+static constexpr size_t OPTION_NAME_WIDTH = 32;
 
 namespace {
 
@@ -322,11 +322,11 @@ T parse_from_string(std::string const &s, const char delim) {
   return make_tuple_from_container<T>(v);
 }
 
-std::string format(std::string const &option_name, int width,
+std::string format(std::string const &option_name, size_t width,
                    std::string const &description) {
   std::string ret = option_name;
 
-  int last_option_name_width = option_name.length();
+  auto last_option_name_width = option_name.length();
   if (auto p = option_name.rfind('\n'); p != std::string::npos) {
     last_option_name_width = option_name.length() - p - 1;
   }
@@ -416,8 +416,8 @@ class ArgBase {
   virtual bool is_option() const = 0;
   virtual bool is_positional() const = 0;
   virtual std::string usage() const = 0;
-  int option_width() const { return option_width_; }
-  void set_option_width(int width) { option_width_ = width; }
+  size_t option_width() const { return option_width_; }
+  void set_option_width(size_t width) { option_width_ = width; }
   const std::string &description() const { return description_; }
   size_t count_{0};
   std::vector<std::string> short_opt_names_;
@@ -425,7 +425,7 @@ class ArgBase {
   std::string description_;
   std::string env_key_;
   bool hidden_{false};
-  int option_width_{OPTION_NAME_WIDTH};
+  size_t option_width_{OPTION_NAME_WIDTH};
 };
 
 class FlagBase : public ArgBase {
@@ -451,15 +451,15 @@ class FlagBase : public ArgBase {
     std::string delimiter_of_short_and_long = ", ";
     std::stringstream usage_str;
 
-    auto flag_names_length =
-        std::accumulate(short_opt_names_.begin(), short_opt_names_.end(), 0,
-                        [negatable = negatable_](int t, const std::string &s) {
-                          return t + s.length() + 1 + (negatable ? 5 : 0);
-                          ;
-                        });
+    auto flag_names_length = std::accumulate(
+        short_opt_names_.begin(), short_opt_names_.end(), (size_t)0,
+        [negatable = negatable_](int t, const std::string &s) {
+          return t + s.length() + 1 + (negatable ? 5 : 0);
+          ;
+        });
     flag_names_length = std::accumulate(
         long_opt_names_.begin(), long_opt_names_.end(), flag_names_length,
-        [negatable = negatable_](int t, const std::string &s) {
+        [negatable = negatable_](size_t t, const std::string &s) {
           return t + s.length() + 2 + (negatable ? 5 : 0);
         });
 
@@ -676,11 +676,11 @@ class OptionBase : public ArgBase {
       std::string delimiter_of_short_and_long = ", ";
 
       auto opt_names_length = std::accumulate(
-          short_opt_names_.begin(), short_opt_names_.end(), 0,
+          short_opt_names_.begin(), short_opt_names_.end(), (size_t)0,
           [](int t, const std::string &s) { return t + s.length() + 1; });
       opt_names_length = std::accumulate(
           long_opt_names_.begin(), long_opt_names_.end(), opt_names_length,
-          [](int t, const std::string &s) { return t + s.length() + 2; });
+          [](size_t t, const std::string &s) { return t + s.length() + 2; });
 
       opt_names_length +=
           (short_opt_names_.size() + long_opt_names_.size() - 2) *
@@ -1462,7 +1462,7 @@ class Command {
           name = name.substr(0, eq_pos);
         }
 
-        if (auto *option = get(name)) {
+        if (auto *option = get(name); option != nullptr) {
           if (option->is_flag()) {
             auto *flag = dynamic_cast<FlagBase *>(option);
             ARG_PARSER_DEBUG("flag: " << name);
@@ -1482,7 +1482,7 @@ class Command {
           }
         } else if (name.length() > 3 && name.substr(0, 3) == "no-") {
           name = name.substr(3);
-          if (auto *option = get(name)) {
+          if (option = get(name); option != nullptr) {
             if (option->is_flag() &&
                 dynamic_cast<FlagBase *>(option)->is_negatable()) {
               auto *flag = dynamic_cast<FlagBase *>(option);
@@ -1686,8 +1686,8 @@ class Command {
   bool is_parsed() { return is_parsed_; }
 
  protected:
-  int option_width() { return option_width_; }
-  void set_option_width(int width) {
+  size_t option_width() { return option_width_; }
+  void set_option_width(size_t width) {
     option_width_ = width;
     for (auto &arg : args_) {
       arg->set_option_width(width);
@@ -1743,7 +1743,7 @@ class Command {
   Command *parent_{nullptr};
   std::function<void()> callback_{nullptr};
   bool is_parsed_{false};
-  int option_width_{OPTION_NAME_WIDTH};
+  size_t option_width_{OPTION_NAME_WIDTH};
 };
 
 class ArgParser : public Command {
