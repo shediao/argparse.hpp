@@ -453,7 +453,7 @@ class FlagBase : public ArgBase {
 
     auto flag_names_length = std::accumulate(
         short_opt_names_.begin(), short_opt_names_.end(), (size_t)0,
-        [negatable = negatable_](int t, const std::string &s) {
+        [negatable = negatable_](size_t t, const std::string &s) {
           return t + s.length() + 1 + (negatable ? 5 : 0);
           ;
         });
@@ -677,7 +677,7 @@ class OptionBase : public ArgBase {
 
       auto opt_names_length = std::accumulate(
           short_opt_names_.begin(), short_opt_names_.end(), (size_t)0,
-          [](int t, const std::string &s) { return t + s.length() + 1; });
+          [](size_t t, const std::string &s) { return t + s.length() + 1; });
       opt_names_length = std::accumulate(
           long_opt_names_.begin(), long_opt_names_.end(), opt_names_length,
           [](size_t t, const std::string &s) { return t + s.length() + 2; });
@@ -1482,7 +1482,7 @@ class Command {
           }
         } else if (name.length() > 3 && name.substr(0, 3) == "no-") {
           name = name.substr(3);
-          if (option = get(name); option != nullptr) {
+          if (auto* option = get(name); option != nullptr) {
             if (option->is_flag() &&
                 dynamic_cast<FlagBase *>(option)->is_negatable()) {
               auto *flag = dynamic_cast<FlagBase *>(option);
