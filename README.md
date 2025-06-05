@@ -153,5 +153,9 @@ add_subdirectory(/path/to/argparse.hpp)
 
 copy `argparse.hpp` to myproject/dir/include
 
+## TODO
+- [ ] bash/zsh completion
+- [ ] windows style
+
 ## docs
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/shediao/argparse.hpp)
