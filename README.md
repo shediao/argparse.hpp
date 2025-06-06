@@ -133,7 +133,7 @@ The `add_flag` method is used to define a boolean flag. When the flag is present
 -   **Syntax**: `parser.add_flag(names, description, variable_to_bind);`
 -   **`names`**: A string containing comma-separated short and long names (e.g., `"h,help"`, `"verbose"`). A single name is also valid (e.g., `"debug"`).
 -   **`description`**: A string describing the flag's purpose, used in generated help messages.
--   **`variable_to_bind`**: A reference to a `bool` variable (which will be set to `true` or `false` based on the flag's presence or explicit negation) or an integral variable (which can be incremented/decremented).
+-   **`variable_to_bind`**: A reference to a `bool`, `std::optional<bool>`, integral type (e.g., `int`, `size_t`), or `std::optional<integral type>`. Boolean-like variables are typically set to `true` (or `false` if negated). Integral types are typically incremented (or decremented if negated).
 
 **Example:**
 
@@ -156,12 +156,25 @@ parser.add_flag("enable-feature", "Enable a specific feature", args.enable_featu
 // if "./my_program --enable-feature" is called, args.enable_feature will be true.
 ```
 
+**Modifiers for Flags:**
+-   `.negatable()`: (Covered below) Allows a flag like `--feature` to have a `--no-feature` counterpart.
+-   `.callback(callback_function)`: Defines a custom callback function (`std::function<void(const FlagValueType&)>`) executed with the flag's effective value (e.g., `bool` or `int`, even if bound to `std::optional`) when the flag is parsed.
+    ```cpp
+    // bool processed = false;
+    // parser.add_flag("p,process", "Process data", args.process_flag)
+    //       .callback([&](bool val){ if(val) processed = true; });
+    ```
+-   `.hidden()`: Hides the flag from the help message.
+    ```cpp
+    // parser.add_flag("secret-debug", "Secret debug flag", args.secret_debug).hidden();
+    ```
+
 **Negatable Flags:**
 
 The library provides ways to handle flags that can be explicitly enabled or disabled:
 
 1.  **`add_negative_flag(names, description, variable_to_bind)`**:
-    This is useful if a feature is enabled by default (variable initialized to `true`), and you want a flag to disable it (set variable to `false`). The bound variable must be a `bool`.
+    This is useful if a feature is enabled by default (variable initialized to `true`), and you want a flag to disable it (set variable to `false`). The bound variable can be a `bool`, `std::optional<bool>`, `int`, or `std::optional<int>`. For boolean types, it sets the value to `false`. For integral types, it typically decrements the value.
     ```cpp
     struct Settings {
       bool debug = true; // Enabled by default
@@ -171,6 +184,9 @@ The library provides ways to handle flags that can be explicitly enabled or disa
     parser.add_negative_flag("release", "Release", settings.debug);
     // If --debug is passed, settings.debug becomes true.
     // If --release is passed, settings.debug becomes false.
+    // Example with int:
+    // int counter = 0;
+    // parser.add_negative_flag("decrease", "Decrease counter", counter); // --decrease makes counter = -1
     ```
 
 2.  **`.negatable()` modifier**:
@@ -190,10 +206,11 @@ The library provides ways to handle flags that can be explicitly enabled or disa
 
 The `add_option` method defines an option that expects an argument (e.g., `--file <filename>`, `-n <number>`).
 
--   **Syntax**: `parser.add_option(names, description, variable_to_bind);`
+-   **Syntax**: `parser.add_option(names, description, variable_to_bind [, char delimiter]);`
 -   **`names`**: Comma-separated short and long names (e.g., `"f,file"`, `"output"`).
 -   **`description`**: A string describing the option's purpose.
 -   **`variable_to_bind`**: A reference to a variable where the option's argument value will be stored.
+-   **`delimiter`** (optional): A character used to split a single string argument into multiple values for tuple-like types (e.g., `std::pair<int, int>`) or containers of tuple-like types. For example, if `delimiter` is `,`, the argument `10,20` could populate a `std::pair<int, int>`.
 
 **Bindable Types:**
 `add_option` can bind to a wide variety of types:
@@ -251,12 +268,21 @@ parser.add_option("I,include", "Include path (can be specified multiple times)",
 
 **Common Modifiers for Options (and Positionals):**
 These methods are chained after `add_option` or `add_positional`:
--   `.default_value(value)`: Sets a default value if the option/argument is not provided. The type of `value` must std::string.
--   `.choices({val1, val2, ...})`: Restricts the argument to one of the specified choices. Works for string, numeric, and custom types that are comparable.
+-   `.default_value(value_string)`: Sets a default value if the option/argument is not provided. For options taking multiple values (e.g., bound to `std::vector`), you can use an initializer list of strings: `.default_value({"val1", "val2"})`. The provided value(s) must be string(s), which will be parsed into the target type.
+-   `.choices({val1, val2, ...})`: Restricts the argument to one of the specified choices. Works for string, numeric, and custom types that are comparable. Values can be of the target type (e.g., `std::vector<int>{1,2,3}`) or strings (e.g., `std::vector<std::string>{"A", "B"}`).
     ```cpp
     // std::string mode;
     // parser.add_option("mode", "Operation mode", mode)
-    //       .choices({"fast", "slow", "balanced"});
+    //       .choices({"fast", "slow", "balanced"}); // For std::string
+    // int level;
+    // parser.add_option("level", "Debug level", level)
+    //       .choices({0, 1, 2}); // For int
+    ```
+-   `.choices_description({{value1, desc1}, {value2, desc2}, ...})`: Provides descriptive help text for each choice, enhancing the help message.
+    ```cpp
+    // std::string optimization;
+    // parser.add_option("opt", "Optimization level", optimization)
+    //       .choices_description({{"0", "No optimization"}, {"1", "Basic optimization"}});
     ```
 -   `.range(min, max)`: Restricts numerical arguments to a specific range (inclusive).
     ```cpp
@@ -264,8 +290,26 @@ These methods are chained after `add_option` or `add_positional`:
     // parser.add_option("p,percentage", "Percentage value", percentage)
     //       .range(0, 100);
     ```
--   `.callback(callback_function)`: Defines a custom callback function (`std::function<void(const ParsedValueType&)>`) to be executed with the parsed value when the option/argument is parsed. `ParsedValueType` is the type of the bound variable (or its `value_type` for `std::optional` or containers).
--   `.checker(predicate_function, error_message)`: Provides custom validation logic. One version takes a predicate (`std::function<bool(const std::string&)>`) that operates on the raw string value before parsing. Another version (more commonly used for value validation) takes a predicate (`std::function<bool(const ParsedValueType&)>`) that operates on the parsed value. If the predicate returns `false`, parsing fails with the given `error_message`.
+-   `.callback(callback_function)`: Defines a custom callback function (`std::function<void(const ValueType&)>`) to be executed with the parsed value when the option/argument is parsed. `ValueType` is the type of the bound variable (or its `value_type` for `std::optional` or containers, i.e., the unwrapped type).
+-   `.checker(predicate_function, error_message)`: Provides custom validation logic.
+    -   `checker(std::function<bool(const std::string&)>, error_message)`: Operates on the raw string value before parsing.
+    -   `checker(std::function<bool(const ValueType&)>, error_message)`: Operates on the parsed value (`ValueType` is the unwrapped type). If the predicate returns `false`, parsing fails with the given `error_message`.
+-   `.env(environment_variable_name)`: Allows the option or positional argument to be populated from the specified environment variable if not provided on the command line.
+    ```cpp
+    // std::string apiKey;
+    // parser.add_option("k,key", "API Key", apiKey)
+    //       .env("MYAPP_API_KEY");
+    ```
+-   `.hidden()`: Hides the option or positional argument from the help message.
+    ```cpp
+    // parser.add_option("internal-setting", "Internal use only", settings.internal)
+    //       .hidden();
+    ```
+-   `.value_help(placeholder_string)`: Customizes the placeholder string (e.g., `<FILE>`, `<NUMBER>`) for the argument's value in the help message.
+    ```cpp
+    // parser.add_option("f,file", "Input file", settings.inputFile)
+    //       .value_help("FILENAME");
+    ```
     ```cpp
     // std::string filename;
     // parser.add_option("f,file", "Input file", filename)
@@ -277,10 +321,11 @@ These methods are chained after `add_option` or `add_positional`:
 
 The `add_positional` method defines a positional argument. These are arguments that are not preceded by a flag or option name (e.g., `my_program input.txt output.txt`). Their order on the command line matters.
 
--   **Syntax**: `parser.add_positional(name, description, variable_to_bind);`
+-   **Syntax**: `parser.add_positional(name, description, variable_to_bind [, char delimiter]);`
 -   **`name`**: A symbolic name for the positional argument (used in help messages and error reporting).
 -   **`description`**: A string describing the argument's purpose.
 -   **`variable_to_bind`**: A reference to a variable where the argument's value will be stored.
+-   **`delimiter`** (optional): Similar to `add_option`, a character used to split a single string argument for tuple-like types or containers of tuple-like types.
 
 **Bindable Types:**
 Bindable types are the same as for `add_option` (Fundamental types, `std::optional<T>`, Containers, Custom types, Tuple-like types).
@@ -315,17 +360,18 @@ parser.add_positional("log-level", "Optional logging level (integer)", fc_args.l
 ```
 **Important Notes on Positional Arguments:**
 -   The order of definition for `add_positional` calls must match the expected order on the command line.
--   A required positional argument cannot follow an optional positional argument or a variadic (container-based) positional argument.
+-   A positional argument is considered required if it's bound to a non-`std::optional` type and no default value is provided. The parser will raise an error if it's missing.
+-   A required positional argument cannot follow an optional positional argument (one bound to `std::optional` or having a default value) or a variadic (container-based) positional argument.
 -   Typically, you can have at most one variadic positional argument, and it should be the last one defined.
 
 **Modifiers:**
-Positional arguments can also use modifiers like `.required()`, `.choices({...})`, `.checker(...)`, and `.default_value(...)` (for optional positionals) similar to `add_option`.
+Positional arguments can use the same "Common Modifiers for Options (and Positionals)" described earlier (e.g., `.default_value()`, `.choices()`, `.checker()`, `.env()`, `.hidden()`, `.value_help()`, `.callback()`).
 
 ### Subcommands
 
-`argparse.hpp` supports subcommands (also known as subparsers), allowing you to create complex command-line interfaces where different actions have their own distinct sets of options and positional arguments (e.g., `docker image ls`, `docker container run`).
+`argparse.hpp` supports subcommands (also known as subparsers), allowing you to create complex command-line interfaces where different actions have their own distinct sets of options and positional arguments (e.g., `git commit -m "message"`, `docker image ls`).
 
-To define a subcommand, you call `add_subparser()` on an existing `ArgParser` instance. This returns a reference to a new `ArgParser` object, which you then configure with its own flags, options, and positional arguments.
+To define a subcommand, you call `add_command()` on an existing `ArgParser` instance (or another `Command` instance). This returns a reference to a new `Command` object, which you then configure with its own flags, options, and positional arguments.
 
 **Example:**
 
@@ -421,11 +467,51 @@ int main(int argc, const char* argv[]) {
 ```
 
 **Using Subcommands:**
--   Call `program.parse(argc, argv)`. This method returns a reference to the `argparse::Command` object that was activated (either the main program's parser or a subcommand's parser).
--   Check the `name()` of the returned command object (e.g., `active_command->name() == "subcommand_name"`) to determine which subcommand was invoked.
--   Arguments bound to the main parser (like `global_args.verbose`) are parsed and available regardless of the subcommand.
--   Arguments specific to a subcommand are only parsed if that subcommand is used.
--   Help messages are context-aware: `my_program subcommand --help` shows help for that subcommand.
+-   Call `program.parse(argc, argv)`. This method returns a reference to the `argparse::Command` object that was activated (either the main program's parser or one of its subcommand's parsers).
+-   Check the `name()` of the returned command object (e.g., `active_command->name() == "clone"`) to determine which subcommand was invoked.
+-   Arguments bound to the main parser (global arguments like `global_args.verbose`) are parsed and available regardless of which subcommand is used (or if no subcommand is used).
+-   Arguments specific to a subcommand are only parsed and populated if that subcommand is actually invoked on the command line.
+-   Help messages are context-aware: `./my_program clone --help` shows help specifically for the `clone` subcommand, while `./my_program --help` shows help for the main program and lists available subcommands.
+-   Each command (main parser or subcommand) can also have a `.callback(std::function<void()>)` that is invoked if that command is the one parsed.
+
+## Additional Features
+
+### Option Aliases
+
+You can create an alias that acts like a flag but actually sets a specific option to a predefined value. This is useful for creating shortcuts.
+
+- **Syntax**: `parser.add_alias(alias_names, original_option_name, value_for_original_option);`
+- **`alias_names`**: Comma-separated names for the new alias (e.g., `"f,fast"`).
+- **`original_option_name`**: The name (short or long, without dashes) of an existing option.
+- **`value_for_original_option`**: The string value that the original option should be set to when the alias is used.
+
+**Example:**
+```cpp
+struct Settings {
+    std::string mode;
+};
+Settings settings;
+argparse::ArgParser parser("my_app");
+parser.add_option("mode", "Set execution mode", settings.mode)
+      .default_value("normal");
+parser.add_alias("fast", "mode", "fast_mode"); // Adds --fast (or -f if "f,fast")
+// If ./my_app --fast is called, settings.mode will be "fast_mode".
+// The help for --fast will show "same as --mode fast_mode".
+```
+
+### Customizing Help Output Width
+
+You can adjust the width used for formatting help messages, particularly the space allocated for option names before their descriptions.
+
+- **Syntax**: `parser.set_option_width(width_in_characters);`
+
+**Example:**
+```cpp
+argparse::ArgParser parser("my_app", "My Application");
+parser.set_option_width(40); // Allocate 40 characters for option names column
+// ... add arguments ...
+```
+
 
 ## Usage
 
