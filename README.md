@@ -139,7 +139,7 @@ This section provides more details on the primary methods for defining command-l
 
 ### `add_flag`
 
-The `add_flag` method is used to define a boolean flag. When the flag is present in the command-line arguments, the bound variable will be set to `true`. By default, flags are `false` unless specified.
+The `add_flag` method is used to define a boolean flag. When the flag is present in the command-line arguments, the bound variable will be set to `true`.
 
 -   **Syntax**: `parser.add_flag(names, description, variable_to_bind);`
 -   **`names`**: A string containing comma-separated short and long names (e.g., `"h,help"`, `"verbose"`). A single name is also valid (e.g., `"debug"`).
@@ -171,13 +171,13 @@ parser.add_flag("enable-feature", "Enable a specific feature", args.enable_featu
 -   `.negatable()`: (Covered below) Allows a flag like `--feature` to have a `--no-feature` counterpart.
 -   `.callback(callback_function)`: Defines a custom callback function (`std::function<void(const FlagValueType&)>`) executed with the flag's effective value (e.g., `bool` or `int`, even if bound to `std::optional`) when the flag is parsed.
     ```cpp
-    // bool processed = false;
-    // parser.add_flag("p,process", "Process data", args.process_flag)
-    //       .callback([&](bool val){ if(val) processed = true; });
+    bool processed = false;
+    parser.add_flag("p,process", "Process data", args.process_flag)
+          .callback([&](bool val){ if(val) processed = true; });
     ```
 -   `.hidden()`: Hides the flag from the help message.
     ```cpp
-    // parser.add_flag("secret-debug", "Secret debug flag", args.secret_debug).hidden();
+    parser.add_flag("secret-debug", "Secret debug flag", args.secret_debug).hidden();
     ```
 
 **Negatable Flags:**
@@ -196,8 +196,8 @@ The library provides ways to handle flags that can be explicitly enabled or disa
     // If --debug is passed, settings.debug becomes true.
     // If --release is passed, settings.debug becomes false.
     // Example with int:
-    // int counter = 0;
-    // parser.add_negative_flag("decrease", "Decrease counter", counter); // --decrease makes counter = -1
+    int counter = 0;
+    parser.add_negative_flag("decrease", "Decrease counter", counter); // --decrease makes counter = -1
     ```
 
 2.  **`.negatable()` modifier**:
@@ -225,7 +225,7 @@ The `add_option` method defines an option that expects an argument (e.g., `--fil
 
 **Bindable Types:**
 `add_option` can bind to a wide variety of types:
--   Fundamental C++ types: `bool` (for options taking an explicit true/false like `--enable=true`), `int`, `long`, `double`, `float`, `char`, `std::string`.
+-   Fundamental C++ types: `bool` (for options taking an explicit true/false like `--enable=true`), `int`, `long`, `double`, `float`, `std::string`.
 -   `std::optional<T>`: For options that are not required, where `T` is a fundamental C++ type, a string-constructible custom type, or a tuple-like type (i.e., not a container type for this specific optional-presence check). If the option is not provided on the command line, the bound `std::optional<T>` variable remains `std::nullopt`. This allows you to easily check if the user specified this particular option.
 -   Containers (e.g., `std::vector<U>`, `std::list<U>`, `std::set<U>`): The option can be specified multiple times on the command line (e.g., `-I /path1 -I /path2`), and all provided values will be collected into the container. `U` can be a fundamental type, a custom string-constructible type, or a tuple-like type. To determine if an option bound to a container was specified by the user, you should check if the container is empty (e.g., `my_vector.empty()`) or its `size()` after parsing. Do not wrap the container type itself in `std::optional` for the purpose of checking presence; bind directly to the container (e.g., `std::vector<std::string> include_paths;`).
 -   Custom types: User-defined types that are:
@@ -267,13 +267,13 @@ parser.add_option("I,include", "Include path (can be specified multiple times)",
 // settings.include_paths will contain {"/usr/local/include", "./project/include"}
 
 // Example for a custom type (MyCustomType would need to be defined)
-// struct MyCustomType {
-//   std::string value;
-//   MyCustomType() = default;
-//   MyCustomType(const std::string& s) : value("processed:" + s) {}
-// };
-// MyCustomType custom_val;
-// parser.add_option("custom", "Custom value processed from string", custom_val);
+struct MyCustomType {
+  std::string value;
+  MyCustomType() = default;
+  MyCustomType(const std::string& s) : value("processed:" + s) {}
+};
+MyCustomType custom_val;
+parser.add_option("custom", "Custom value processed from string", custom_val);
 // ./my_app --custom hello -> custom_val.value would be "processed:hello"
 ```
 
@@ -282,24 +282,24 @@ These methods are chained after `add_option` or `add_positional`:
 -   `.default_value(value_string)`: Sets a default value if the option/argument is not provided. For options taking multiple values (e.g., bound to `std::vector`), you can use an initializer list of strings: `.default_value({"val1", "val2"})`. The provided value(s) must be string(s), which will be parsed into the target type.
 -   `.choices({val1, val2, ...})`: Restricts the argument to one of the specified choices. Works for string, numeric, and custom types that are comparable. Values can be of the target type (e.g., `std::vector<int>{1,2,3}`) or strings (e.g., `std::vector<std::string>{"A", "B"}`).
     ```cpp
-    // std::string mode;
-    // parser.add_option("mode", "Operation mode", mode)
-    //       .choices({"fast", "slow", "balanced"}); // For std::string
-    // int level;
-    // parser.add_option("level", "Debug level", level)
-    //       .choices({0, 1, 2}); // For int
+    std::string mode;
+    parser.add_option("mode", "Operation mode", mode)
+          .choices({"fast", "slow", "balanced"}); // For std::string
+    int level;
+    parser.add_option("level", "Debug level", level)
+          .choices({0, 1, 2}); // For int
     ```
 -   `.choices_description({{value1, desc1}, {value2, desc2}, ...})`: Provides descriptive help text for each choice, enhancing the help message.
     ```cpp
-    // std::string optimization;
-    // parser.add_option("opt", "Optimization level", optimization)
-    //       .choices_description({{"0", "No optimization"}, {"1", "Basic optimization"}});
+    std::string optimization;
+    parser.add_option("opt", "Optimization level", optimization)
+          .choices_description({{"0", "No optimization"}, {"1", "Basic optimization"}});
     ```
 -   `.range(min, max)`: Restricts numerical arguments to a specific range (inclusive).
     ```cpp
-    // int percentage;
-    // parser.add_option("p,percentage", "Percentage value", percentage)
-    //       .range(0, 100);
+    int percentage;
+    parser.add_option("p,percentage", "Percentage value", percentage)
+          .range(0, 100);
     ```
 -   `.callback(callback_function)`: Defines a custom callback function (`std::function<void(const ValueType&)>`) to be executed with the parsed value when the option/argument is parsed. `ValueType` is the type of the bound variable (or its `value_type` for `std::optional` or containers, i.e., the unwrapped type).
 -   `.checker(predicate_function, error_message)`: Provides custom validation logic.
@@ -307,25 +307,25 @@ These methods are chained after `add_option` or `add_positional`:
     -   `checker(std::function<bool(const ValueType&)>, error_message)`: Operates on the parsed value (`ValueType` is the unwrapped type). If the predicate returns `false`, parsing fails with the given `error_message`.
 -   `.env(environment_variable_name)`: Allows the option or positional argument to be populated from the specified environment variable if not provided on the command line.
     ```cpp
-    // std::string apiKey;
-    // parser.add_option("k,key", "API Key", apiKey)
-    //       .env("MYAPP_API_KEY");
+    std::string apiKey;
+    parser.add_option("k,key", "API Key", apiKey)
+          .env("MYAPP_API_KEY");
     ```
 -   `.hidden()`: Hides the option or positional argument from the help message.
     ```cpp
-    // parser.add_option("internal-setting", "Internal use only", settings.internal)
-    //       .hidden();
+    parser.add_option("internal-setting", "Internal use only", settings.internal)
+          .hidden();
     ```
 -   `.value_help(placeholder_string)`: Customizes the placeholder string (e.g., `<FILE>`, `<NUMBER>`) for the argument's value in the help message.
     ```cpp
-    // parser.add_option("f,file", "Input file", settings.inputFile)
-    //       .value_help("FILENAME");
+    parser.add_option("f,file", "Input file", settings.inputFile)
+          .value_help("FILENAME");
     ```
     ```cpp
-    // std::string filename;
-    // parser.add_option("f,file", "Input file", filename)
-    //       .checker([](const std::string& fname) { return !fname.empty() && fname.length() > 3; },
-    //                "Filename must not be empty and longer than 3 chars.");
+    std::string filename;
+    parser.add_option("f,file", "Input file", filename)
+          .checker([](const std::string& fname) { return !fname.empty() && fname.length() > 3; },
+                   "Filename must not be empty and longer than 3 chars.");
     ```
 
 ### `add_positional`
@@ -370,10 +370,18 @@ parser.add_positional("log-level", "Optional logging level (integer)", fc_args.l
 // fc_args.additional_files would contain {"item1.txt", "item2.txt", "item3.txt"}
 ```
 **Important Notes on Positional Arguments:**
--   The order of definition for `add_positional` calls must match the expected order on the command line.
--   A positional argument is considered required if it's bound to a non-`std::optional` type and no default value is provided. The parser will raise an error if it's missing.
--   A required positional argument cannot follow an optional positional argument (one bound to `std::optional` or having a default value) or a variadic (container-based) positional argument.
--   Typically, you can have at most one variadic positional argument, and it should be the last one defined.
+-   Positional arguments can appear anywhere on the command line, provided they are not interpreted as a value for an option.
+-   They are parsed in the order they are defined using `add_positional`.
+-   **Binding to Non-Container Types:** When a positional argument is bound to a non-container type (e.g., `int`, `std::string`), it consumes one command-line argument. The parser then expects the next positional argument as per its definition.
+-   **Binding to Compile-Time Sized Containers:** If bound to a container with a compile-time known size (e.g., `std::pair`, `std::tuple`, `std::array<T, N>`), it consumes N command-line arguments to fill the container's elements sequentially.
+-   **Binding to Dynamically-Sized Containers (Variadic):** If bound to a dynamically-sized container (e.g., `std::vector<T>`, `std::list<T>`, `std::set<T>`), it greedily consumes all subsequent command-line arguments identified as positionals. This is a "variadic" positional argument.
+-   **Ordering Multiple Positionals:**
+    -   Positional arguments bound to non-container types or compile-time sized containers must be defined *before* any variadic positional argument.
+    -   There can be at most one variadic positional argument, and it must be defined as the *last* positional argument.
+-   **Required vs. Optional:**
+    -   A positional argument is considered required if bound to a non-`std::optional` type without a default value. Missing required arguments cause a parse error.
+    -   An optional positional argument is bound to `std::optional<T>` or has a default value.
+    -   Generally, a required positional argument should not follow an optional one, unless the optional one is the last or leads into a final variadic argument, to avoid ambiguity.
 
 **Modifiers:**
 Positional arguments can use the same "Common Modifiers for Options (and Positionals)" described earlier (e.g., `.default_value()`, `.choices()`, `.checker()`, `.env()`, `.hidden()`, `.value_help()`, `.callback()`).
@@ -524,7 +532,7 @@ parser.set_option_width(40); // Allocate 40 characters for option names column
 ```
 
 
-## Usage
+## Build System
 
 ### 1. cmake
 
