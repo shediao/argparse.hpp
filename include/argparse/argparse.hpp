@@ -350,6 +350,25 @@ std::string format(std::string const &option_name, size_t width,
   return ret;
 }
 
+std::optional<std::string> get_env(std::string const &key) {
+#if defined(_WIN32) && !defined(__GNUC__)
+  char *buf{nullptr};
+  size_t len = 0;
+  _dupenv_s(&buf, &len, key.c_str());
+  if (buf != nullptr) {
+    auto ret = std::string(buf);
+    free(buf);
+    return ret;
+  }
+#else
+  auto *env = getenv(key.c_str());
+  if (env) {
+    return std::string(env);
+  }
+#endif
+  return std::nullopt;
+}
+
 }  // namespace
 
 inline void store_true(bool &value) { value = true; }
@@ -660,12 +679,8 @@ class OptionBase : public ArgBase {
     if (count() != 0 || env_key_.empty()) {
       return;
     }
-    if (auto *env = std::getenv(env_key_.c_str()); env != nullptr) {
-      std::string_view e{env};
-      if (auto i = e.find('='); i != std::string_view::npos) {
-        auto val = e.substr(i);
-        parse(std::string(val));
-      }
+    if (auto env = get_env(env_key_); env.has_value()) {
+      parse(env.value());
     }
   }
   std::string usage() const override {
@@ -1482,7 +1497,7 @@ class Command {
           }
         } else if (name.length() > 3 && name.substr(0, 3) == "no-") {
           name = name.substr(3);
-          if (auto* option = get(name); option != nullptr) {
+          if (auto *option = get(name); option != nullptr) {
             if (option->is_flag() &&
                 dynamic_cast<FlagBase *>(option)->is_negatable()) {
               auto *flag = dynamic_cast<FlagBase *>(option);
