@@ -8,7 +8,7 @@
 | GNU-style options     | ✅           | ✅                                              | ✅                                         | ✅                                                                                           | ❌                                         |
 | Positional arguments  | ✅           | ✅                                              | ✅                                         | ✅                                                                                           | ❌                                         |
 | Default values        | ✅           | ✅                                              | ✅                                         | ✅                                                                                           | ✅                                         |
-| Type-safe             | ✅           | ✅                                              | ✅                                         | ✅                                                                                           | ✅                                         |
+| Real Type-safe        | ✅           | ❓                                              | ❓                                         | ❓                                                                                           | ❓                                         |
 | Container support     | ✅           | ✅                                              | ✅                                         | ✅                                                                                           | ❌                                         |
 | Custom types          | ✅           | ✅                                              | ✅                                         | ✅                                                                                           | ❌                                         |
 | Subcommands           | ✅           | ❌                                              | ✅                                         | ❌                                                                                           | ❌                                         |
@@ -19,6 +19,17 @@
 | Required options      | ✅           | ✅                                              | ✅                                         | ✅                                                                                           | ✅                                         |
 | Option groups         | ❌           | ✅                                              | ✅                                         | ✅                                                                                           | ❌                                         |
 | Validation            | ✅           | ✅                                              | ✅                                         | ✅                                                                                           | ❌                                         |
+
+## Key Differentiator: Direct Variable Binding
+
+A significant advantage of `argparse.hpp` over many other C++ command-line parsing libraries is its approach to argument handling. Instead of requiring users to retrieve argument values through template functions like `parser.get<Type>("arg_name")` or `results["arg_name"].as<Type>()` after parsing, `argparse.hpp` binds flags, options, and positional arguments directly to user-defined variables.
+
+This means:
+-   **True Type Safety at Compile Time**: The types are known and checked when you define the arguments.
+-   **No Runtime Type Conversions/Casting for Access**: Once `parser.parse()` is called, the bound variables are populated directly with the parsed and converted values. You can use these variables immediately without needing `get<T>()`, `cast<T>()`, or similar accessor methods.
+-   **Simpler and Cleaner Code**: Accessing parsed values is as simple as using the variable itself (e.g., `if (args.verbose) { ... }`, `std::string filename = args.output_file;`).
+
+This design philosophy leads to more robust, readable, and maintainable code by leveraging C++'s type system more effectively for command-line argument parsing.
 
 ## Quick start
 
@@ -42,8 +53,8 @@ Each flag, option, and positional argument is bound to an actual variable, which
 - Fundamental C++ types (`bool`, `int`, `long`, `double`, etc.)
 - Custom types (must be constructible from `std::string`)
 - Tuple-like types (`std::pair`, `std::tuple`, `std::array`)
-- Containers of any of the above element types
-- std::optional<T>, T is any of the above types(Fundamental,string-constructible,tuple-like,container)
+- Containers (e.g., `std::vector<U>`, `std::list<U>`, `std::set<U>`) where `U` can be a fundamental type, a custom string-constructible type, or a tuple-like type. To check if a container-based option/positional was provided, bind directly to the container and check its `empty()` status or `size()` after parsing.
+- `std::optional<T>` where `T` is one of the non-container types (Fundamental, string-constructible custom type, Tuple-like type). This is used for optional arguments; if the argument is not provided, the `std::optional` variable remains `std::nullopt`.
 
 ## Basics
 
@@ -215,8 +226,8 @@ The `add_option` method defines an option that expects an argument (e.g., `--fil
 **Bindable Types:**
 `add_option` can bind to a wide variety of types:
 -   Fundamental C++ types: `bool` (for options taking an explicit true/false like `--enable=true`), `int`, `long`, `double`, `float`, `char`, `std::string`.
--   `std::optional<T>`: For options that are not required. `T` can be any of the other supported types here. If the option is not provided, the `std::optional` remains `std::nullopt`.
--   Containers (e.g., `std::vector<T>`, `std::list<T>`, `std::set<T>`): The option can be specified multiple times on the command line (e.g., `-I /path1 -I /path2`), and all values will be collected into the container. `T` can be a fundamental, custom, or string-constructible tuple-like type.
+-   `std::optional<T>`: For options that are not required, where `T` is a fundamental C++ type, a string-constructible custom type, or a tuple-like type (i.e., not a container type for this specific optional-presence check). If the option is not provided on the command line, the bound `std::optional<T>` variable remains `std::nullopt`. This allows you to easily check if the user specified this particular option.
+-   Containers (e.g., `std::vector<U>`, `std::list<U>`, `std::set<U>`): The option can be specified multiple times on the command line (e.g., `-I /path1 -I /path2`), and all provided values will be collected into the container. `U` can be a fundamental type, a custom string-constructible type, or a tuple-like type. To determine if an option bound to a container was specified by the user, you should check if the container is empty (e.g., `my_vector.empty()`) or its `size()` after parsing. Do not wrap the container type itself in `std::optional` for the purpose of checking presence; bind directly to the container (e.g., `std::vector<std::string> include_paths;`).
 -   Custom types: User-defined types that are:
     -   Constructible from `std::string` (e.g., `MyType(const std::string& s)`). The library primarily uses this mechanism for custom types.
 -   Tuple-like types (`std::pair`, `std::tuple`, `std::array`): Generally supported if their elements are string-constructible, allowing parsing from a single argument string (e.g., "val1,val2" with a specified delimiter).
