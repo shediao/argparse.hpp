@@ -1,6 +1,9 @@
 #include <gtest/gtest.h>
 
 #include <argparse/argparse.hpp>
+#if defined(_WIN32)
+#include "Windows.h"
+#endif
 
 bool setEnvVariable(const std::string& name, const std::string& value,
                     bool overwrite = true) {
