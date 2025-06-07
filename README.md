@@ -1,3 +1,7 @@
+
+[![cmake-multi-platform](https://github.com/shediao/argparse.hpp/actions/workflows/cmake-multi-platform.yml/badge.svg)](https://github.com/shediao/argparse.hpp/actions/workflows/cmake-multi-platform.yml)
+[![msys2](https://github.com/shediao/argparse.hpp/actions/workflows/msys2.yml/badge.svg)](https://github.com/shediao/argparse.hpp/actions/workflows/msys2.yml)
+
 ## Feature Comparison
 
 | Feature               | argparse.hpp | [cxxopts](https://github.com/jarro2783/cxxopts) | [CLI11](https://github.com/CLIUtils/CLI11) | [Boost](https://www.boost.org/doc/libs/1_84_0/doc/html/program_options.html) | [gflags](https://github.com/gflags/gflags) |
