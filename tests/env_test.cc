@@ -8,23 +8,18 @@
 
 bool setEnvVariable(const std::string& name, const std::string& value,
                     bool overwrite = true) {
-#if defined(_WIN32) && !defined(__GNUC__)
+#if defined(_WIN32)
   if (!overwrite) {
-    char* pValue = nullptr;
-    size_t len;
-    errno_t err = _dupenv_s(&pValue, &len, name.c_str());
-    if (err == 0 && pValue != nullptr) {
-      free(pValue);  // 释放 _dupenv_s 分配的内存
-      return true;   // 认为操作“成功”，因为它满足了不覆盖的条件
+    std::vector<char> buf(128);
+    GetEnvironmentVariableA(name.c_str(), buf.data(),
+                            static_cast<DWORD>(buf.size()));
+    if (GetLastError() == ERROR_ENVVAR_NOT_FOUND) {
+      return SetEnvironmentVariableA(name.c_str(), value.c_str());
     }
-    if (pValue) {
-      free(pValue);
-    }
+    return true;
+  } else {
+    return SetEnvironmentVariableA(name.c_str(), value.c_str());
   }
-  if (_putenv_s(name.c_str(), value.c_str()) != 0) {
-    return false;
-  }
-  return true;
 #else
   if (setenv(name.c_str(), value.c_str(), overwrite ? 1 : 0) != 0) {
     return false;

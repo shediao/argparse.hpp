@@ -23,6 +23,9 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+#if defined(_WIN32)
+#include <windows.h>
+#endif  // _WIN32
 
 #if defined(ARG_PARSE_DEBUG)
 #define ARG_PARSER_DEBUG(msg)                   \
@@ -351,15 +354,20 @@ std::string format(std::string const &option_name, size_t width,
 }
 
 std::optional<std::string> get_env(std::string const &key) {
-#if defined(_WIN32) && !defined(__GNUC__)
-  char *buf{nullptr};
-  size_t len = 0;
-  _dupenv_s(&buf, &len, key.c_str());
-  if (buf != nullptr) {
-    auto ret = std::string(buf);
-    free(buf);
-    return ret;
+#if defined(_WIN32)
+  std::vector<char> buf(128);
+  auto const size = GetEnvironmentVariableA(key.c_str(), buf.data(),
+                                            static_cast<DWORD>(buf.size()));
+  if (GetLastError() == ERROR_ENVVAR_NOT_FOUND) {
+    return std::nullopt;
   }
+  if (size > buf.size()) {
+    buf.resize(static_cast<size_t>(size));
+    buf[0] = '\0';
+    GetEnvironmentVariableA(key.c_str(), buf.data(),
+                            static_cast<DWORD>(buf.size()));
+  }
+  return std::string{buf.data()};
 #else
   auto *env = getenv(key.c_str());
   if (env) {
