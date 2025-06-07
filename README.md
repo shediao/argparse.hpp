@@ -378,10 +378,6 @@ parser.add_positional("log-level", "Optional logging level (integer)", fc_args.l
 -   **Ordering Multiple Positionals:**
     -   Positional arguments bound to non-container types or compile-time sized containers must be defined *before* any variadic positional argument.
     -   There can be at most one variadic positional argument, and it must be defined as the *last* positional argument.
--   **Required vs. Optional:**
-    -   A positional argument is considered required if bound to a non-`std::optional` type without a default value. Missing required arguments cause a parse error.
-    -   An optional positional argument is bound to `std::optional<T>` or has a default value.
-    -   Generally, a required positional argument should not follow an optional one, unless the optional one is the last or leads into a final variadic argument, to avoid ambiguity.
 
 **Modifiers:**
 Positional arguments can use the same "Common Modifiers for Options (and Positionals)" described earlier (e.g., `.default_value()`, `.choices()`, `.checker()`, `.env()`, `.hidden()`, `.value_help()`, `.callback()`).
