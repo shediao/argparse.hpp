@@ -353,28 +353,24 @@ std::string format(std::string const &option_name, size_t width,
   return ret;
 }
 
-std::optional<std::string> get_env(std::string const &key) {
+std::optional<std::string> get_env(std::string const &name) {
 #if defined(_WIN32)
-  std::vector<char> buf(128);
-  auto const size = GetEnvironmentVariableA(key.c_str(), buf.data(),
-                                            static_cast<DWORD>(buf.size()));
-  if (GetLastError() == ERROR_ENVVAR_NOT_FOUND) {
-    return std::nullopt;
+  auto const size = GetEnvironmentVariableA(name.c_str(), nullptr, 0);
+  if (size == 0) {
+    return GetLastError() == ERROR_ENVVAR_NOT_FOUND
+               ? std::nullopt
+               : std::optional<std::string>{""};
   }
-  if (size > buf.size()) {
-    buf.resize(static_cast<size_t>(size));
-    buf[0] = '\0';
-    GetEnvironmentVariableA(key.c_str(), buf.data(),
-                            static_cast<DWORD>(buf.size()));
-  }
-  return std::string{buf.data()};
+  std::vector<char> value(size);
+  GetEnvironmentVariableA(name.c_str(), value.data(), size);
+  return std::string{value.data()};
 #else
-  auto *env = getenv(key.c_str());
+  auto *env = getenv(name.c_str());
   if (env) {
     return std::string(env);
   }
-#endif
   return std::nullopt;
+#endif
 }
 
 }  // namespace
@@ -1704,9 +1700,14 @@ class Command {
 
   std::string const &command() const { return command_; }
   std::string const &name() const { return command_; }
+  Command &hidden(bool v = true) {
+    is_hidden_ = v;
+    return *this;
+  }
   void set_parent(Command *parent) { parent_ = parent; }
   bool has_parent() const { return parent_ != nullptr; }
   bool is_parsed() { return is_parsed_; }
+  bool is_hidden() const { return is_hidden_; }
 
  protected:
   size_t option_width() { return option_width_; }
@@ -1766,6 +1767,7 @@ class Command {
   Command *parent_{nullptr};
   std::function<void()> callback_{nullptr};
   bool is_parsed_{false};
+  bool is_hidden_{false};
   size_t option_width_{OPTION_NAME_WIDTH};
 };
 
@@ -1788,6 +1790,9 @@ class ArgParser : public Command {
     if (!subcommands_.empty()) {
       usage_str << "\n\nAvailable Commands:";
       for (auto const &cmd : subcommands_) {
+        if (cmd->is_hidden()) {
+          continue;
+        }
         usage_str << "\n " << cmd->oneline_usage();
       }
     }
