@@ -8,7 +8,8 @@
 
 #include "argparse/argparse.hpp"
 
-using namespace argparse;
+using argparse::detail::parse_from_string;
+using argparse::detail::split;
 
 // Test bool
 TEST(ParseFromStringTest, BoolTest) {
