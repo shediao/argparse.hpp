@@ -292,7 +292,7 @@ C &split_to_if(C &to, const std::basic_string<CharT> &str, F f,
                int max_count = -1, bool is_compress_token = false) {
   auto begin = str.begin();
   auto delimiter = begin;
-  size_t MAX_COUNT = max_count < 0 ? std::numeric_limits<size_t>::max()
+  size_t MAX_COUNT = max_count < 0 ? (std::numeric_limits<size_t>::max())
                                    : static_cast<size_t>(max_count);
   size_t count = 0;
 
