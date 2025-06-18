@@ -285,20 +285,36 @@ std::string join(const std::vector<std::string> &v, const T &delim) {
   return result.str();
 }
 
+template <typename CharT, typename F, typename C>
+  requires std::is_same_v<bool,
+                          decltype(std::declval<F>()(std::declval<CharT>()))>
+C &split_to_if(C &to, const std::basic_string<CharT> &str, F f,
+               int max_count = -1, bool is_compress_token = false) {
+  auto begin = str.begin();
+  auto delimiter = begin;
+  size_t MAX_COUNT = max_count < 0 ? std::numeric_limits<size_t>::max()
+                                   : static_cast<size_t>(max_count);
+  size_t count = 0;
+
+  while (count++ < MAX_COUNT &&
+         (delimiter = std::find_if(begin, str.end(), f)) != str.end()) {
+    to.insert(to.end(), {begin, delimiter});
+    if (is_compress_token) {
+      begin = std::find_if_not(delimiter, str.end(), f);
+    } else {
+      begin = std::next(delimiter);
+    }
+  }
+
+  to.insert(to.end(), {begin, str.end()});
+
+  return to;
+}
+
 inline std::vector<std::string> split(std::string const &s, char delim,
                                       int max) {
   std::vector<std::string> result;
-  auto unsplit_it = s.begin();
-  int n = 1;
-  while ((n++ < max || max == -1) && unsplit_it != s.end()) {
-    auto it = std::find(unsplit_it, s.end(), delim);
-    if (it == s.end()) {
-      break;
-    }
-    result.emplace_back(unsplit_it, it);
-    unsplit_it = std::next(it);
-  }
-  result.emplace_back(unsplit_it, s.end());
+  split_to_if(result, s, [delim](char c) { return c == delim; }, max, false);
   return result;
 }
 
@@ -318,7 +334,7 @@ T make_tuple_from_container(std::vector<std::string> const &v) {
 // for tuple like types
 template <ParseFromStringTupleLikeType T>
 T parse_from_string(std::string const &s, const char delim) {
-  auto v = split(s, delim, std::tuple_size_v<std::decay_t<T>>);
+  auto v = split(s, delim, std::tuple_size_v<std::decay_t<T>> - 1);
   if (v.size() != std::tuple_size_v<std::decay_t<T>>) {
     throw std::invalid_argument(
         "Invalid string for split " +
@@ -1559,6 +1575,9 @@ class Command {
       // Handle positional arguments
       else {
         if (pos_index < positionals.size()) {
+          if (remaining_are_positional()) {
+            break;
+          }
           auto *pos = dynamic_cast<OptionBase *>(positionals[pos_index]);
           ARG_PARSER_DEBUG("positional: " << pos_index << ": " << arg);
           pos->parse(arg);
@@ -1711,6 +1730,8 @@ class Command {
   bool has_parent() const { return parent_ != nullptr; }
   bool is_parsed() { return is_parsed_; }
   bool is_hidden() const { return is_hidden_; }
+  void set_remaining_are_positional() { remaining_are_positional_ = true; }
+  bool remaining_are_positional() { return remaining_are_positional_; }
 
  protected:
   size_t option_width() { return option_width_; }
@@ -1771,6 +1792,7 @@ class Command {
   std::function<void()> callback_{nullptr};
   bool is_parsed_{false};
   bool is_hidden_{false};
+  bool remaining_are_positional_{false};
   size_t option_width_{OPTION_NAME_WIDTH};
 };
 

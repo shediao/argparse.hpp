@@ -58,10 +58,12 @@ TEST(ParseFromStringTest, LongLongTest) {
 }
 
 TEST(ParseFromStringTest, split) {
-  EXPECT_EQ(split("k=v", '=', 2), (std::vector<std::string>{"k", "v"}));
+  EXPECT_EQ(split("k=v", '=', 1), (std::vector<std::string>{"k", "v"}));
+  EXPECT_EQ(split("1,2,3", ',', 1), (std::vector<std::string>{"1", "2,3"}));
+  EXPECT_EQ(split("1,2,3", ',', 2), (std::vector<std::string>{"1", "2", "3"}));
   EXPECT_EQ(split("1,2,3", ',', 3), (std::vector<std::string>{"1", "2", "3"}));
-  EXPECT_EQ(split("1,2,3", ',', 2), (std::vector<std::string>{"1", "2,3"}));
-  EXPECT_EQ(split("1,2,3", ',', 4), (std::vector<std::string>{"1", "2", "3"}));
+  EXPECT_EQ(split("1,", ',', -1), (std::vector<std::string>{"1", ""}));
+  EXPECT_EQ(split(",1", ',', -1), (std::vector<std::string>{"", "1"}));
 }
 
 TEST(ParseFromStringTest, Sizeable) {
