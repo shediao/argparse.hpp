@@ -369,17 +369,54 @@ inline std::string format(std::string const &option_name, size_t width,
   return ret;
 }
 
+#if defined(_WIN32)
+// Helper function to convert a UTF-8 std::string to a UTF-16 std::wstring
+inline std::wstring to_wstring(const std::string &str) {
+  if (str.empty()) {
+    return {};
+  }
+  int size_needed =
+      MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
+  if (size_needed <= 0) {
+    // Consider throwing an exception for conversion errors
+    return {};
+  }
+  std::wstring wstr(size_needed, 0);
+  MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &wstr[0],
+                      size_needed);
+  return wstr;
+}
+
+// Helper function to convert a UTF-16 std::wstring to a UTF-8 std::string
+inline std::string to_string(const std::wstring &wstr) {
+  if (wstr.empty()) {
+    return {};
+  }
+  int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(),
+                                        NULL, 0, NULL, NULL);
+  if (size_needed <= 0) {
+    // Consider throwing an exception for conversion errors
+    return {};
+  }
+  std::string str(size_needed, 0);
+  WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), &str[0],
+                      size_needed, NULL, NULL);
+  return str;
+}
+#endif  // _WIN32
+
 inline std::optional<std::string> getenv(std::string const &name) {
 #if defined(_WIN32)
-  auto const size = GetEnvironmentVariableA(name.c_str(), nullptr, 0);
+  auto wname = to_wstring(name);
+  auto const size = GetEnvironmentVariableW(wname.c_str(), nullptr, 0);
   if (size == 0) {
     return GetLastError() == ERROR_ENVVAR_NOT_FOUND
                ? std::nullopt
                : std::optional<std::string>{""};
   }
-  std::vector<char> value(size);
-  GetEnvironmentVariableA(name.c_str(), value.data(), size);
-  return std::string{value.data()};
+  std::vector<wchar_t> value(size);
+  GetEnvironmentVariableW(wname.data(), value.data(), size);
+  return to_string(value.data());
 #else
   auto *env = ::getenv(name.c_str());
   if (env) {
