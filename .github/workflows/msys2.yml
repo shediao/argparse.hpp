@@ -31,7 +31,11 @@ jobs:
         with:
           msystem: ${{matrix.msystem}}
           update: true
-          install: git gcc clang cmake ninja mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-clang mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja mingw-w64-x86_64-gcc mingw-w64-x86_64-clang mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
+          install: >
+            git
+            ${{ matrix.msystem == 'MSYS' && 'gcc clang cmake ninja' || '' }}
+            ${{ matrix.msystem == 'UCRT64' && 'mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-clang mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja' || '' }}
+            ${{ matrix.msystem == 'MINGW64' && 'mingw-w64-x86_64-gcc mingw-w64-x86_64-clang mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja' || '' }}
       - name: Set reusable strings
         id: strings
         run: |
