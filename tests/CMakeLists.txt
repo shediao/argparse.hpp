@@ -2,17 +2,16 @@ set(CMAKE_CXX_STANDARD 20)
 
 include(FetchContent)
 
+if(NOT CMAKE_HOST_SYSTEM_NAME MATCHES "Windows" AND MSVC)
+  set(gtest_disable_pthreads
+      ON
+      CACHE BOOL "" FORCE)
+endif()
 FetchContent_Declare(
   googletest
   GIT_REPOSITORY https://github.com/google/googletest.git
   GIT_TAG v1.15.2
   GIT_SHALLOW TRUE)
-
-if(NOT CMAKE_HOST_SYSTEM_NAME MATCHES "Windows" AND MSVC)
-  set(gtest_disable_pthreads
-      OFF ON
-      CACHE BOOL "" FORCE)
-endif()
 FetchContent_MakeAvailable(googletest)
 
 function(add_argparse_test test_name test_files)
