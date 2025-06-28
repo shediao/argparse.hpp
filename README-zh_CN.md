@@ -123,8 +123,9 @@ int main(int argc, const char* argv[]) {
       .default_value("https://api.openai.com/v1/chat/completions");
 
   parser.add_positional("prompt", "提示", args.prompt)
-      .checker([](const std::string& val) { return !val.empty(); },
-               "提示必须为非空字符串");
+      .checker([](const std::string& val) {
+        return std::pair{!val.empty(), "提示必须为非空字符串"};
+      });
 
   try {
     parser.parse(argc, argv);
@@ -305,9 +306,9 @@ parser.add_option("custom", "从字符串处理的自定义值", custom_val);
           .range(0, 100);
     ```
 - `.callback(callback_function)`: 定义一个自定义回调函数 (`std::function<void(const ValueType&)>`)，当解析选项/参数时，使用解析后的值执行。`ValueType` 是绑定变量的类型（或对于 `std::optional` 或容器，是其 `value_type`，即解包后的类型）。
-- `.checker(predicate_function, error_message)`: 提供自定义验证逻辑。
-    - `checker(std::function<bool(const std::string&)>, error_message)`: 在解析前对原始字符串值进行操作。
-    - `checker(std::function<bool(const ValueType&)>, error_message)`: 对解析后的值进行操作（`ValueType` 是解包后的类型）。如果谓词返回 `false`，则解析失败并显示给定的 `error_message`。
+- `.checker(validation_function)`: 提供自定义验证逻辑。验证函数接受一个值并返回一个 `std::pair<bool, std::string>`。如果 `bool` 为 `false`，解析将失败，并将 `std::string` 用作错误消息。
+    - `checker(std::function<std::pair<bool, std::string>(const std::string&)>)`: 在解析前对原始字符串值进行操作。
+    - `checker(std::function<std::pair<bool, std::string>(const ValueType&)>)`: 对解析后的值进行操作（`ValueType` 是解包后的类型，例如 `std::optional<int>` 的 `int`）。
 - `.env(environment_variable_name)`: 如果命令行上未提供，则允许从指定的环境变量中填充选项或位置参数。
     ```cpp
     std::string apiKey;
@@ -328,8 +329,9 @@ parser.add_option("custom", "从字符串处理的自定义值", custom_val);
     std::string filename;
     parser.add_option("f,file", "输入文件", filename)
           .checker([](const std::string& fname) {
-  return !fname.empty() && fname.length() > 3; },
-                   "文件名不能为空且长度必须大于3个字符。");
+            bool is_valid = !fname.empty() && fname.length() > 3;
+            return std::pair{is_valid, "文件名不能为空且长度必须大于3个字符。"};
+          });
     ```
 
 ### `add_positional`

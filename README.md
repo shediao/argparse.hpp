@@ -124,8 +124,9 @@ int main(int argc, const char* argv[]) {
       .default_value("https://api.openai.com/v1/chat/completions");
 
   parser.add_positional("prompt", "Prompt", args.prompt)
-      .checker([](const std::string& val) { return !val.empty(); },
-               "prompt is a non empty string");
+      .checker([](const std::string& val) {
+        return std::pair{!val.empty(), "prompt must not be empty"};
+      });
 
   try {
     parser.parse(argc, argv);
@@ -305,9 +306,9 @@ These methods are chained after `add_option` or `add_positional`:
           .range(0, 100);
     ```
 -   `.callback(callback_function)`: Defines a custom callback function (`std::function<void(const ValueType&)>`) to be executed with the parsed value when the option/argument is parsed. `ValueType` is the type of the bound variable (or its `value_type` for `std::optional` or containers, i.e., the unwrapped type).
--   `.checker(predicate_function, error_message)`: Provides custom validation logic.
-    -   `checker(std::function<bool(const std::string&)>, error_message)`: Operates on the raw string value before parsing.
-    -   `checker(std::function<bool(const ValueType&)>, error_message)`: Operates on the parsed value (`ValueType` is the unwrapped type). If the predicate returns `false`, parsing fails with the given `error_message`.
+-   `.checker(validation_function)`: Provides custom validation logic. The validation function takes a value and returns a `std::pair<bool, std::string>`. If the `bool` is `false`, parsing fails, and the `std::string` is used as the error message.
+    -   `checker(std::function<std::pair<bool, std::string>(const std::string&)>)`: Operates on the raw string value before parsing.
+    -   `checker(std::function<std::pair<bool, std::string>(const ValueType&)>)`: Operates on the parsed value (`ValueType` is the unwrapped type, e.g., `int` for `std::optional<int>`).
 -   `.env(environment_variable_name)`: Allows the option or positional argument to be populated from the specified environment variable if not provided on the command line.
     ```cpp
     std::string apiKey;
@@ -327,8 +328,10 @@ These methods are chained after `add_option` or `add_positional`:
     ```cpp
     std::string filename;
     parser.add_option("f,file", "Input file", filename)
-          .checker([](const std::string& fname) { return !fname.empty() && fname.length() > 3; },
-                   "Filename must not be empty and longer than 3 chars.");
+          .checker([](const std::string& fname) {
+            bool is_valid = !fname.empty() && fname.length() > 3;
+            return std::pair{is_valid, "Filename must not be empty and longer than 3 chars."};
+          });
     ```
 
 ### `add_positional`
