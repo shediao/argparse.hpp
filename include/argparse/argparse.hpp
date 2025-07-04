@@ -441,7 +441,7 @@ inline std::string format(std::string const &option_name, size_t width,
 
 #if defined(_WIN32)
 // Helper function to convert a UTF-8 std::string to a UTF-16 std::wstring
-inline std::wstring to_wstring(const std::string &str) {
+inline std::wstring to_wstring(const std::string_view &str) {
   if (str.empty()) {
     return {};
   }
@@ -458,7 +458,7 @@ inline std::wstring to_wstring(const std::string &str) {
 }
 
 // Helper function to convert a UTF-16 std::wstring to a UTF-8 std::string
-inline std::string to_string(const std::wstring &wstr) {
+inline std::string to_string(const std::wstring_view &wstr) {
   if (wstr.empty()) {
     return {};
   }
@@ -1960,6 +1960,20 @@ class ArgParser : public Command {
     }
     return *this;
   }
+#if defined(_WIN32)
+  Command &parse(int argc, wchar_t const *wargv[]) {
+    std::vector<std::string> args;
+    args.reserve(argc);
+    std::transform(wargv, wargv + argc, std::back_inserter(args),
+                   [](const wchar_t *s) {
+                     return detail::to_string(std::wstring_view(s));
+                   });
+    std::vector<const char *> args_cstr(argc + 1, nullptr);
+    std::transform(args.begin(), args.end(), args_cstr.begin(),
+                   [](const std::string &s) { return s.data(); });
+    return parse(argc, args_cstr.data());
+  }
+#endif
 
   Command &add_command(std::string const &cmd, std::string const &description) {
     if (std::any_of(begin(args_), end(args_),
