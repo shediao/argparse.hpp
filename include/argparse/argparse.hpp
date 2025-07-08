@@ -6,7 +6,6 @@
 #define __ARGPARSE_ARGPARSE_HPP__
 
 #include <algorithm>
-#include <cassert>
 #include <cctype>
 #include <concepts>
 #include <cstdlib>
@@ -1947,7 +1946,7 @@ class ArgParser : public Command {
   void print_version() const {
     std::cerr << "Version: " << version << std::endl;
   }
-  Command &parse(int argc, const char *argv[]) {
+  Command &parse(int argc, const char *const *argv) {
     add_default_help_flag();
     for (auto &sc : subcommands_) {
       sc->add_default_help_flag();
@@ -1961,7 +1960,7 @@ class ArgParser : public Command {
     return *this;
   }
 #if defined(_WIN32)
-  Command &parse(int argc, wchar_t const *wargv[]) {
+  Command &parse(int argc, wchar_t const *const *wargv) {
     std::vector<std::string> args;
     args.reserve(argc);
     std::transform(wargv, wargv + argc, std::back_inserter(args),
