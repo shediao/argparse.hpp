@@ -6,6 +6,7 @@
 #define __ARGPARSE_ARGPARSE_HPP__
 
 #include <algorithm>
+#include <cassert>
 #include <cctype>
 #include <concepts>
 #include <cstdlib>
@@ -1943,9 +1944,6 @@ class ArgParser : public Command {
     return usage_str.str();
   }
   void print_usage() const override { std::cerr << this->usage() << '\n'; }
-  void print_version() const {
-    std::cerr << "Version: " << version << std::endl;
-  }
   Command &parse(int argc, const char *const *argv) {
     add_default_help_flag();
     for (auto &sc : subcommands_) {
@@ -1986,9 +1984,6 @@ class ArgParser : public Command {
     return *cmd_ptr;
   }
   void set_option_width(int width) { this->Command::set_option_width(width); }
-
- private:
-  std::string version{"0.1"};
 };
 
 }  // namespace argparse
