@@ -1638,12 +1638,11 @@ class Command {
             }
           }
         } else if (name.length() > 3 && name.substr(0, 3) == "no-") {
-          name = name.substr(3);
-          if (auto *option = get(name); option != nullptr) {
-            if (option->is_flag() &&
-                dynamic_cast<FlagBase *>(option)->is_negatable()) {
-              auto *flag = dynamic_cast<FlagBase *>(option);
-              flag->negatable_parse();
+          if (auto *negatable_flag = get(name.substr(3));
+              negatable_flag != nullptr) {
+            if (negatable_flag->is_flag() &&
+                dynamic_cast<FlagBase *>(negatable_flag)->is_negatable()) {
+              dynamic_cast<FlagBase *>(negatable_flag)->negatable_parse();
             } else {
               throw std::runtime_error("Unknown option: " + name);
             }
@@ -1712,7 +1711,8 @@ class Command {
               ARG_PARSER_DEBUG(
                   "subcmd: " << detail::join(
                       std::vector<std::string>{argv + i, argv + argc}, ' '));
-              return (*subcmd_ptr_it)->parse(argc - i, argv + i);
+              return (*subcmd_ptr_it)
+                  ->parse(argc - static_cast<int>(i), argv + i);
             } else {
               throw std::runtime_error("unkonwn subcommand: " + arg);
             }
