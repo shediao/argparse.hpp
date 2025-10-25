@@ -750,6 +750,9 @@ class OptionBase : public ArgBase {
   OptionBase(const std::string &name, const std::string &description)
       : ArgBase(name, description) {}
 
+  void require() { is_require_ = true; }
+  bool is_require() { return is_require_; }
+
  protected:
   bool is_flag() const override final { return false; }
   virtual void parse(const std::string &opt_value) {
@@ -897,6 +900,7 @@ class OptionBase : public ArgBase {
     }
     return usage_str.str();
   }
+  bool is_require_{false};
   std::string value_help_;
   std::vector<std::string> opt_values;
   std::vector<std::function<std::pair<bool, std::string>(std::string const &)>>
@@ -946,6 +950,10 @@ class OptionBaseCRTP : public OptionBase {
   }
   Derived &env(std::string const &env) {
     ArgBase::env(env);
+    return static_cast<Derived &>(*this);
+  }
+  Derived &require() {
+    OptionBase::require();
     return static_cast<Derived &>(*this);
   }
 };
@@ -1750,6 +1758,17 @@ class Command {
         dynamic_cast<OptionBase *>(arg.get())->use_default_if_needed();
       }
     }
+
+    for (const auto &arg : args_) {
+      if ((arg->is_option() || arg->is_positional()) && arg->count() == 0 &&
+          dynamic_cast<OptionBase *>(arg.get())->is_require()) {
+        throw std::runtime_error("expect an option or positional: " +
+                                 (arg->long_opt_names_.empty()
+                                      ? *(arg->short_opt_names_.begin())
+                                      : *(arg->long_opt_names_.begin())));
+      }
+    }
+
     if (callback_) {
       callback_();
     }

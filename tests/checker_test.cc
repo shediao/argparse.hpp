@@ -21,6 +21,16 @@ class CheckerArgsMaker : public ::testing::Test {
     return ret;
   }
 };
+TEST_F(CheckerArgsMaker, Require) {
+  argparse::ArgParser parser("prog", "");
+  std::string type;
+  parser.add_option("t", "type", type).require();
+
+  auto args = make_args("prog");
+  ASSERT_THROW(parser.parse(args.size(), args.data()), std::runtime_error);
+  args = make_args("prog", "-t", "debug");
+  ASSERT_NO_THROW(parser.parse(args.size(), args.data()));
+}
 TEST_F(CheckerArgsMaker, Allowed) {
   auto args = make_args("prog", "-t", "xx");
 
