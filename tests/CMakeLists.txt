@@ -1,5 +1,7 @@
 set(CMAKE_CXX_STANDARD 20)
 
+set(INSTALL_GTEST OFF)
+
 include(FetchContent)
 
 if(NOT CMAKE_HOST_SYSTEM_NAME MATCHES "Windows" AND MSVC)
