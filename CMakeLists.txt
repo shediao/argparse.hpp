@@ -8,7 +8,8 @@ set("PROJECT_DESCRIPTION"
     "A header-only lightweight C++ command line option parser")
 set("PROJECT_HOMEPAGE_URL" "https://github.com/shediao/argparse.hpp")
 
-if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+# PROJECT_IS_TOP_LEVEL
+if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
   option(ARGPARSE_BUILD_TESTS "Set to ON to build tests" ON)
 else()
   option(ARGPARSE_BUILD_TESTS "Set to OFF to build tests" OFF)
@@ -28,20 +29,23 @@ if(ARGPARSE_BUILD_TESTS)
   add_subdirectory(tests)
 endif()
 
-install(
-  TARGETS argparse
-  EXPORT argparse-targets
-  INCLUDES
-  DESTINATION include)
+# PROJECT_IS_TOP_LEVEL
+if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
+  install(
+    TARGETS argparse
+    EXPORT argparse-targets
+    INCLUDES
+    DESTINATION include)
 
-install(
-  DIRECTORY include/
-  DESTINATION include
-  FILES_MATCHING
-  PATTERN "*.hpp")
+  install(
+    DIRECTORY include/
+    DESTINATION include
+    FILES_MATCHING
+    PATTERN "*.hpp")
 
-install(
-  EXPORT argparse-targets
-  FILE argparse-targets.cmake
-  NAMESPACE argparse::
-  DESTINATION lib/cmake/argparse)
+  install(
+    EXPORT argparse-targets
+    FILE argparse-targets.cmake
+    NAMESPACE argparse::
+    DESTINATION lib/cmake/argparse)
+endif()
