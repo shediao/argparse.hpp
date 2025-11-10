@@ -1701,10 +1701,11 @@ class Command {
       // Handle positional arguments
       else {
         if (pos_index < positionals.size()) {
-          if (remaining_are_positional()) {
+          auto *pos = dynamic_cast<OptionBase *>(positionals[pos_index]);
+          if (remaining_are_positional() &&
+              pos_index == positionals.size() - 1 && pos->is_multiple()) {
             break;
           }
-          auto *pos = dynamic_cast<OptionBase *>(positionals[pos_index]);
           ARG_PARSER_DEBUG("positional: " << pos_index << ": " << arg);
           pos->parse(arg);
           if (!pos->is_multiple()) {
