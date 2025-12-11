@@ -1801,6 +1801,9 @@ class Command {
     auto positionals = args_ | std::views::filter([](const auto &arg) {
                          return arg->is_positional();
                        });
+    if (!positionals.empty()) {
+      usage_str << " [--]";
+    }
     for (const auto &arg : positionals) {
       if (dynamic_cast<OptionBase *>(arg.get())->is_multiple()) {
         usage_str << " <" << arg->long_opt_names_.front() << ">...";
