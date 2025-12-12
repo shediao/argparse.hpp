@@ -1592,6 +1592,10 @@ class Command {
     this->callback_ = std::move(cb);
     return *this;
   }
+  Command &help_footer(std::string footer) {
+    this->help_footer_ = std::move(footer);
+    return *this;
+  }
 
   void parse(int argc, char const *const *argv) {
     this->is_parsed_ = true;
@@ -1832,6 +1836,9 @@ class Command {
         usage_str << "\n " << arg->usage();
       }
     }
+    if (!help_footer_.empty()) {
+      usage_str << "\n\n" << help_footer_;
+    }
     return usage_str.str();
   }
   std::string oneline_usage() {
@@ -1929,6 +1936,7 @@ class Command {
   std::vector<std::unique_ptr<ArgBase>> args_;
   std::string command_;
   std::string description_;
+  std::string help_footer_;
   std::vector<std::shared_ptr<Command>> subcommands_;
   Command *parent_{nullptr};
   std::function<void()> callback_{nullptr};
