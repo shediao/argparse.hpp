@@ -1592,8 +1592,12 @@ class Command {
     this->callback_ = std::move(cb);
     return *this;
   }
-  Command &help_footer(std::string footer) {
-    this->help_footer_ = std::move(footer);
+  Command &usage_header(std::string header) {
+    this->usage_header_ = std::move(header);
+    return *this;
+  }
+  Command &usage_footer(std::string footer) {
+    this->usage_footer_ = std::move(footer);
     return *this;
   }
 
@@ -1793,6 +1797,13 @@ class Command {
                 std::ostream_iterator<std::string>(usage_str, " "));
     }
 
+    if (!usage_header_.empty()) {
+      usage_str << usage_header_;
+      if (usage_header_.back() != '\n') {
+        usage_str << '\n';
+      }
+    }
+
     usage_str << command_;
     if (std::ranges::find_if(args_, [](const auto &arg) {
           return arg->is_option() || arg->is_flag();
@@ -1836,8 +1847,8 @@ class Command {
         usage_str << "\n " << arg->usage();
       }
     }
-    if (!help_footer_.empty()) {
-      usage_str << "\n\n" << help_footer_;
+    if (!usage_footer_.empty()) {
+      usage_str << "\n" << usage_footer_;
     }
     return usage_str.str();
   }
@@ -1936,7 +1947,8 @@ class Command {
   std::vector<std::unique_ptr<ArgBase>> args_;
   std::string command_;
   std::string description_;
-  std::string help_footer_;
+  std::string usage_header_;
+  std::string usage_footer_;
   std::vector<std::shared_ptr<Command>> subcommands_;
   Command *parent_{nullptr};
   std::function<void()> callback_{nullptr};
