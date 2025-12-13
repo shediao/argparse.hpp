@@ -776,16 +776,16 @@ class OptionBase : public ArgBase {
   virtual std::optional<std::string> get_default_value() const = 0;
 
   template <typename T>
-  void set_default_value_help() {
+  void set_value_placeholder_for_type() {
     if constexpr (detail::is_optional_v<T>) {
-      set_default_value_help<typename T::value_type>();
+      set_value_placeholder_for_type<typename T::value_type>();
     } else {
       if constexpr (std::is_integral_v<T>) {
-        value_help_ = "<N>";
+        value_placeholder_ = "<N>";
       } else if constexpr (std::is_floating_point_v<T>) {
-        value_help_ = "<0.0>";
+        value_placeholder_ = "<x.y>";
       } else {
-        value_help_ = "<arg>";
+        value_placeholder_ = "<arg>";
       }
     }
   }
@@ -819,7 +819,7 @@ class OptionBase : public ArgBase {
         opt_names_length += delimiter_of_short_and_long.length();
       }
 
-      opt_names_length += (value_help_.length() + 1);
+      opt_names_length += (value_placeholder_.length() + 1);
 
       std::vector<std::string> short_names_with_dash;
       std::vector<std::string> long_names_with_dash_dash;
@@ -838,23 +838,23 @@ class OptionBase : public ArgBase {
                          long_names_with_dash_dash.end());
         auto end = all_names.end() - 1;
         for (auto it = all_names.begin(); it != end; ++it) {
-          usage_str << *it << ' ' << value_help_ << '\n';
+          usage_str << *it << ' ' << value_placeholder_ << '\n';
         }
-        usage_str << detail::format(*end + " " + value_help_, option_width(),
-                                    description());
+        usage_str << detail::format(*end + " " + value_placeholder_,
+                                    option_width(), description());
       } else {
         auto s = detail::join(short_names_with_dash, delimiter);
         auto l = detail::join(long_names_with_dash_dash, delimiter);
         if (short_names_with_dash.empty()) {
           std::string options_str =
               "  " + std::string(delimiter_of_short_and_long.length(), ' ') + l;
-          usage_str << detail::format(options_str + " " + value_help_,
+          usage_str << detail::format(options_str + " " + value_placeholder_,
                                       option_width(), description());
         } else {
           std::string options_str = long_names_with_dash_dash.empty()
                                         ? s
                                         : (s + delimiter_of_short_and_long + l);
-          usage_str << detail::format(options_str + " " + value_help_,
+          usage_str << detail::format(options_str + " " + value_placeholder_,
                                       option_width(), description());
         }
       }
@@ -901,7 +901,7 @@ class OptionBase : public ArgBase {
     return usage_str.str();
   }
   bool is_require_{false};
-  std::string value_help_;
+  std::string value_placeholder_;
   std::vector<std::string> opt_values;
   std::vector<std::function<std::pair<bool, std::string>(std::string const &)>>
       parse_befor_value_checker_;
@@ -934,8 +934,17 @@ class OptionBaseCRTP : public OptionBase {
         });
   }
 
-  Derived &value_help(std::string const &value_help) {
-    this->value_help_ = "<" + value_help + ">";
+  Derived &value_placeholder(std::string const &value_placeholder) {
+    bool add_parentheses = true;
+    if (!value_placeholder.empty() && (value_placeholder.starts_with('<') ||
+                                       value_placeholder.starts_with('['))) {
+      add_parentheses = false;
+    }
+    if (add_parentheses) {
+      this->value_placeholder_ = "<" + value_placeholder + ">";
+    } else {
+      this->value_placeholder_ = value_placeholder;
+    }
     return static_cast<Derived &>(*this);
   }
 
@@ -974,7 +983,7 @@ class Option final : public OptionBaseCRTP<Option<T>> {
       : OptionBaseCRTP<Option<T>>(name, description),
         bind_value_(std::ref(bind_value)),
         parse_function_(detail::parse_from_string<parsed_value_type>) {
-    OptionBase::set_default_value_help<T>();
+    OptionBase::set_value_placeholder_for_type<T>();
   }
   Option(const std::string &name, const std::string &description, T &bind_value,
          char delim)
@@ -984,7 +993,7 @@ class Option final : public OptionBaseCRTP<Option<T>> {
         parse_function_([delim](std::string const &opt_value) {
           return detail::parse_from_string<parsed_value_type>(opt_value, delim);
         }) {
-    OptionBase::set_default_value_help<T>();
+    OptionBase::set_value_placeholder_for_type<T>();
   }
   Option<T> &default_value(const std::string &default_value)
     requires(!detail::ParseFromStringContainerType<T>)
@@ -1185,7 +1194,6 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
     requires detail::BindableWithoutDelimiterType<T>
       : OptionBaseCRTP<Positional<T>>(name, description),
         bind_value_(std::ref(bind_value)) {
-    OptionBase::set_default_value_help<T>();
     if constexpr (detail::ParseFromStringContainerType<T>) {
       parse_function_ = [](std::string const &opt_value) {
         return detail::parse_from_string<parsed_value_type>(opt_value);
@@ -1199,13 +1207,13 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
         return detail::parse_from_string<T>(opt_value);
       };
     }
+    (void)OptionBaseCRTP<Positional<T>>::value_placeholder(name);
   }
   Positional(const std::string &name, const std::string &description,
              T &bind_value, char delim)
     requires detail::BindableWithDelimiterType<T>
       : OptionBaseCRTP<Positional<T>>(name, description),
         bind_value_(std::ref(bind_value)) {
-    OptionBase::set_default_value_help<T>();
     if constexpr (detail::ParseFromStringContainerType<T>) {
       parse_function_ = [delim](std::string const &opt_value) {
         return detail::parse_from_string<parsed_value_type>(opt_value, delim);
@@ -1219,6 +1227,7 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
         return detail::parse_from_string<T>(opt_value, delim);
       };
     }
+    (void)OptionBaseCRTP<Positional<T>>::value_placeholder(name);
   }
   Positional<T> &default_value(const std::string &default_value)
     requires(!detail::ParseFromStringContainerType<T>)
@@ -1820,10 +1829,10 @@ class Command {
       usage_str << " [--]";
     }
     for (const auto &arg : positionals) {
+      usage_str << " "
+                << dynamic_cast<OptionBase *>(arg.get())->value_placeholder_;
       if (dynamic_cast<OptionBase *>(arg.get())->is_multiple()) {
-        usage_str << " <" << arg->long_opt_names_.front() << ">...";
-      } else {
-        usage_str << " <" << arg->long_opt_names_.front() << ">";
+        usage_str << "...";
       }
     }
     if (std::ranges::find_if(args_, [](const auto &arg) {
