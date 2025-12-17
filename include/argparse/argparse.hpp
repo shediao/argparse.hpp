@@ -113,7 +113,7 @@ concept ParseFromStringSingleType =
 
 template <typename T>
 concept ParseFromStringTupleLikeType = requires {
-  std::get<0>(std::declval<T &>());
+  std::get<0>(std::declval<T&>());
   requires std::tuple_size_v<T> > 0;
   typename std::tuple_element<0, T>::type;
 } && []<std::size_t... I>(std::integer_sequence<std::size_t, I...>) constexpr {
@@ -185,10 +185,10 @@ concept is_parse_from_string_basic_type =
     std::same_as<T, unsigned long> || std::same_as<T, long long> ||
     std::same_as<T, unsigned long long> || std::same_as<T, float> ||
     std::same_as<T, double> || std::same_as<T, long double> ||
-    requires(std::string const &s) { T(s); };
+    requires(std::string const& s) { T(s); };
 
 template <ParseFromStringBasicType T>
-T parse_from_string(std::string const &s) {
+T parse_from_string(std::string const& s) {
   size_t pos = 0;
   if constexpr (std::is_same_v<T, int>) {
     auto result = std::stoi(s, &pos);
@@ -250,12 +250,12 @@ T parse_from_string(std::string const &s) {
 }
 
 template <ParseFromStringCustomType T>
-T parse_from_string(std::string const &s) {
+T parse_from_string(std::string const& s) {
   return T(s);
 }
 
 template <>
-inline bool parse_from_string<bool>(std::string const &s) {
+inline bool parse_from_string<bool>(std::string const& s) {
   if (s == "true" || s == "on" || s == "1") {
     return true;
   }
@@ -265,7 +265,7 @@ inline bool parse_from_string<bool>(std::string const &s) {
   throw std::invalid_argument("Invalid string for bool: " + s);
 }
 template <>
-inline char parse_from_string<char>(std::string const &s) {
+inline char parse_from_string<char>(std::string const& s) {
   if (s.length() == 1) {
     return s[0];
   }
@@ -273,7 +273,7 @@ inline char parse_from_string<char>(std::string const &s) {
 }
 
 template <typename T>
-std::string join(const std::vector<std::string> &v, const T &delim) {
+std::string join(const std::vector<std::string>& v, const T& delim) {
   std::stringstream result;
   auto it = v.begin();
   if (it != v.end()) {
@@ -342,7 +342,7 @@ constexpr bool has_push_front_v = has_push_front<T>::value;
 template <typename CharT, typename F, typename C>
   requires std::is_same_v<bool,
                           decltype(std::declval<F>()(std::declval<CharT>()))>
-C &split_to_if(C &to, const std::basic_string<CharT> &str, F f,
+C& split_to_if(C& to, const std::basic_string<CharT>& str, F f,
                int max_count = -1, bool is_compress_token = false) {
   auto begin = str.begin();
   auto delimiter = begin;
@@ -379,7 +379,7 @@ C &split_to_if(C &to, const std::basic_string<CharT> &str, F f,
   return to;
 }
 
-inline std::vector<std::string> split(std::string const &s, char delim,
+inline std::vector<std::string> split(std::string const& s, char delim,
                                       int max) {
   std::vector<std::string> result;
   split_to_if(result, s, [delim](char c) { return c == delim; }, max, false);
@@ -387,21 +387,21 @@ inline std::vector<std::string> split(std::string const &s, char delim,
 }
 
 template <typename T, std::size_t... I>
-T make_tuple_from_container_impl(std::vector<std::string> const &v,
+T make_tuple_from_container_impl(std::vector<std::string> const& v,
                                  std::integer_sequence<std::size_t, I...>) {
   return T{
       parse_from_string<std::decay_t<std::tuple_element_t<I, T>>>(v[I])...};
 }
 
 template <ParseFromStringTupleLikeType T>
-T make_tuple_from_container(std::vector<std::string> const &v) {
+T make_tuple_from_container(std::vector<std::string> const& v) {
   return make_tuple_from_container_impl<T>(
       v, std::make_index_sequence<std::tuple_size_v<std::decay_t<T>>>());
 }
 
 // for tuple like types
 template <ParseFromStringTupleLikeType T>
-T parse_from_string(std::string const &s, const char delim) {
+T parse_from_string(std::string const& s, const char delim) {
   auto v = split(s, delim, std::tuple_size_v<std::decay_t<T>> - 1);
   if (v.size() != std::tuple_size_v<std::decay_t<T>>) {
     throw std::invalid_argument(
@@ -411,8 +411,8 @@ T parse_from_string(std::string const &s, const char delim) {
   return make_tuple_from_container<T>(v);
 }
 
-inline std::string format(std::string const &option_name, size_t width,
-                          std::string const &description) {
+inline std::string format(std::string const& option_name, size_t width,
+                          std::string const& description) {
   std::string ret = option_name;
 
   auto last_option_name_width = option_name.length();
@@ -441,7 +441,7 @@ inline std::string format(std::string const &option_name, size_t width,
 
 #if defined(_WIN32)
 // Helper function to convert a UTF-8 std::string to a UTF-16 std::wstring
-inline std::wstring to_wstring(const std::string_view &str) {
+inline std::wstring to_wstring(const std::string_view& str) {
   if (str.empty()) {
     return {};
   }
@@ -458,7 +458,7 @@ inline std::wstring to_wstring(const std::string_view &str) {
 }
 
 // Helper function to convert a UTF-16 std::wstring to a UTF-8 std::string
-inline std::string to_string(const std::wstring_view &wstr) {
+inline std::string to_string(const std::wstring_view& wstr) {
   if (wstr.empty()) {
     return {};
   }
@@ -475,7 +475,7 @@ inline std::string to_string(const std::wstring_view &wstr) {
 }
 #endif  // _WIN32
 
-inline std::optional<std::string> getenv(std::string const &name) {
+inline std::optional<std::string> getenv(std::string const& name) {
 #if defined(_WIN32)
   auto wname = to_wstring(name);
   auto const size = GetEnvironmentVariableW(wname.c_str(), nullptr, 0);
@@ -488,7 +488,7 @@ inline std::optional<std::string> getenv(std::string const &name) {
   GetEnvironmentVariableW(wname.data(), value.data(), size);
   return to_string(value.data());
 #else
-  auto *env = ::getenv(name.c_str());
+  auto* env = ::getenv(name.c_str());
   if (env) {
     return std::string(env);
   }
@@ -498,19 +498,19 @@ inline std::optional<std::string> getenv(std::string const &name) {
 
 }  // namespace detail
 
-inline void store_true(bool &value) { value = true; }
+inline void store_true(bool& value) { value = true; }
 
-inline void store_false(bool &value) { value = false; }
+inline void store_false(bool& value) { value = false; }
 
 template <typename T>
   requires std::integral<T>
-inline void increment(T &value) {
+inline void increment(T& value) {
   ++value;
 }
 
 template <typename T>
   requires std::integral<T>
-inline void decrement(T &value) {
+inline void decrement(T& value) {
   --value;
 }
 
@@ -519,9 +519,9 @@ class ArgBase {
   friend class ArgParser;
 
  public:
-  ArgBase(const std::string &name, const std::string &description)
+  ArgBase(const std::string& name, const std::string& description)
       : description_(description) {
-    for (auto &&opt_name : detail::split(name, ',', -1)) {
+    for (auto&& opt_name : detail::split(name, ',', -1)) {
       if (opt_name.empty()) {
         continue;
       }
@@ -547,12 +547,12 @@ class ArgBase {
   size_t count() const { return count_; }
   virtual ~ArgBase() = default;
 
-  ArgBase &hidden(bool v = true) {
+  ArgBase& hidden(bool v = true) {
     hidden_ = v;
     return *this;
   }
 
-  ArgBase &env(std::string const &env) {
+  ArgBase& env(std::string const& env) {
     env_key_ = env;
     return *this;
   }
@@ -564,7 +564,7 @@ class ArgBase {
   virtual std::string usage() const = 0;
   size_t option_width() const { return option_width_; }
   void set_option_width(size_t width) { option_width_ = width; }
-  const std::string &description() const { return description_; }
+  const std::string& description() const { return description_; }
   size_t count_{0};
   std::vector<std::string> short_opt_names_;
   std::vector<std::string> long_opt_names_;
@@ -579,7 +579,7 @@ class FlagBase : public ArgBase {
   friend class ArgParser;
 
  public:
-  FlagBase(const std::string &name, const std::string &description)
+  FlagBase(const std::string& name, const std::string& description)
       : ArgBase(name, description) {}
 
   void negatable(bool v = true) { this->negatable_ = v; }
@@ -599,13 +599,13 @@ class FlagBase : public ArgBase {
 
     auto flag_names_length = std::accumulate(
         short_opt_names_.begin(), short_opt_names_.end(), (size_t)0,
-        [negatable = negatable_](size_t t, const std::string &s) {
+        [negatable = negatable_](size_t t, const std::string& s) {
           return t + s.length() + 1 + (negatable ? 5 : 0);
           ;
         });
     flag_names_length = std::accumulate(
         long_opt_names_.begin(), long_opt_names_.end(), flag_names_length,
-        [negatable = negatable_](size_t t, const std::string &s) {
+        [negatable = negatable_](size_t t, const std::string& s) {
           return t + s.length() + 2 + (negatable ? 5 : 0);
         });
 
@@ -622,12 +622,12 @@ class FlagBase : public ArgBase {
     std::ranges::transform(
         short_opt_names_, back_inserter(short_names_with_dash),
         [no_long_names = long_opt_names_.empty(),
-         negatable = negatable_](auto const &s) {
+         negatable = negatable_](auto const& s) {
           return no_long_names && negatable ? ("[--no]-" + s) : ("-" + s);
         });
     std::ranges::transform(long_opt_names_,
                            back_inserter(long_names_with_dash_dash),
-                           [negatable = negatable_](auto const &s) {
+                           [negatable = negatable_](auto const& s) {
                              return negatable ? ("--[no-]" + s) : ("--" + s);
                            });
 
@@ -676,30 +676,30 @@ class Flag final : public FlagBase {
   using parsed_value_type = detail::extract_value_type_t<T>;
 
  public:
-  Flag(const std::string &name, const std::string &description, T &bind_value)
+  Flag(const std::string& name, const std::string& description, T& bind_value)
       : FlagBase(name, description),
         bind_value_(std::ref(bind_value)),
         parse_function_{store_true},
         parse_negatable_function_{store_false} {}
-  Flag(const std::string &name, const std::string &description, T &bind_value,
-       std::function<void(parsed_value_type &)> action,
-       std::function<void(parsed_value_type &)> negatable_action)
+  Flag(const std::string& name, const std::string& description, T& bind_value,
+       std::function<void(parsed_value_type&)> action,
+       std::function<void(parsed_value_type&)> negatable_action)
       : FlagBase(name, description),
         bind_value_(std::ref(bind_value)),
         parse_function_(std::move(action)),
         parse_negatable_function_(std::move(negatable_action)) {}
 
-  Flag<T> &callback(std::function<void(parsed_value_type)> cb) {
+  Flag<T>& callback(std::function<void(parsed_value_type)> cb) {
     callback_ = std::move(cb);
     return *this;
   }
 
-  T const &value() const { return bind_value_; }
+  T const& value() const { return bind_value_; }
 
  protected:
   void parse() override {
     if constexpr (detail::is_optional_v<T>) {
-      auto &flag_value = bind_value_.get();
+      auto& flag_value = bind_value_.get();
       if (!flag_value.has_value()) {
         flag_value = typename T::value_type{};
       }
@@ -717,7 +717,7 @@ class Flag final : public FlagBase {
   }
   void negatable_parse() override {
     if constexpr (detail::is_optional_v<T>) {
-      auto &flag_value = bind_value_.get();
+      auto& flag_value = bind_value_.get();
       if (!flag_value.has_value()) {
         flag_value = typename T::value_type{};
       }
@@ -736,8 +736,8 @@ class Flag final : public FlagBase {
 
  private:
   std::reference_wrapper<T> bind_value_;
-  std::function<void(parsed_value_type &)> parse_function_;
-  std::function<void(parsed_value_type &)> parse_negatable_function_;
+  std::function<void(parsed_value_type&)> parse_function_;
+  std::function<void(parsed_value_type&)> parse_negatable_function_;
   std::function<void(parsed_value_type)> callback_;
 };
 
@@ -747,7 +747,7 @@ class OptionBase : public ArgBase {
   friend class OptionAlias;
 
  public:
-  OptionBase(const std::string &name, const std::string &description)
+  OptionBase(const std::string& name, const std::string& description)
       : ArgBase(name, description) {}
 
   void require() { is_require_ = true; }
@@ -755,8 +755,8 @@ class OptionBase : public ArgBase {
 
  protected:
   bool is_flag() const override final { return false; }
-  virtual void parse(const std::string &opt_value) {
-    for (const auto &checker : parse_befor_value_checker_) {
+  virtual void parse(const std::string& opt_value) {
+    for (const auto& checker : parse_befor_value_checker_) {
       if (auto [ok, errmsg] = checker(opt_value); !ok) {
         std::string err_msg = "check failed: ";
         err_msg += detail::join(long_opt_names_, ',');
@@ -807,10 +807,10 @@ class OptionBase : public ArgBase {
 
       auto opt_names_length = std::accumulate(
           short_opt_names_.begin(), short_opt_names_.end(), (size_t)0,
-          [](size_t t, const std::string &s) { return t + s.length() + 1; });
+          [](size_t t, const std::string& s) { return t + s.length() + 1; });
       opt_names_length = std::accumulate(
           long_opt_names_.begin(), long_opt_names_.end(), opt_names_length,
-          [](size_t t, const std::string &s) { return t + s.length() + 2; });
+          [](size_t t, const std::string& s) { return t + s.length() + 2; });
 
       opt_names_length +=
           (short_opt_names_.size() + long_opt_names_.size() - 2) *
@@ -825,10 +825,10 @@ class OptionBase : public ArgBase {
       std::vector<std::string> long_names_with_dash_dash;
       std::ranges::transform(short_opt_names_,
                              back_inserter(short_names_with_dash),
-                             [](auto const &s) { return "-" + s; });
+                             [](auto const& s) { return "-" + s; });
       std::ranges::transform(long_opt_names_,
                              back_inserter(long_names_with_dash_dash),
-                             [](auto const &s) { return "--" + s; });
+                             [](auto const& s) { return "--" + s; });
 
       bool use_multiple_lines = opt_names_length > option_width();
 
@@ -875,7 +875,7 @@ class OptionBase : public ArgBase {
         }
       }
       if (!this->choices_descriptions_.empty()) {
-        for (auto const &[value, help] : this->choices_descriptions_) {
+        for (auto const& [value, help] : this->choices_descriptions_) {
           usage_str << '\n'
                     << detail::format("      [" + value + "]", option_width(),
                                       " " + help);
@@ -903,7 +903,7 @@ class OptionBase : public ArgBase {
   bool is_require_{false};
   std::string value_placeholder_;
   std::vector<std::string> opt_values;
-  std::vector<std::function<std::pair<bool, std::string>(std::string const &)>>
+  std::vector<std::function<std::pair<bool, std::string>(std::string const&)>>
       parse_befor_value_checker_;
   std::map<std::string, std::string> choices_descriptions_;
 };
@@ -912,16 +912,16 @@ template <typename Derived>
 class OptionBaseCRTP : public OptionBase {
  public:
   using OptionBase::OptionBase;
-  Derived &checker(
-      std::function<std::pair<bool, std::string>(std::string const &)> f) {
+  Derived& checker(
+      std::function<std::pair<bool, std::string>(std::string const&)> f) {
     parse_befor_value_checker_.push_back(std::move(f));
 
-    return static_cast<Derived &>(*this);
+    return static_cast<Derived&>(*this);
   }
 
-  Derived &choices(std::vector<std::string> const &allowed_values) {
+  Derived& choices(std::vector<std::string> const& allowed_values) {
     return OptionBaseCRTP<Derived>::checker(
-        [allowed_values](const std::string &value) {
+        [allowed_values](const std::string& value) {
           using return_type = std::pair<bool, std::string>;
           auto ok = std::ranges::find(allowed_values, value) !=
                     std::ranges::end(allowed_values);
@@ -934,7 +934,7 @@ class OptionBaseCRTP : public OptionBase {
         });
   }
 
-  Derived &value_placeholder(std::string const &value_placeholder) {
+  Derived& value_placeholder(std::string const& value_placeholder) {
     bool add_parentheses = true;
     if (!value_placeholder.empty() && (value_placeholder.starts_with('<') ||
                                        value_placeholder.starts_with('['))) {
@@ -945,25 +945,25 @@ class OptionBaseCRTP : public OptionBase {
     } else {
       this->value_placeholder_ = value_placeholder;
     }
-    return static_cast<Derived &>(*this);
+    return static_cast<Derived&>(*this);
   }
 
-  Derived &choices_description(
-      std::map<std::string, std::string> const &choices_description) {
+  Derived& choices_description(
+      std::map<std::string, std::string> const& choices_description) {
     this->choices_descriptions_ = choices_description;
-    return static_cast<Derived &>(*this);
+    return static_cast<Derived&>(*this);
   }
-  Derived &hidden(bool v = true) {
+  Derived& hidden(bool v = true) {
     ArgBase::hidden(v);
-    return static_cast<Derived &>(*this);
+    return static_cast<Derived&>(*this);
   }
-  Derived &env(std::string const &env) {
+  Derived& env(std::string const& env) {
     ArgBase::env(env);
-    return static_cast<Derived &>(*this);
+    return static_cast<Derived&>(*this);
   }
-  Derived &require() {
+  Derived& require() {
     OptionBase::require();
-    return static_cast<Derived &>(*this);
+    return static_cast<Derived&>(*this);
   }
 };
 
@@ -978,53 +978,53 @@ class Option final : public OptionBaseCRTP<Option<T>> {
   using parsed_value_type = detail::extract_value_type_t<T>;
 
  public:
-  Option(const std::string &name, const std::string &description, T &bind_value)
+  Option(const std::string& name, const std::string& description, T& bind_value)
     requires detail::BindableWithoutDelimiterType<T>
       : OptionBaseCRTP<Option<T>>(name, description),
         bind_value_(std::ref(bind_value)),
         parse_function_(detail::parse_from_string<parsed_value_type>) {
     OptionBase::set_value_placeholder_for_type<T>();
   }
-  Option(const std::string &name, const std::string &description, T &bind_value,
+  Option(const std::string& name, const std::string& description, T& bind_value,
          char delim)
     requires detail::BindableWithDelimiterType<T>
       : OptionBaseCRTP<Option<T>>(name, description),
         bind_value_(std::ref(bind_value)),
-        parse_function_([delim](std::string const &opt_value) {
+        parse_function_([delim](std::string const& opt_value) {
           return detail::parse_from_string<parsed_value_type>(opt_value, delim);
         }) {
     OptionBase::set_value_placeholder_for_type<T>();
   }
-  Option<T> &default_value(const std::string &default_value)
+  Option<T>& default_value(const std::string& default_value)
     requires(!detail::ParseFromStringContainerType<T>)
   {
     this->default_value_ = default_value;
     return *this;
   }
-  Option<T> &default_value(std::initializer_list<std::string> default_value)
+  Option<T>& default_value(std::initializer_list<std::string> default_value)
     requires detail::ParseFromStringContainerType<T>
   {
     this->default_value_ = default_value;
     return *this;
   }
 
-  Option<T> &callback(std::function<void(value_type const &)> cb) {
+  Option<T>& callback(std::function<void(value_type const&)> cb) {
     callback_ = std::move(cb);
     return *this;
   }
 
   using OptionBaseCRTP<Option<T>>::checker;
-  Option<T> &checker(
-      std::function<std::pair<bool, std::string>(const parsed_value_type &)>
+  Option<T>& checker(
+      std::function<std::pair<bool, std::string>(const parsed_value_type&)>
           check_function) {
     value_checker_.push_back(std::move(check_function));
     return *this;
   }
 
-  Option<T> &range(parsed_value_type r_min, parsed_value_type r_max)
+  Option<T>& range(parsed_value_type r_min, parsed_value_type r_max)
     requires std::is_arithmetic_v<parsed_value_type>
   {
-    value_checker_.push_back([r_min, r_max](const parsed_value_type &val) {
+    value_checker_.push_back([r_min, r_max](const parsed_value_type& val) {
       using return_type = std::pair<bool, std::string>;
       auto ok = r_min <= val && val <= r_max;
       if (!ok) {
@@ -1039,8 +1039,8 @@ class Option final : public OptionBaseCRTP<Option<T>> {
   }
 
   using OptionBaseCRTP<Option<T>>::choices;
-  Option<T> &choices(std::vector<parsed_value_type> const &allowed_values) {
-    return Option<T>::checker([allowed_values](parsed_value_type const &val) {
+  Option<T>& choices(std::vector<parsed_value_type> const& allowed_values) {
+    return Option<T>::checker([allowed_values](parsed_value_type const& val) {
       using return_type = std::pair<bool, std::string>;
       auto ok = std::find(begin(allowed_values), end(allowed_values), val) !=
                 end(allowed_values);
@@ -1053,7 +1053,7 @@ class Option final : public OptionBaseCRTP<Option<T>> {
           std::transform(
               begin(allowed_values), end(allowed_values),
               std::back_inserter(tmp),
-              [](parsed_value_type const &v) -> std::string {
+              [](parsed_value_type const& v) -> std::string {
                 if constexpr (detail::has_std_to_string_v<parsed_value_type>) {
                   return std::to_string(v);
                 } else {
@@ -1069,15 +1069,15 @@ class Option final : public OptionBaseCRTP<Option<T>> {
     });
   }
 
-  T const &value() const { return bind_value_; }
+  T const& value() const { return bind_value_; }
 
  protected:
   bool is_option() const override final { return true; }
   bool is_positional() const override final { return false; }
-  void parse(const std::string &opt_value) override {
+  void parse(const std::string& opt_value) override {
     OptionBaseCRTP<Option<T>>::parse(opt_value);
     auto parsed_value = parse_function_(opt_value);
-    for (const auto &checker : value_checker_) {
+    for (const auto& checker : value_checker_) {
       if (auto [ok, errmsg] = checker(parsed_value); !ok) {
         std::string err_msg = "check failed: ";
         err_msg += detail::join(ArgBase::long_opt_names_, ',');
@@ -1115,7 +1115,7 @@ class Option final : public OptionBaseCRTP<Option<T>> {
     }
     if constexpr (detail::ParseFromStringContainerType<T>) {
       if (default_value_.has_value()) {
-        for (const auto &value : default_value_.value()) {
+        for (const auto& value : default_value_.value()) {
           parse(value);
         }
       }
@@ -1141,21 +1141,21 @@ class Option final : public OptionBaseCRTP<Option<T>> {
 
  private:
   std::reference_wrapper<T> bind_value_;
-  std::function<parsed_value_type(std::string const &)> parse_function_;
+  std::function<parsed_value_type(std::string const&)> parse_function_;
   std::conditional_t<detail::ParseFromStringContainerType<T>,
                      std::optional<std::vector<std::string>>,
                      std::optional<std::string>>
       default_value_;
-  std::function<void(value_type const &)> callback_;
+  std::function<void(value_type const&)> callback_;
   std::vector<
-      std::function<std::pair<bool, std::string>(parsed_value_type const &)>>
+      std::function<std::pair<bool, std::string>(parsed_value_type const&)>>
       value_checker_;
 };
 
 class OptionAlias : public FlagBase {
  public:
-  OptionAlias(std::string const &name, OptionBase *option,
-              std::string const &opt_value)
+  OptionAlias(std::string const& name, OptionBase* option,
+              std::string const& opt_value)
       : FlagBase(name, "same as " +
                            (option->long_opt_names_.empty()
                                 ? (option->short_opt_names_.empty()
@@ -1174,7 +1174,7 @@ class OptionAlias : public FlagBase {
   void negatable_parse() override {}
 
  private:
-  OptionBase *option_{nullptr};
+  OptionBase* option_{nullptr};
   std::string opt_value_{};
 };
 
@@ -1189,77 +1189,77 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
   using parsed_value_type = detail::extract_value_type_t<T>;
 
  public:
-  Positional(const std::string &name, const std::string &description,
-             T &bind_value)
+  Positional(const std::string& name, const std::string& description,
+             T& bind_value)
     requires detail::BindableWithoutDelimiterType<T>
       : OptionBaseCRTP<Positional<T>>(name, description),
         bind_value_(std::ref(bind_value)) {
     if constexpr (detail::ParseFromStringContainerType<T>) {
-      parse_function_ = [](std::string const &opt_value) {
+      parse_function_ = [](std::string const& opt_value) {
         return detail::parse_from_string<parsed_value_type>(opt_value);
       };
     } else if constexpr (detail::is_optional_v<T>) {
-      parse_function_ = [](std::string const &opt_value) {
+      parse_function_ = [](std::string const& opt_value) {
         return detail::parse_from_string<parsed_value_type>(opt_value);
       };
     } else {
-      parse_function_ = [](std::string const &opt_value) {
+      parse_function_ = [](std::string const& opt_value) {
         return detail::parse_from_string<T>(opt_value);
       };
     }
     (void)OptionBaseCRTP<Positional<T>>::value_placeholder(name);
   }
-  Positional(const std::string &name, const std::string &description,
-             T &bind_value, char delim)
+  Positional(const std::string& name, const std::string& description,
+             T& bind_value, char delim)
     requires detail::BindableWithDelimiterType<T>
       : OptionBaseCRTP<Positional<T>>(name, description),
         bind_value_(std::ref(bind_value)) {
     if constexpr (detail::ParseFromStringContainerType<T>) {
-      parse_function_ = [delim](std::string const &opt_value) {
+      parse_function_ = [delim](std::string const& opt_value) {
         return detail::parse_from_string<parsed_value_type>(opt_value, delim);
       };
     } else if constexpr (detail::is_optional_v<T>) {
-      parse_function_ = [delim](std::string const &opt_value) {
+      parse_function_ = [delim](std::string const& opt_value) {
         return detail::parse_from_string<parsed_value_type>(opt_value, delim);
       };
     } else {
-      parse_function_ = [delim](std::string const &opt_value) {
+      parse_function_ = [delim](std::string const& opt_value) {
         return detail::parse_from_string<T>(opt_value, delim);
       };
     }
     (void)OptionBaseCRTP<Positional<T>>::value_placeholder(name);
   }
-  Positional<T> &default_value(const std::string &default_value)
+  Positional<T>& default_value(const std::string& default_value)
     requires(!detail::ParseFromStringContainerType<T>)
   {
     this->default_value_ = default_value;
     return *this;
   }
-  Positional<T> &default_value(std::initializer_list<std::string> default_value)
+  Positional<T>& default_value(std::initializer_list<std::string> default_value)
     requires detail::ParseFromStringContainerType<T>
   {
     this->default_value_ = default_value;
     return *this;
   }
 
-  Positional<T> &callback(std::function<void(value_type const &)> cb) {
+  Positional<T>& callback(std::function<void(value_type const&)> cb) {
     callback_ = std::move(cb);
   }
 
-  T const &value() const { return bind_value_; }
+  T const& value() const { return bind_value_; }
 
   using OptionBaseCRTP<Positional<T>>::checker;
-  Positional<T> &checker(
-      std::function<std::pair<bool, std::string>(const parsed_value_type &)>
+  Positional<T>& checker(
+      std::function<std::pair<bool, std::string>(const parsed_value_type&)>
           check_function) {
     value_checker_.push_back(std::move(check_function));
     return *this;
   }
 
-  Positional<T> &range(parsed_value_type r_min, parsed_value_type r_max)
+  Positional<T>& range(parsed_value_type r_min, parsed_value_type r_max)
     requires std::is_arithmetic_v<parsed_value_type>
   {
-    value_checker_.push_back([r_min, r_max](const parsed_value_type &val) {
+    value_checker_.push_back([r_min, r_max](const parsed_value_type& val) {
       using return_type = std::pair<bool, std::string>;
       auto ok = r_min <= val && val <= r_max;
       if (!ok) {
@@ -1274,9 +1274,9 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
   }
 
   using OptionBaseCRTP<Positional<T>>::choices;
-  Positional<T> &choices(std::vector<parsed_value_type> const &allowed_values) {
+  Positional<T>& choices(std::vector<parsed_value_type> const& allowed_values) {
     return Positional<T>::checker([allowed_values](
-                                      parsed_value_type const &val) {
+                                      parsed_value_type const& val) {
       using return_type = std::pair<bool, std::string>;
       auto ok = std::find(begin(allowed_values), end(allowed_values), val) !=
                 end(allowed_values);
@@ -1289,7 +1289,7 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
           std::transform(
               begin(allowed_values), end(allowed_values),
               std::back_inserter(tmp),
-              [](parsed_value_type const &v) -> std::string {
+              [](parsed_value_type const& v) -> std::string {
                 if constexpr (detail::has_std_to_string_v<parsed_value_type>) {
                   return std::to_string(v);
                 } else {
@@ -1309,10 +1309,10 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
  protected:
   bool is_option() const override final { return false; }
   bool is_positional() const override final { return true; }
-  void parse(const std::string &opt_value) override {
+  void parse(const std::string& opt_value) override {
     OptionBaseCRTP<Positional<T>>::parse(opt_value);
     auto parsed_value = parse_function_(opt_value);
-    for (const auto &checker : value_checker_) {
+    for (const auto& checker : value_checker_) {
       if (auto [ok, errmsg] = checker(parsed_value); !ok) {
         std::string err_msg = "check failed: ";
         err_msg += detail::join(ArgBase::long_opt_names_, ',');
@@ -1350,7 +1350,7 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
     }
     if constexpr (detail::ParseFromStringContainerType<T>) {
       if (default_value_.has_value()) {
-        for (const auto &value : default_value_.value()) {
+        for (const auto& value : default_value_.value()) {
           parse(value);
         }
       }
@@ -1376,30 +1376,29 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
 
  private:
   std::reference_wrapper<T> bind_value_;
-  std::function<parsed_value_type(std::string const &)> parse_function_;
+  std::function<parsed_value_type(std::string const&)> parse_function_;
   std::conditional_t<detail::ParseFromStringContainerType<T>,
                      std::optional<std::vector<std::string>>,
                      std::optional<std::string>>
       default_value_;
-  std::function<void(value_type const &)> callback_;
+  std::function<void(value_type const&)> callback_;
   std::vector<
-      std::function<std::pair<bool, std::string>(parsed_value_type const &)>>
+      std::function<std::pair<bool, std::string>(parsed_value_type const&)>>
       value_checker_;
 };
 
 class Command {
   template <typename T>
     requires std::same_as<T, bool> || std::same_as<std::optional<bool>, T>
-  Flag<T> &add_flag_bool(
-      const std::string &name, const std::string &description, T &bind_value,
-      std::function<void(detail::extract_value_type_t<T> &)> action =
-          store_true,
-      std::function<void(detail::extract_value_type_t<T> &)> negatable_action =
+  Flag<T>& add_flag_bool(
+      const std::string& name, const std::string& description, T& bind_value,
+      std::function<void(detail::extract_value_type_t<T>&)> action = store_true,
+      std::function<void(detail::extract_value_type_t<T>&)> negatable_action =
           store_false) {
     auto flag = std::make_unique<Flag<T>>(name, description, bind_value,
                                           std::move(action),
                                           std::move(negatable_action));
-    auto &ret = *(flag.get());
+    auto& ret = *(flag.get());
     if (flag_or_option_exists(ret)) {
       throw std::runtime_error("Flag or Option already exists: " + name);
     }
@@ -1410,16 +1409,16 @@ class Command {
     requires detail::is_integral_v<T> ||
              (detail::is_optional_v<T> &&
               detail::is_integral_v<typename T::value_type>)
-  Flag<T> &add_flag_int(
-      const std::string &name, const std::string &description, T &bind_value,
-      std::function<void(detail::extract_value_type_t<T> &)> action =
+  Flag<T>& add_flag_int(
+      const std::string& name, const std::string& description, T& bind_value,
+      std::function<void(detail::extract_value_type_t<T>&)> action =
           increment<detail::extract_value_type_t<T>>,
-      std::function<void(detail::extract_value_type_t<T> &)> negatable_action =
+      std::function<void(detail::extract_value_type_t<T>&)> negatable_action =
           decrement<detail::extract_value_type_t<T>>) {
     auto flag = std::make_unique<Flag<T>>(name, description, bind_value,
                                           std::move(action),
                                           std::move(negatable_action));
-    auto &ret = *(flag.get());
+    auto& ret = *(flag.get());
     if (flag_or_option_exists(ret)) {
       throw std::runtime_error("Flag or Option already exists: " + name);
     }
@@ -1433,10 +1432,10 @@ class Command {
   virtual ~Command() {}
   template <typename T>
     requires std::same_as<T, bool> || std::same_as<std::optional<bool>, T>
-  Flag<T> &add_flag(const std::string &name, const std::string &description,
-                    T &bind_value) {
-    std::function<void(detail::extract_value_type_t<T> &)> action = store_true;
-    std::function<void(detail::extract_value_type_t<T> &)> negatable_action =
+  Flag<T>& add_flag(const std::string& name, const std::string& description,
+                    T& bind_value) {
+    std::function<void(detail::extract_value_type_t<T>&)> action = store_true;
+    std::function<void(detail::extract_value_type_t<T>&)> negatable_action =
         store_false;
     return add_flag_bool(name, description, bind_value, std::move(action),
                          std::move(negatable_action));
@@ -1445,11 +1444,11 @@ class Command {
     requires detail::is_integral_v<T> ||
              (detail::is_optional_v<T> &&
               detail::is_integral_v<typename T::value_type>)
-  Flag<T> &add_flag(const std::string &name, const std::string &description,
-                    T &bind_value) {
-    std::function<void(detail::extract_value_type_t<T> &)> action =
+  Flag<T>& add_flag(const std::string& name, const std::string& description,
+                    T& bind_value) {
+    std::function<void(detail::extract_value_type_t<T>&)> action =
         increment<detail::extract_value_type_t<T>>;
-    std::function<void(detail::extract_value_type_t<T> &)> negatable_action =
+    std::function<void(detail::extract_value_type_t<T>&)> negatable_action =
         decrement<detail::extract_value_type_t<T>>;
     return add_flag_int(name, description, bind_value, std::move(action),
                         std::move(negatable_action));
@@ -1457,29 +1456,29 @@ class Command {
 
   template <typename T>
     requires std::same_as<T, bool> || std::same_as<std::optional<bool>, T>
-  Flag<T> &add_negative_flag(const std::string &name,
-                             const std::string &description, T &bind_value) {
-    std::function<void(detail::extract_value_type_t<T> &)> action = store_false;
-    std::function<void(detail::extract_value_type_t<T> &)> negatable_action =
+  Flag<T>& add_negative_flag(const std::string& name,
+                             const std::string& description, T& bind_value) {
+    std::function<void(detail::extract_value_type_t<T>&)> action = store_false;
+    std::function<void(detail::extract_value_type_t<T>&)> negatable_action =
         store_true;
     return add_flag_bool(name, description, bind_value, std::move(action),
                          std::move(negatable_action));
   }
   template <typename T>
     requires std::same_as<T, int> || std::same_as<std::optional<int>, T>
-  Flag<T> &add_negative_flag(const std::string &name,
-                             const std::string &description, T &bind_value) {
-    std::function<void(detail::extract_value_type_t<T> &)> action =
+  Flag<T>& add_negative_flag(const std::string& name,
+                             const std::string& description, T& bind_value) {
+    std::function<void(detail::extract_value_type_t<T>&)> action =
         decrement<detail::extract_value_type_t<T>>;
-    std::function<void(detail::extract_value_type_t<T> &)> negatable_action =
+    std::function<void(detail::extract_value_type_t<T>&)> negatable_action =
         increment<detail::extract_value_type_t<T>>;
     return add_flag_int(name, description, bind_value, std::move(action),
                         std::move(negatable_action));
   }
 
-  FlagBase &add_alias(const std::string &name, const std::string &opt_name,
-                      const std::string &opt_value) {
-    auto *opt = get(opt_name);
+  FlagBase& add_alias(const std::string& name, const std::string& opt_name,
+                      const std::string& opt_value) {
+    auto* opt = get(opt_name);
     if (!opt) {
       throw std::runtime_error("Not found option: " + opt_name);
     }
@@ -1488,9 +1487,9 @@ class Command {
     }
 
     auto alias =
-        std::make_unique<OptionAlias>(name, (OptionBase *)opt, opt_value);
+        std::make_unique<OptionAlias>(name, (OptionBase*)opt, opt_value);
 
-    auto &ret = *(alias.get());
+    auto& ret = *(alias.get());
     if (flag_or_option_exists(ret)) {
       throw std::runtime_error("Flag or Option already exists: " + name);
     }
@@ -1499,10 +1498,10 @@ class Command {
   }
 
   template <detail::BindableWithoutDelimiterType T>
-  Option<T> &add_option(const std::string &name, const std::string &description,
-                        T &bind_value) {
+  Option<T>& add_option(const std::string& name, const std::string& description,
+                        T& bind_value) {
     auto option = std::make_unique<Option<T>>(name, description, bind_value);
-    auto &ret = *(option.get());
+    auto& ret = *(option.get());
     if (flag_or_option_exists(ret)) {
       throw std::runtime_error("Flag or Option already exists: " + name);
     }
@@ -1511,11 +1510,11 @@ class Command {
   }
 
   template <detail::BindableWithDelimiterType T>
-  Option<T> &add_option(const std::string &name, const std::string &description,
-                        T &bind_value, char delim) {
+  Option<T>& add_option(const std::string& name, const std::string& description,
+                        T& bind_value, char delim) {
     auto option =
         std::make_unique<Option<T>>(name, description, bind_value, delim);
-    auto &ret = *(option.get());
+    auto& ret = *(option.get());
     if (flag_or_option_exists(ret)) {
       throw std::runtime_error("Flag or Option already exists: " + name);
     }
@@ -1524,15 +1523,15 @@ class Command {
   }
 
   template <detail::BindableWithoutDelimiterType T>
-  Positional<T> &add_positional(const std::string &name,
-                                const std::string &description, T &bind_value) {
+  Positional<T>& add_positional(const std::string& name,
+                                const std::string& description, T& bind_value) {
     if (!subcommands_.empty()) {
       throw std::runtime_error(
           "Cannot add positional parameter when there are sub commands");
     }
-    if (std::ranges::find_if(args_, [](const auto &arg) {
+    if (std::ranges::find_if(args_, [](const auto& arg) {
           return arg->is_positional() &&
-                 dynamic_cast<OptionBase *>(arg.get())->is_multiple();
+                 dynamic_cast<OptionBase*>(arg.get())->is_multiple();
         }) != args_.end()) {
       throw std::runtime_error(
           "Positional argument only support one container and it "
@@ -1540,7 +1539,7 @@ class Command {
     }
     auto positional =
         std::make_unique<Positional<T>>(name, description, bind_value);
-    auto &ret = *(positional.get());
+    auto& ret = *(positional.get());
     if (positional_exists(ret)) {
       throw std::runtime_error("Positional already exists: " + name);
     }
@@ -1549,8 +1548,8 @@ class Command {
   }
 
   template <detail::BindableWithDelimiterType T>
-  Positional<T> &add_positional(const std::string &name,
-                                const std::string &description, T &bind_value,
+  Positional<T>& add_positional(const std::string& name,
+                                const std::string& description, T& bind_value,
                                 char delim) {
     if (!subcommands_.empty()) {
       throw std::runtime_error(
@@ -1558,7 +1557,7 @@ class Command {
     }
     auto positional =
         std::make_unique<Positional<T>>(name, description, bind_value, delim);
-    auto &ret = *(positional.get());
+    auto& ret = *(positional.get());
     if (positional_exists(ret)) {
       throw std::runtime_error("Positional already exists: " + name);
     }
@@ -1566,9 +1565,9 @@ class Command {
     return ret;
   }
 
-  ArgBase *get(const std::string &name, bool find_from_parent = true) {
+  ArgBase* get(const std::string& name, bool find_from_parent = true) {
     if (name.length() == 1) {
-      auto it = std::ranges::find_if(args_, [name](const auto &arg) {
+      auto it = std::ranges::find_if(args_, [name](const auto& arg) {
         return std::find(arg->short_opt_names_.begin(),
                          arg->short_opt_names_.end(),
                          name) != arg->short_opt_names_.end();
@@ -1578,7 +1577,7 @@ class Command {
                  : ((find_from_parent && parent_) ? parent_->get(name)
                                                   : nullptr);
     } else {
-      auto it = std::ranges::find_if(args_, [name](const auto &arg) {
+      auto it = std::ranges::find_if(args_, [name](const auto& arg) {
         return std::find(arg->long_opt_names_.begin(),
                          arg->long_opt_names_.end(),
                          name) != arg->long_opt_names_.end();
@@ -1589,40 +1588,40 @@ class Command {
                                                   : nullptr);
     }
   }
-  ArgBase &operator[](const std::string &name) {
-    if (auto *arg = get(name); arg != nullptr) {
+  ArgBase& operator[](const std::string& name) {
+    if (auto* arg = get(name); arg != nullptr) {
       return *arg;
     } else {
       throw std::runtime_error("Unknown option: " + name);
     }
   }
 
-  Command &callback(std::function<void()> cb) {
+  Command& callback(std::function<void()> cb) {
     this->callback_ = std::move(cb);
     return *this;
   }
-  Command &usage_header(std::string header) {
+  Command& usage_header(std::string header) {
     this->usage_header_ = std::move(header);
     return *this;
   }
-  Command &usage_footer(std::string footer) {
+  Command& usage_footer(std::string footer) {
     this->usage_footer_ = std::move(footer);
     return *this;
   }
 
-  void parse(int argc, char const *const *argv) {
+  void parse(int argc, char const* const* argv) {
     this->is_parsed_ = true;
-    std::vector<const char *> commands{argv, argv + argc};
+    std::vector<const char*> commands{argv, argv + argc};
     ARG_PARSER_DEBUG(
         detail::join(std::vector<std::string>{argv, argv + argc}, ' '));
     size_t i = 1;  // Skip program name
     if (!commands.empty() && commands[0] != nullptr && commands[0][0] == '-') {
       i = 0;
     }
-    std::vector<ArgBase *> positionals;
+    std::vector<ArgBase*> positionals;
 
     // Collect all positional arguments
-    for (const auto &arg : args_) {
+    for (const auto& arg : args_) {
       if (arg->is_positional()) {
         positionals.push_back(arg.get());
       }
@@ -1631,7 +1630,7 @@ class Command {
     size_t pos_index = 0;
 
     while (i < commands.size()) {
-      const std::string &arg = commands[i];
+      const std::string& arg = commands[i];
 
       // Handle long options (--option)
       if (arg.size() > 2 && arg.substr(0, 2) == "--") {
@@ -1644,13 +1643,13 @@ class Command {
           name = name.substr(0, eq_pos);
         }
 
-        if (auto *option = get(name); option != nullptr) {
+        if (auto* option = get(name); option != nullptr) {
           if (option->is_flag()) {
-            auto *flag = dynamic_cast<FlagBase *>(option);
+            auto* flag = dynamic_cast<FlagBase*>(option);
             ARG_PARSER_DEBUG("flag: " << name);
             flag->parse();
           } else if (option->is_option()) {
-            auto *opt = dynamic_cast<OptionBase *>(option);
+            auto* opt = dynamic_cast<OptionBase*>(option);
             if (eq_pos != std::string::npos) {
               ARG_PARSER_DEBUG("option: " << name << "=" << value);
               opt->parse(value);
@@ -1663,11 +1662,11 @@ class Command {
             }
           }
         } else if (name.length() > 3 && name.substr(0, 3) == "no-") {
-          if (auto *negatable_flag = get(name.substr(3));
+          if (auto* negatable_flag = get(name.substr(3));
               negatable_flag != nullptr) {
             if (negatable_flag->is_flag() &&
-                dynamic_cast<FlagBase *>(negatable_flag)->is_negatable()) {
-              dynamic_cast<FlagBase *>(negatable_flag)->negatable_parse();
+                dynamic_cast<FlagBase*>(negatable_flag)->is_negatable()) {
+              dynamic_cast<FlagBase*>(negatable_flag)->negatable_parse();
             } else {
               throw std::runtime_error("Unknown option: " + name);
             }
@@ -1683,13 +1682,13 @@ class Command {
         // Handle combined short options
         for (size_t j = 0; j < opts.size(); ++j) {
           std::string name(1, opts[j]);
-          if (auto *option = get(name)) {
+          if (auto* option = get(name)) {
             if (option->is_flag()) {
-              auto *flag = dynamic_cast<FlagBase *>(option);
+              auto* flag = dynamic_cast<FlagBase*>(option);
               ARG_PARSER_DEBUG("flag: " << name);
               flag->parse();
             } else if (option->is_option()) {
-              auto *opt = dynamic_cast<OptionBase *>(option);
+              auto* opt = dynamic_cast<OptionBase*>(option);
               if (j < opts.size() - 1) {
                 ARG_PARSER_DEBUG("option: " << name << "="
                                             << opts.substr(j + 1));
@@ -1718,7 +1717,7 @@ class Command {
       // Handle positional arguments
       else {
         if (pos_index < positionals.size()) {
-          auto *pos = dynamic_cast<OptionBase *>(positionals[pos_index]);
+          auto* pos = dynamic_cast<OptionBase*>(positionals[pos_index]);
           if (remaining_are_positional() &&
               pos_index == positionals.size() - 1 && pos->is_multiple()) {
             break;
@@ -1752,7 +1751,7 @@ class Command {
 
     while (i < commands.size()) {
       if (pos_index < positionals.size()) {
-        auto *pos = dynamic_cast<OptionBase *>(positionals[pos_index]);
+        auto* pos = dynamic_cast<OptionBase*>(positionals[pos_index]);
         ARG_PARSER_DEBUG("positional: " << pos_index << ": " << commands[i]);
         pos->parse(commands[i]);
         if (!pos->is_multiple()) {
@@ -1765,21 +1764,21 @@ class Command {
     }
 
     // Handle environment
-    for (const auto &arg : args_) {
+    for (const auto& arg : args_) {
       if ((arg->is_option() || arg->is_positional()) && arg->count() == 0) {
-        dynamic_cast<OptionBase *>(arg.get())->use_env_if_needed();
+        dynamic_cast<OptionBase*>(arg.get())->use_env_if_needed();
       }
     }
     // Handle options that were not provided but have default values
-    for (const auto &arg : args_) {
+    for (const auto& arg : args_) {
       if ((arg->is_option() || arg->is_positional()) && arg->count() == 0) {
-        dynamic_cast<OptionBase *>(arg.get())->use_default_if_needed();
+        dynamic_cast<OptionBase*>(arg.get())->use_default_if_needed();
       }
     }
 
-    for (const auto &arg : args_) {
+    for (const auto& arg : args_) {
       if ((arg->is_option() || arg->is_positional()) && arg->count() == 0 &&
-          dynamic_cast<OptionBase *>(arg.get())->is_require()) {
+          dynamic_cast<OptionBase*>(arg.get())->is_require()) {
         throw std::runtime_error("expect an option or positional: " +
                                  (arg->long_opt_names_.empty()
                                       ? *(arg->short_opt_names_.begin())
@@ -1797,7 +1796,7 @@ class Command {
 
     if (parent_ != nullptr) {
       std::vector<std::string> parent_cmds;
-      Command *p = parent_;
+      Command* p = parent_;
       while (p != nullptr) {
         parent_cmds.push_back(p->command());
         p = p->parent_;
@@ -1814,7 +1813,7 @@ class Command {
     }
 
     usage_str << command_;
-    if (std::ranges::find_if(args_, [](const auto &arg) {
+    if (std::ranges::find_if(args_, [](const auto& arg) {
           return arg->is_option() || arg->is_flag();
         }) != args_.end()) {
       usage_str << " [options]...";
@@ -1822,36 +1821,36 @@ class Command {
     if (!subcommands_.empty()) {
       usage_str << " [cmd] [options]...";
     }
-    auto positionals = args_ | std::views::filter([](const auto &arg) {
+    auto positionals = args_ | std::views::filter([](const auto& arg) {
                          return arg->is_positional();
                        });
     if (!positionals.empty()) {
       usage_str << " [--]";
     }
-    for (const auto &arg : positionals) {
+    for (const auto& arg : positionals) {
       usage_str << " "
-                << dynamic_cast<OptionBase *>(arg.get())->value_placeholder_;
-      if (dynamic_cast<OptionBase *>(arg.get())->is_multiple()) {
+                << dynamic_cast<OptionBase*>(arg.get())->value_placeholder_;
+      if (dynamic_cast<OptionBase*>(arg.get())->is_multiple()) {
         usage_str << "...";
       }
     }
-    if (std::ranges::find_if(args_, [](const auto &arg) {
+    if (std::ranges::find_if(args_, [](const auto& arg) {
           return arg->is_option() || arg->is_flag();
         }) != args_.end()) {
       usage_str << "\n\nOptions:";
     }
-    for (const auto &arg : args_) {
+    for (const auto& arg : args_) {
       if ((arg->is_option() || arg->is_flag()) && !arg->hidden_) {
         usage_str << "\n " << arg->usage();
       }
     }
 
-    if (std::ranges::find_if(args_, [](const auto &arg) {
+    if (std::ranges::find_if(args_, [](const auto& arg) {
           return arg->is_positional();
         }) != args_.end()) {
       usage_str << "\n\nPositionals:";
     }
-    for (const auto &arg : args_) {
+    for (const auto& arg : args_) {
       if (arg->is_positional() && !arg->hidden_) {
         usage_str << "\n " << arg->usage();
       }
@@ -1868,14 +1867,14 @@ class Command {
   }
   void add_default_help_flag() {
     static bool default_help{false};
-    auto *const help = get("help", false);
+    auto* const help = get("help", false);
     if (nullptr == help) {
-      auto *const h = get("h", false);
+      auto* const h = get("h", false);
       std::string help_name = "help";
       if (nullptr == h) {
         help_name = "h,help";
       }
-      auto &f =
+      auto& f =
           add_flag(help_name, "Display this help information", default_help);
       f.set_option_width(this->option_width());
       f.callback([this](bool v) {
@@ -1889,13 +1888,13 @@ class Command {
 
   virtual void print_usage() const { std::cerr << usage() << "\n"; }
 
-  std::string const &command() const { return command_; }
-  std::string const &name() const { return command_; }
-  Command &hidden(bool v = true) {
+  std::string const& command() const { return command_; }
+  std::string const& name() const { return command_; }
+  Command& hidden(bool v = true) {
     is_hidden_ = v;
     return *this;
   }
-  void set_parent(Command *parent) { parent_ = parent; }
+  void set_parent(Command* parent) { parent_ = parent; }
   bool has_parent() const { return parent_ != nullptr; }
   bool is_parsed() { return is_parsed_; }
   bool is_hidden() const { return is_hidden_; }
@@ -1906,27 +1905,27 @@ class Command {
   size_t option_width() { return option_width_; }
   void set_option_width(size_t width) {
     option_width_ = width;
-    for (auto &arg : args_) {
+    for (auto& arg : args_) {
       arg->set_option_width(width);
     }
-    for (auto &cmd : subcommands_) {
+    for (auto& cmd : subcommands_) {
       cmd->set_option_width(width);
     }
   }
-  bool flag_or_option_exists(ArgBase &new_arg) const {
+  bool flag_or_option_exists(ArgBase& new_arg) const {
     return flag_exists(new_arg) || option_exists(new_arg);
   }
-  bool flag_exists(ArgBase &new_arg) const {
+  bool flag_exists(ArgBase& new_arg) const {
     return option_name_exists(new_arg, 0);
   }
-  bool option_exists(ArgBase &new_arg) const {
+  bool option_exists(ArgBase& new_arg) const {
     return option_name_exists(new_arg, 1);
   }
-  bool positional_exists(ArgBase &new_arg) const {
+  bool positional_exists(ArgBase& new_arg) const {
     return option_name_exists(new_arg, 2);
   }
-  bool option_name_exists(ArgBase &new_arg, int type) const {
-    for (const auto &arg : args_) {
+  bool option_name_exists(ArgBase& new_arg, int type) const {
+    for (const auto& arg : args_) {
       if (type == 0 && !arg->is_flag()) {
         continue;
       }
@@ -1936,14 +1935,14 @@ class Command {
       if (type == 2 && !arg->is_positional()) {
         continue;
       }
-      for (auto &name : arg->long_opt_names_) {
+      for (auto& name : arg->long_opt_names_) {
         if (std::find(new_arg.long_opt_names_.begin(),
                       new_arg.long_opt_names_.end(),
                       name) != new_arg.long_opt_names_.end()) {
           return true;
         }
       }
-      for (auto &name : arg->short_opt_names_) {
+      for (auto& name : arg->short_opt_names_) {
         if (std::find(new_arg.short_opt_names_.begin(),
                       new_arg.short_opt_names_.end(),
                       name) != new_arg.short_opt_names_.end()) {
@@ -1959,7 +1958,7 @@ class Command {
   std::string usage_header_;
   std::string usage_footer_;
   std::vector<std::shared_ptr<Command>> subcommands_;
-  Command *parent_{nullptr};
+  Command* parent_{nullptr};
   std::function<void()> callback_{nullptr};
   bool is_parsed_{false};
   bool is_hidden_{false};
@@ -1985,7 +1984,7 @@ class ArgParser : public Command {
 
     if (!subcommands_.empty()) {
       usage_str << "\n\nAvailable Commands:";
-      for (auto const &cmd : subcommands_) {
+      for (auto const& cmd : subcommands_) {
         if (cmd->is_hidden()) {
           continue;
         }
@@ -1996,37 +1995,37 @@ class ArgParser : public Command {
     return usage_str.str();
   }
   void print_usage() const override { std::cerr << this->usage() << '\n'; }
-  Command &parse(int argc, const char *const *argv) {
+  Command& parse(int argc, const char* const* argv) {
     add_default_help_flag();
-    for (auto &sc : subcommands_) {
+    for (auto& sc : subcommands_) {
       sc->add_default_help_flag();
     }
     Command::parse(argc, argv);
     auto it = std::find_if(begin(subcommands_), end(subcommands_),
-                           [](auto &cmdptr) { return cmdptr->is_parsed(); });
+                           [](auto& cmdptr) { return cmdptr->is_parsed(); });
     if (it != end(subcommands_)) {
       return **it;
     }
     return *this;
   }
 #if defined(_WIN32)
-  Command &parse(int argc, wchar_t const *const *wargv) {
+  Command& parse(int argc, wchar_t const* const* wargv) {
     std::vector<std::string> args;
     args.reserve(argc);
     std::transform(wargv, wargv + argc, std::back_inserter(args),
-                   [](const wchar_t *s) {
+                   [](const wchar_t* s) {
                      return detail::to_string(std::wstring_view(s));
                    });
-    std::vector<const char *> args_cstr(argc + 1, nullptr);
+    std::vector<const char*> args_cstr(argc + 1, nullptr);
     std::transform(args.begin(), args.end(), args_cstr.begin(),
-                   [](const std::string &s) { return s.data(); });
+                   [](const std::string& s) { return s.data(); });
     return parse(argc, args_cstr.data());
   }
 #endif
 
-  Command &add_command(std::string const &cmd, std::string const &description) {
+  Command& add_command(std::string const& cmd, std::string const& description) {
     if (std::any_of(begin(args_), end(args_),
-                    [](auto const &a) { return a->is_positional(); })) {
+                    [](auto const& a) { return a->is_positional(); })) {
       throw std::runtime_error(
           "Cannot add sub command when there are positionals");
     }
