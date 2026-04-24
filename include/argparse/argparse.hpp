@@ -71,7 +71,7 @@ template <typename T>
 constexpr bool is_string_v = is_string<T>::value;
 
 template <typename T>
-concept is_container = requires(T t) {
+concept IsContainer = requires(T t) {
   requires(!is_string_v<T>);
   t.insert(t.end(), std::declval<typename T::value_type>());
 };
@@ -138,8 +138,8 @@ concept ParseFromStringType =
 
 template <typename T>
 concept ParseFromStringContainerType =
-    is_container<T> && (ParseFromStringSingleType<typename T::value_type> ||
-                        ParseFromStringTupleLikeType<typename T::value_type>);
+    IsContainer<T> && (ParseFromStringSingleType<typename T::value_type> ||
+                       ParseFromStringTupleLikeType<typename T::value_type>);
 
 template <typename T>
 struct extract_value_type {
@@ -179,7 +179,7 @@ concept BindableWithDelimiterType =
      ParseFromStringTupleLikeType<typename T::value_type>);
 
 template <typename T>
-concept is_parse_from_string_basic_type =
+concept IsParseFromStringBasicType =
     std::same_as<T, std::string> || std::same_as<T, bool> ||
     std::same_as<T, int> || std::same_as<T, long> ||
     std::same_as<T, unsigned long> || std::same_as<T, long long> ||
@@ -343,7 +343,7 @@ template <typename CharT, typename F, typename C>
   requires std::is_same_v<bool,
                           decltype(std::declval<F>()(std::declval<CharT>()))>
 C& split_to_if(C& to, const std::basic_string<CharT>& str, F f,
-               int max_count = -1, bool is_compress_token = false) {
+               int max_count = -1, bool compress_tokens = false) {
   auto begin = str.begin();
   auto delimiter = begin;
   int count = 0;
@@ -351,7 +351,7 @@ C& split_to_if(C& to, const std::basic_string<CharT>& str, F f,
   while ((max_count < 0 || count++ < max_count) &&
          (delimiter = std::find_if(begin, str.end(), f)) != str.end()) {
     to.insert(to.end(), {begin, delimiter});
-    if (is_compress_token) {
+    if (compress_tokens) {
       begin = std::find_if_not(delimiter, str.end(), f);
     } else {
       begin = std::next(delimiter);
@@ -405,8 +405,9 @@ T parse_from_string(std::string const& s, const char delim) {
   auto v = split(s, delim, std::tuple_size_v<std::decay_t<T>> - 1);
   if (v.size() != std::tuple_size_v<std::decay_t<T>>) {
     throw std::invalid_argument(
-        "Invalid string for split " +
-        std::to_string(std::tuple_size_v<std::decay_t<T>>) + "th element:" + s);
+        "Invalid string for split: expected " +
+        std::to_string(std::tuple_size_v<std::decay_t<T>>) +
+        " elements, got: " + s);
   }
   return make_tuple_from_container<T>(v);
 }
@@ -750,20 +751,20 @@ class OptionBase : public ArgBase {
   OptionBase(const std::string& name, const std::string& description)
       : ArgBase(name, description) {}
 
-  void require() { is_require_ = true; }
-  bool is_require() { return is_require_; }
+  void required() { is_required_ = true; }
+  bool is_required() const { return is_required_; }
 
  protected:
   bool is_flag() const override final { return false; }
   virtual void parse(const std::string& opt_value) {
-    for (const auto& checker : parse_befor_value_checker_) {
+    for (const auto& checker : parse_before_value_checker_) {
       if (auto [ok, errmsg] = checker(opt_value); !ok) {
         std::string err_msg = "check failed: ";
         err_msg += detail::join(long_opt_names_, ',');
         err_msg += detail::join(short_opt_names_, ',');
         err_msg += "==> ";
         err_msg += opt_value;
-        err_msg += " is a invalid value. ";
+        err_msg += " is an invalid value. ";
         throw std::invalid_argument(err_msg + errmsg);
       }
     }
@@ -900,11 +901,11 @@ class OptionBase : public ArgBase {
     }
     return usage_str.str();
   }
-  bool is_require_{false};
+  bool is_required_{false};
   std::string value_placeholder_;
   std::vector<std::string> opt_values;
   std::vector<std::function<std::pair<bool, std::string>(std::string const&)>>
-      parse_befor_value_checker_;
+      parse_before_value_checker_;
   std::map<std::string, std::string> choices_descriptions_;
 };
 
@@ -914,7 +915,7 @@ class OptionBaseCRTP : public OptionBase {
   using OptionBase::OptionBase;
   Derived& checker(
       std::function<std::pair<bool, std::string>(std::string const&)> f) {
-    parse_befor_value_checker_.push_back(std::move(f));
+    parse_before_value_checker_.push_back(std::move(f));
 
     return static_cast<Derived&>(*this);
   }
@@ -961,8 +962,8 @@ class OptionBaseCRTP : public OptionBase {
     ArgBase::env(env);
     return static_cast<Derived&>(*this);
   }
-  Derived& require() {
-    OptionBase::require();
+  Derived& required() {
+    OptionBase::required();
     return static_cast<Derived&>(*this);
   }
 };
@@ -1084,7 +1085,7 @@ class Option final : public OptionBaseCRTP<Option<T>> {
         err_msg += detail::join(ArgBase::short_opt_names_, ',');
         err_msg += ": `";
         err_msg += opt_value;
-        err_msg += "` is a invalid value. ";
+        err_msg += "` is an invalid value. ";
         throw std::invalid_argument(err_msg + errmsg);
       }
     }
@@ -1244,6 +1245,7 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
 
   Positional<T>& callback(std::function<void(value_type const&)> cb) {
     callback_ = std::move(cb);
+    return *this;
   }
 
   T const& value() const { return bind_value_; }
@@ -1319,7 +1321,7 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
         err_msg += detail::join(ArgBase::short_opt_names_, ',');
         err_msg += ": `";
         err_msg += opt_value;
-        err_msg += "` is a invalid value. ";
+        err_msg += "` is an invalid value. ";
         throw std::invalid_argument(err_msg + errmsg);
       }
     }
@@ -1480,10 +1482,10 @@ class Command {
                       const std::string& opt_value) {
     auto* opt = get(opt_name);
     if (!opt) {
-      throw std::runtime_error("Not found option: " + opt_name);
+      throw std::runtime_error("Option not found: " + opt_name);
     }
     if (!opt->is_option()) {
-      throw std::runtime_error("Not an option: " + opt_name);
+      throw std::runtime_error("Is not an option: " + opt_name);
     }
 
     auto alias =
@@ -1527,15 +1529,15 @@ class Command {
                                 const std::string& description, T& bind_value) {
     if (!subcommands_.empty()) {
       throw std::runtime_error(
-          "Cannot add positional parameter when there are sub commands");
+          "Cannot add positional argument when subcommands exist");
     }
     if (std::ranges::find_if(args_, [](const auto& arg) {
           return arg->is_positional() &&
                  dynamic_cast<OptionBase*>(arg.get())->is_multiple();
         }) != args_.end()) {
       throw std::runtime_error(
-          "Positional argument only support one container and it "
-          "must be the last one");
+          "Only one container positional argument is supported, "
+          "and it must be the last one");
     }
     auto positional =
         std::make_unique<Positional<T>>(name, description, bind_value);
@@ -1553,7 +1555,7 @@ class Command {
                                 char delim) {
     if (!subcommands_.empty()) {
       throw std::runtime_error(
-          "Cannot add positional parameter when there are sub commands");
+          "Cannot add positional argument when subcommands exist");
     }
     auto positional =
         std::make_unique<Positional<T>>(name, description, bind_value, delim);
@@ -1718,7 +1720,7 @@ class Command {
       else {
         if (pos_index < positionals.size()) {
           auto* pos = dynamic_cast<OptionBase*>(positionals[pos_index]);
-          if (remaining_are_positional() &&
+          if (treat_remaining_as_positional() &&
               pos_index == positionals.size() - 1 && pos->is_multiple()) {
             break;
           }
@@ -1739,7 +1741,7 @@ class Command {
               return (*subcmd_ptr_it)
                   ->parse(argc - static_cast<int>(i), argv + i);
             } else {
-              throw std::runtime_error("unkonwn subcommand: " + arg);
+              throw std::runtime_error("unknown subcommand: " + arg);
             }
           } else {
             throw std::runtime_error("Too many positional arguments");
@@ -1778,8 +1780,8 @@ class Command {
 
     for (const auto& arg : args_) {
       if ((arg->is_option() || arg->is_positional()) && arg->count() == 0 &&
-          dynamic_cast<OptionBase*>(arg.get())->is_require()) {
-        throw std::runtime_error("expect an option or positional: " +
+          dynamic_cast<OptionBase*>(arg.get())->is_required()) {
+        throw std::runtime_error("Missing required option or positional: " +
                                  (arg->long_opt_names_.empty()
                                       ? *(arg->short_opt_names_.begin())
                                       : *(arg->long_opt_names_.begin())));
@@ -1860,7 +1862,7 @@ class Command {
     }
     return usage_str.str();
   }
-  std::string oneline_usage() {
+  std::string one_line_usage() {
     std::stringstream usage_str;
     usage_str << detail::format(command_, option_width(), description_);
     return usage_str.str();
@@ -1875,7 +1877,7 @@ class Command {
         help_name = "h,help";
       }
       auto& f =
-          add_flag(help_name, "Display this help information", default_help);
+          add_flag(help_name, "Print this help message", default_help);
       f.set_option_width(this->option_width());
       f.callback([this](bool v) {
         if (v) {
@@ -1898,8 +1900,12 @@ class Command {
   bool has_parent() const { return parent_ != nullptr; }
   bool is_parsed() { return is_parsed_; }
   bool is_hidden() const { return is_hidden_; }
-  void set_remaining_are_positional() { remaining_are_positional_ = true; }
-  bool remaining_are_positional() { return remaining_are_positional_; }
+  void set_treat_remaining_as_positional(bool v = true) {
+    treat_remaining_as_positional_ = v;
+  }
+  bool treat_remaining_as_positional() const {
+    return treat_remaining_as_positional_;
+  }
 
  protected:
   size_t option_width() { return option_width_; }
@@ -1962,7 +1968,7 @@ class Command {
   std::function<void()> callback_{nullptr};
   bool is_parsed_{false};
   bool is_hidden_{false};
-  bool remaining_are_positional_{false};
+  bool treat_remaining_as_positional_{false};
   size_t option_width_{OPTION_NAME_WIDTH};
 };
 
@@ -1988,7 +1994,7 @@ class ArgParser : public Command {
         if (cmd->is_hidden()) {
           continue;
         }
-        usage_str << "\n " << cmd->oneline_usage();
+        usage_str << "\n " << cmd->one_line_usage();
       }
     }
 
@@ -2027,7 +2033,7 @@ class ArgParser : public Command {
     if (std::any_of(begin(args_), end(args_),
                     [](auto const& a) { return a->is_positional(); })) {
       throw std::runtime_error(
-          "Cannot add sub command when there are positionals");
+          "Cannot add subcommand when positional arguments exist");
     }
     auto cmd_ptr = std::make_shared<Command>(cmd, description);
     cmd_ptr->set_parent(this);

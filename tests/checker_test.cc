@@ -24,7 +24,7 @@ class CheckerArgsMaker : public ::testing::Test {
 TEST_F(CheckerArgsMaker, Require) {
   argparse::ArgParser parser("prog", "");
   std::string type;
-  parser.add_option("t", "type", type).require();
+  parser.add_option("t", "type", type).required();
 
   auto args = make_args("prog");
   ASSERT_THROW(parser.parse(args.size(), args.data()), std::runtime_error);

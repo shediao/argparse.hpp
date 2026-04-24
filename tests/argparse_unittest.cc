@@ -37,7 +37,7 @@ TEST(argparse, DefaultHelpFlag) {
   ArgParser parser{"prog", "the prog description"};
   ASSERT_EXIT(parser.parse(args.size(), args.data()),
               ::testing::ExitedWithCode(0),
-              ".*-h, --help.*Display this help information.*");
+              ".*-h, --help.*Print this help message.*");
 }
 
 TEST(argparse, FlagAlreadyExists) {

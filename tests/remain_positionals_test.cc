@@ -30,7 +30,7 @@ TEST_F(RemainOptionalsTest, Test1) {
   parser.add_flag("g,flag2", "测试标志2", flag2);
   parser.add_flag("c,count", "计数器", count);
   parser.add_positional("cmds", "cmds", cmds);
-  parser.set_remaining_are_positional();
+  parser.set_treat_remaining_as_positional();
 
   auto args = make_args("test_prog");
   // 测试不传入标志的情况
