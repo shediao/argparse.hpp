@@ -81,7 +81,7 @@ TEST_F(CheckerArgsMaker, Checker) {
 
   argparse::ArgParser parser("prog", "");
   float t;
-  parser.add_option("t", "", t).checker([](float const& v) {
+  parser.add_option("t", "", t).validator([](float const& v) {
     return std::pair<bool, std::string>{v > 0.0f && v < 1.0f,
                                         "value not in (0.0~1.0)"};
   });
@@ -95,7 +95,7 @@ TEST_F(CheckerArgsMaker, CheckerOptional) {
 
   argparse::ArgParser parser("prog", "");
   std::optional<float> t;
-  parser.add_option("t", "", t).checker([](float const& v) {
+  parser.add_option("t", "", t).validator([](float const& v) {
     return std::pair<bool, std::string>{v > 0.0f && v < 1.0f,
                                         "value not in (0.0~1.0)"};
   });
@@ -113,20 +113,20 @@ TEST_F(CheckerArgsMaker, Checker1) {
   double d{0.0};
   std::string s;
   int count = 0;
-  parser.add_option("i", "", i).checker([&count](const int& val) {
+  parser.add_option("i", "", i).validator([&count](const int& val) {
     count++;
     return std::pair<bool, std::string>{val == 1, "i value must is 1"};
   });
-  parser.add_option("f", "", f).checker([&count](const float& val) {
+  parser.add_option("f", "", f).validator([&count](const float& val) {
     count++;
     return std::pair<bool, std::string>{val == 1.0f, "f value must is 1.0f"};
   });
 
-  parser.add_option("d", "", d).checker([&count](const double& val) {
+  parser.add_option("d", "", d).validator([&count](const double& val) {
     count++;
     return std::pair<bool, std::string>{val == 1.0, "d value must is 1.0"};
   });
-  parser.add_option("s", "", s).checker([&count](const std::string& val) {
+  parser.add_option("s", "", s).validator([&count](const std::string& val) {
     count++;
     return std::pair<bool, std::string>{val == "111",
                                         "s value must is \"111\""};
@@ -151,13 +151,13 @@ TEST_F(CheckerArgsMaker, Checker2) {
   std::optional<double> d;
   std::optional<std::string> s;
   int count = 0;
-  parser.add_option("i", "", i).range(1, 4).checker([&count](const int& val) {
+  parser.add_option("i", "", i).range(1, 4).validator([&count](const int& val) {
     count++;
     return std::pair<bool, std::string>{val == 1, "value must is 1"};
   });
   parser.add_option("f", "", f)
       .range(1.0f, 4.0f)
-      .checker([&count](const float& val) {
+      .validator([&count](const float& val) {
         count++;
         return std::pair<bool, std::string>{std::abs(val - 1.0f) < 1e-9,
                                             "value must is 1.0"};
@@ -165,12 +165,12 @@ TEST_F(CheckerArgsMaker, Checker2) {
 
   parser.add_option("d", "", d)
       .range(1.0, 4.0)
-      .checker([&count](const double& val) {
+      .validator([&count](const double& val) {
         count++;
         return std::pair<bool, std::string>{std::abs(val - 1.0) < 1e-9,
                                             "value must is 1.0"};
       });
-  parser.add_option("s", "", s).checker([&count](const std::string& val) {
+  parser.add_option("s", "", s).validator([&count](const std::string& val) {
     count++;
     return std::pair<bool, std::string>{val == "111", "value must is 111"};
   });
@@ -195,7 +195,7 @@ TEST_F(CheckerArgsMaker, Checker3) {
 
   std::vector<int> c;
   int count = 0;
-  parser.add_option("c", "", c).range(1, 4).checker([&count](int const& v) {
+  parser.add_option("c", "", c).range(1, 4).validator([&count](int const& v) {
     count++;
     return std::pair<bool, std::string>{1 <= v && 4 >= v, "value not in [1~4]"};
   });
@@ -217,7 +217,7 @@ TEST_F(CheckerArgsMaker, Checker4) {
   std::map<int, int> p;
   int count = 0;
   parser.add_option("p", "", p, ',')
-      .checker([&count](std::map<int, int>::value_type const& p) {
+      .validator([&count](std::map<int, int>::value_type const& p) {
         count++;
         return std::pair<bool, std::string>{
             p.first >= 1 && p.first <= 4 && p.first == p.second,
@@ -245,7 +245,7 @@ TEST_F(CheckerArgsMaker, Checker5) {
                 {"s2", 2},
                 {"s3", 3},
                 {"s4", 4}})
-      .checker(
+      .validator(
           [&](std::vector<std::pair<std::string, int>>::value_type const& p) {
             count++;
             return std::pair<bool, std::string>{p.second == count,
