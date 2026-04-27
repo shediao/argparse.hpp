@@ -19,14 +19,67 @@
 #include <optional>
 #include <ranges>
 #include <sstream>
-#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
 #if defined(_WIN32)
 #include <windows.h>
+#else
+#include <unistd.h>
 #endif  // _WIN32
+
+#ifndef ARGPARSE_HAS_EXCEPTIONS
+#if defined(_MSC_VER) && defined(_CPPUNWIND)
+// MSVC defines _CPPUNWIND to 1 if and only if exceptions are enabled.
+#define ARGPARSE_HAS_EXCEPTIONS 1
+#elif defined(__BORLANDC__)
+// C++Builder's implementation of the STL uses the _HAS_EXCEPTIONS
+// macro to enable exceptions, so we'll do the same.
+// Assumes that exceptions are enabled by default.
+#ifndef _HAS_EXCEPTIONS
+#define _HAS_EXCEPTIONS 1
+#endif  // _HAS_EXCEPTIONS
+#define ARGPARSE_HAS_EXCEPTIONS _HAS_EXCEPTIONS
+#elif defined(__clang__)
+// clang defines __EXCEPTIONS if and only if exceptions are enabled before clang
+// 220714, but if and only if cleanups are enabled after that. In Obj-C++ files,
+// there can be cleanups for ObjC exceptions which also need cleanups, even if
+// C++ exceptions are disabled. clang has __has_feature(cxx_exceptions) which
+// checks for C++ exceptions starting at clang r206352, but which checked for
+// cleanups prior to that. To reliably check for C++ exception availability with
+// clang, check for
+// __EXCEPTIONS && __has_feature(cxx_exceptions).
+#if defined(__EXCEPTIONS) && __EXCEPTIONS && __has_feature(cxx_exceptions)
+#define ARGPARSE_HAS_EXCEPTIONS 1
+#else
+#define ARGPARSE_HAS_EXCEPTIONS 0
+#endif
+#elif defined(__GNUC__) && defined(__EXCEPTIONS) && __EXCEPTIONS
+// gcc defines __EXCEPTIONS to 1 if and only if exceptions are enabled.
+#define ARGPARSE_HAS_EXCEPTIONS 1
+#elif defined(__SUNPRO_CC)
+// Sun Pro CC supports exceptions.  However, there is no compile-time way of
+// detecting whether they are enabled or not.  Therefore, we assume that
+// they are enabled unless the user tells us otherwise.
+#define ARGPARSE_HAS_EXCEPTIONS 1
+#elif defined(__IBMCPP__) && defined(__EXCEPTIONS) && __EXCEPTIONS
+// xlC defines __EXCEPTIONS to 1 if and only if exceptions are enabled.
+#define ARGPARSE_HAS_EXCEPTIONS 1
+#elif defined(__HP_aCC)
+// Exception handling is in effect by default in HP aCC compiler. It has to
+// be turned of by +noeh compiler option if desired.
+#define ARGPARSE_HAS_EXCEPTIONS 1
+#else
+// For other compilers, we assume exceptions are disabled to be
+// conservative.
+#define ARGPARSE_HAS_EXCEPTIONS 0
+#endif  // defined(_MSC_VER) || defined(__BORLANDC__)
+#endif  // ARGPARSE_HAS_EXCEPTIONS
+
+#if ARGPARSE_HAS_EXCEPTIONS
+#include <stdexcept>
+#endif
 
 #if defined(ARG_PARSE_DEBUG)
 #define ARG_PARSER_DEBUG(msg)                   \
@@ -44,6 +97,38 @@ namespace argparse {
 inline constexpr size_t OPTION_NAME_WIDTH = 32;
 
 namespace detail {
+
+inline void die(std::string const& msg) {
+#if ARGPARSE_HAS_EXCEPTIONS
+  throw std::runtime_error(msg);
+#else
+  if (!msg.empty()) {
+#if defined(_WIN32)
+    (void)WriteFile(GetStdHandle(STD_ERROR_HANDLE), msg.c_str(),
+                    static_cast<DWORD>(msg.size()), NULL, NULL);
+#else
+    [[maybe_unused]] auto ret = write(STDERR_FILENO, msg.c_str(), msg.size());
+#endif
+  }
+  abort();
+#endif
+}
+
+inline void report_invalid_argument(std::string const& msg) {
+#if ARGPARSE_HAS_EXCEPTIONS
+  throw std::invalid_argument(msg);
+#else
+  if (!msg.empty()) {
+#if defined(_WIN32)
+    (void)WriteFile(GetStdHandle(STD_ERROR_HANDLE), msg.c_str(),
+                    static_cast<DWORD>(msg.size()), NULL, NULL);
+#else
+    [[maybe_unused]] auto ret = write(STDERR_FILENO, msg.c_str(), msg.size());
+#endif
+  }
+  abort();
+#endif
+}
 
 template <typename...>
 using void_t = void;
@@ -193,49 +278,51 @@ T parse_from_string(std::string const& s) {
   if constexpr (std::is_same_v<T, int>) {
     auto result = std::stoi(s, &pos);
     if (pos != s.size()) {
-      throw std::invalid_argument("Invalid integer: " + s);
+      detail::report_invalid_argument("Invalid integer: " + s);
     }
     return result;
   } else if constexpr (std::is_same_v<T, long>) {
     auto result = std::stol(s, &pos);
     if (pos != s.size()) {
-      throw std::invalid_argument("Invalid long integer: " + s);
+      detail::report_invalid_argument("Invalid long integer: " + s);
     }
     return result;
   } else if constexpr (std::is_same_v<T, unsigned long>) {
     auto result = std::stoul(s, &pos);
     if (pos != s.size()) {
-      throw std::invalid_argument("Invalid unsigned long integer: " + s);
+      detail::report_invalid_argument("Invalid unsigned long integer: " + s);
     }
     return result;
   } else if constexpr (std::is_same_v<T, long long>) {
     auto result = std::stoll(s, &pos);
     if (pos != s.size()) {
-      throw std::invalid_argument("Invalid long long integer: " + s);
+      detail::report_invalid_argument("Invalid long long integer: " + s);
     }
     return result;
   } else if constexpr (std::is_same_v<T, unsigned long long>) {
     auto result = std::stoull(s, &pos);
     if (pos != s.size()) {
-      throw std::invalid_argument("Invalid unsigned long long integer: " + s);
+      detail::report_invalid_argument("Invalid unsigned long long integer: " +
+                                      s);
     }
     return result;
   } else if constexpr (std::is_same_v<T, float>) {
     auto result = std::stof(s, &pos);
     if (pos != s.size()) {
-      throw std::invalid_argument("Invalid floating-point number: " + s);
+      detail::report_invalid_argument("Invalid floating-point number: " + s);
     }
     return result;
   } else if constexpr (std::is_same_v<T, double>) {
     auto result = std::stod(s, &pos);
     if (pos != s.size()) {
-      throw std::invalid_argument("Invalid double-precision number: " + s);
+      detail::report_invalid_argument("Invalid double-precision number: " + s);
     }
     return result;
   } else if constexpr (std::is_same_v<T, long double>) {
     auto result = std::stold(s, &pos);
     if (pos != s.size()) {
-      throw std::invalid_argument("Invalid long double-precision number: " + s);
+      detail::report_invalid_argument("Invalid long double-precision number: " +
+                                      s);
     }
     return result;
   }
@@ -245,7 +332,7 @@ T parse_from_string(std::string const& s) {
   if constexpr (std::is_same_v<T, std::string>) {
     return s;
   }
-  throw std::invalid_argument("Unsupported type for parse_from_string");
+  detail::report_invalid_argument("Unsupported type for parse_from_string");
 }
 
 template <ParseFromStringCustomType T>
@@ -261,14 +348,14 @@ inline bool parse_from_string<bool>(std::string const& s) {
   if (s == "false" || s == "off" || s == "0") {
     return false;
   }
-  throw std::invalid_argument("Invalid boolean value: " + s);
+  detail::report_invalid_argument("Invalid boolean value: " + s);
 }
 template <>
 inline char parse_from_string<char>(std::string const& s) {
   if (s.length() == 1) {
     return s[0];
   }
-  throw std::invalid_argument("Invalid character: " + s);
+  detail::report_invalid_argument("Invalid character: " + s);
 }
 
 template <typename T>
@@ -403,7 +490,7 @@ template <ParseFromStringTupleLikeType T>
 T parse_from_string(std::string const& s, const char delim) {
   auto v = split(s, delim, std::tuple_size_v<std::decay_t<T>> - 1);
   if (v.size() != std::tuple_size_v<std::decay_t<T>>) {
-    throw std::invalid_argument(
+    detail::report_invalid_argument(
         "Invalid delimited string: expected " +
         std::to_string(std::tuple_size_v<std::decay_t<T>>) +
         " elements, got: " + s);
@@ -526,21 +613,21 @@ class ArgBase {
         continue;
       }
       if (opt_name[0] == '-') {
-        throw std::invalid_argument("Invalid option name: " + name + ", " +
-                                    opt_name + " starts with '-'");
+        detail::report_invalid_argument("Invalid option name: " + name + ", " +
+                                        opt_name + " starts with '-'");
       }
       if (std::find_if(opt_name.begin(), opt_name.end(), [](unsigned char c) {
             return std::isblank(c);
           }) != opt_name.end()) {
-        throw std::invalid_argument("Invalid option name: " + name + ", " +
-                                    opt_name + " contains whitespace");
+        detail::report_invalid_argument("Invalid option name: " + name + ", " +
+                                        opt_name + " contains whitespace");
       }
       if (opt_name.length() == 1) {
         short_opt_names_.push_back(std::move(opt_name));
       } else if (opt_name.length() > 1) {
         long_opt_names_.push_back(std::move(opt_name));
       } else {
-        throw std::invalid_argument("Invalid option name: " + name);
+        detail::report_invalid_argument("Invalid option name: " + name);
       }
     }
   }
@@ -764,7 +851,7 @@ class OptionBase : public ArgBase {
         msg += "==> ";
         msg += opt_value;
         msg += " is an invalid value. ";
-        throw std::invalid_argument(msg + err_msg);
+        detail::report_invalid_argument(msg + err_msg);
       }
     }
     this->opt_values.push_back(opt_value);
@@ -1085,7 +1172,7 @@ class Option final : public OptionBaseCRTP<Option<T>> {
         msg += ": `";
         msg += opt_value;
         msg += "` is an invalid value. ";
-        throw std::invalid_argument(msg + err_msg);
+        detail::report_invalid_argument(msg + err_msg);
       }
     }
     if constexpr (detail::ParseFromStringContainerType<T>) {
@@ -1277,7 +1364,7 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
   using OptionBaseCRTP<Positional<T>>::choices;
   Positional<T>& choices(std::vector<parsed_value_type> const& allowed_values) {
     return Positional<T>::validator([allowed_values](
-                                      parsed_value_type const& val) {
+                                        parsed_value_type const& val) {
       using return_type = std::pair<bool, std::string>;
       auto ok = std::find(begin(allowed_values), end(allowed_values), val) !=
                 end(allowed_values);
@@ -1321,7 +1408,7 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
         msg += ": `";
         msg += opt_value;
         msg += "` is an invalid value. ";
-        throw std::invalid_argument(msg + err_msg);
+        detail::report_invalid_argument(msg + err_msg);
       }
     }
     if constexpr (detail::ParseFromStringContainerType<T>) {
@@ -1396,12 +1483,12 @@ class Command {
       std::function<void(detail::extract_value_type_t<T>&)> action = store_true,
       std::function<void(detail::extract_value_type_t<T>&)> negated_action =
           store_false) {
-    auto flag = std::make_unique<Flag<T>>(name, description, bind_value,
-                                          std::move(action),
-                                          std::move(negated_action));
+    auto flag =
+        std::make_unique<Flag<T>>(name, description, bind_value,
+                                  std::move(action), std::move(negated_action));
     auto& ret = *(flag.get());
     if (flag_or_option_exists(ret)) {
-      throw std::runtime_error("Flag or Option already exists: " + name);
+      detail::die("Flag or Option already exists: " + name);
     }
     args_.push_back(std::move(flag));
     return ret;
@@ -1416,12 +1503,12 @@ class Command {
           increment<detail::extract_value_type_t<T>>,
       std::function<void(detail::extract_value_type_t<T>&)> negated_action =
           decrement<detail::extract_value_type_t<T>>) {
-    auto flag = std::make_unique<Flag<T>>(name, description, bind_value,
-                                          std::move(action),
-                                          std::move(negated_action));
+    auto flag =
+        std::make_unique<Flag<T>>(name, description, bind_value,
+                                  std::move(action), std::move(negated_action));
     auto& ret = *(flag.get());
     if (flag_or_option_exists(ret)) {
-      throw std::runtime_error("Flag or Option already exists: " + name);
+      detail::die("Flag or Option already exists: " + name);
     }
     args_.push_back(std::move(flag));
     return ret;
@@ -1481,10 +1568,10 @@ class Command {
                       const std::string& opt_value) {
     auto* opt = get(opt_name);
     if (!opt) {
-      throw std::runtime_error("Option not found: " + opt_name);
+      detail::die("Option not found: " + opt_name);
     }
     if (!opt->is_option()) {
-      throw std::runtime_error("Not an option: " + opt_name);
+      detail::die("Not an option: " + opt_name);
     }
 
     auto alias =
@@ -1492,7 +1579,7 @@ class Command {
 
     auto& ret = *(alias.get());
     if (flag_or_option_exists(ret)) {
-      throw std::runtime_error("Flag or Option already exists: " + name);
+      detail::die("Flag or Option already exists: " + name);
     }
     args_.push_back(std::move(alias));
     return ret;
@@ -1504,7 +1591,7 @@ class Command {
     auto option = std::make_unique<Option<T>>(name, description, bind_value);
     auto& ret = *(option.get());
     if (flag_or_option_exists(ret)) {
-      throw std::runtime_error("Flag or Option already exists: " + name);
+      detail::die("Flag or Option already exists: " + name);
     }
     args_.push_back(std::move(option));
     return ret;
@@ -1517,7 +1604,7 @@ class Command {
         std::make_unique<Option<T>>(name, description, bind_value, delim);
     auto& ret = *(option.get());
     if (flag_or_option_exists(ret)) {
-      throw std::runtime_error("Flag or Option already exists: " + name);
+      detail::die("Flag or Option already exists: " + name);
     }
     args_.push_back(std::move(option));
     return ret;
@@ -1527,14 +1614,13 @@ class Command {
   Positional<T>& add_positional(const std::string& name,
                                 const std::string& description, T& bind_value) {
     if (!subcommands_.empty()) {
-      throw std::runtime_error(
-          "Cannot add positional argument when subcommands exist");
+      detail::die("Cannot add positional argument when subcommands exist");
     }
     if (std::ranges::find_if(args_, [](const auto& arg) {
           return arg->is_positional() &&
                  dynamic_cast<OptionBase*>(arg.get())->is_multiple();
         }) != args_.end()) {
-      throw std::runtime_error(
+      detail::die(
           "Only one container positional argument is supported, "
           "and it must be the last one");
     }
@@ -1542,7 +1628,7 @@ class Command {
         std::make_unique<Positional<T>>(name, description, bind_value);
     auto& ret = *(positional.get());
     if (positional_exists(ret)) {
-      throw std::runtime_error("Positional already exists: " + name);
+      detail::die("Positional already exists: " + name);
     }
     args_.push_back(std::move(positional));
     return ret;
@@ -1553,14 +1639,13 @@ class Command {
                                 const std::string& description, T& bind_value,
                                 char delim) {
     if (!subcommands_.empty()) {
-      throw std::runtime_error(
-          "Cannot add positional argument when subcommands exist");
+      detail::die("Cannot add positional argument when subcommands exist");
     }
     auto positional =
         std::make_unique<Positional<T>>(name, description, bind_value, delim);
     auto& ret = *(positional.get());
     if (positional_exists(ret)) {
-      throw std::runtime_error("Positional already exists: " + name);
+      detail::die("Positional already exists: " + name);
     }
     args_.push_back(std::move(positional));
     return ret;
@@ -1590,11 +1675,11 @@ class Command {
     }
   }
   ArgBase& operator[](const std::string& name) {
-    if (auto* arg = get(name); arg != nullptr) {
-      return *arg;
-    } else {
-      throw std::runtime_error("Unknown option: " + name);
+    auto* arg = get(name);
+    if (arg == nullptr) {
+      detail::die("Unknown option: " + name);
     }
+    return *arg;
   }
 
   Command& callback(std::function<void()> cb) {
@@ -1659,7 +1744,7 @@ class Command {
               ARG_PARSER_DEBUG("option: " << name << "=" << val);
               opt->parse(val);
             } else {
-              throw std::runtime_error("Missing value for option: " + name);
+              detail::die("Missing value for option: " + name);
             }
           }
         } else if (name.length() > 3 && name.substr(0, 3) == "no-") {
@@ -1669,11 +1754,11 @@ class Command {
                 dynamic_cast<FlagBase*>(negatable_flag)->is_negatable()) {
               dynamic_cast<FlagBase*>(negatable_flag)->parse_negated();
             } else {
-              throw std::runtime_error("Unknown option: " + name);
+              detail::die("Unknown option: " + name);
             }
           }
         } else {
-          throw std::runtime_error("Unknown option: " + name);
+          detail::die("Unknown option: " + name);
         }
       }
       // Handle short options (-o)
@@ -1702,11 +1787,11 @@ class Command {
                 ARG_PARSER_DEBUG("option: " << name << "=" << val);
                 opt->parse(val);
               } else {
-                throw std::runtime_error("Missing value for option: " + name);
+                detail::die("Missing value for option: " + name);
               }
             }
           } else {
-            throw std::runtime_error("Unknown option: " + name);
+            detail::die("Unknown option: " + name);
           }
         }
       }
@@ -1740,10 +1825,10 @@ class Command {
               return (*subcmd_ptr_it)
                   ->parse(argc - static_cast<int>(i), argv + i);
             } else {
-              throw std::runtime_error("Unknown subcommand: " + arg);
+              detail::die("Unknown subcommand: " + arg);
             }
           } else {
-            throw std::runtime_error("Too many positional arguments");
+            detail::die("Too many positional arguments");
           }
         }
       }
@@ -1759,7 +1844,7 @@ class Command {
           pos_index++;
         }
       } else {
-        throw std::runtime_error("Too many positional arguments");
+        detail::die("Too many positional arguments");
       }
       ++i;
     }
@@ -1780,10 +1865,10 @@ class Command {
     for (const auto& arg : args_) {
       if ((arg->is_option() || arg->is_positional()) && arg->count() == 0 &&
           dynamic_cast<OptionBase*>(arg.get())->is_required()) {
-        throw std::runtime_error("Missing required option or positional: " +
-                                 (arg->long_opt_names_.empty()
-                                      ? *(arg->short_opt_names_.begin())
-                                      : *(arg->long_opt_names_.begin())));
+        detail::die("Missing required option or positional: " +
+                    (arg->long_opt_names_.empty()
+                         ? *(arg->short_opt_names_.begin())
+                         : *(arg->long_opt_names_.begin())));
       }
     }
 
@@ -1875,8 +1960,7 @@ class Command {
       if (nullptr == h) {
         help_name = "h,help";
       }
-      auto& f =
-          add_flag(help_name, "Print this help message", default_help);
+      auto& f = add_flag(help_name, "Print this help message", default_help);
       f.set_option_width(this->option_width());
       f.callback([this](bool v) {
         if (v) {
@@ -2031,8 +2115,7 @@ class ArgParser : public Command {
   Command& add_command(std::string const& cmd, std::string const& description) {
     if (std::any_of(begin(args_), end(args_),
                     [](auto const& a) { return a->is_positional(); })) {
-      throw std::runtime_error(
-          "Cannot add subcommand when positional arguments exist");
+      detail::die("Cannot add subcommand when positional arguments exist");
     }
     auto cmd_ptr = std::make_shared<Command>(cmd, description);
     cmd_ptr->set_parent(this);

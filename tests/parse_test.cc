@@ -966,7 +966,7 @@ TEST_F(ArgParserTest, SubCmdTest4) {
   try {
     parser.parse(args.size(), args.data());
   } catch (std::runtime_error const& e) {
-    ASSERT_STREQ(e.what(), "unkonwn subcommand: command1");
+    ASSERT_STREQ(e.what(), "Unknown subcommand: command1");
   } catch (...) {
     ASSERT_TRUE(false);
   }
