@@ -349,6 +349,7 @@ inline bool parse_from_string<bool>(std::string const& s) {
     return false;
   }
   detail::report_invalid_argument("Invalid boolean value: " + s);
+  return false;
 }
 template <>
 inline char parse_from_string<char>(std::string const& s) {
@@ -356,6 +357,7 @@ inline char parse_from_string<char>(std::string const& s) {
     return s[0];
   }
   detail::report_invalid_argument("Invalid character: " + s);
+  return '\0';
 }
 
 template <typename T>
