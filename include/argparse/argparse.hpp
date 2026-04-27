@@ -500,32 +500,96 @@ T parse_from_string(std::string const& s, const char delim) {
   return make_tuple_from_container<T>(v);
 }
 
+// Word-wrap a single segment of text (no embedded \n) to fit within
+// the given width.  Break on spaces when possible; force-break only
+// when a single word is wider than the requested width.
+inline std::string word_wrap(const std::string& text, size_t width) {
+  if (text.empty() || width == 0) return text;
+  std::string result;
+  result.reserve(text.size() + text.size() / (width ? width : 1));
+  size_t pos = 0;
+  while (pos < text.size()) {
+    // Skip a single leading space on continuation lines.
+    if (!result.empty() && pos < text.size() && text[pos] == ' ') ++pos;
+    size_t remaining = text.size() - pos;
+    if (remaining <= width) {
+      if (!result.empty()) result += '\n';
+      result += text.substr(pos);
+      break;
+    }
+    // Look backwards for a space.
+    size_t break_at = pos + width;
+    while (break_at > pos && text[break_at] != ' ') --break_at;
+    if (break_at == pos) break_at = pos + width;  // force break
+    if (!result.empty()) result += '\n';
+    result += text.substr(pos, break_at - pos);
+    pos = break_at;
+  }
+  return result;
+}
+
+// Format a help entry in two columns:
+//   column 1 : option_name (width characters)
+//   column 2 : description (word-wrapped to fit within 80 - width chars)
+//
+// If the option_name already contains embedded '\\n' (because the caller
+// placed multiple names on separate lines) only the *last* line is used
+// to decide where the description begins.
 inline std::string format(std::string const& option_name, size_t width,
                           std::string const& description) {
-  std::string ret = option_name;
+  constexpr size_t total_width = 80;
+  size_t desc_width =
+      (total_width > width + 2) ? (total_width - width) : 40;
 
-  auto last_option_name_width = option_name.length();
-  if (auto p = option_name.rfind('\n'); p != std::string::npos) {
-    last_option_name_width = option_name.length() - p - 1;
+  // Length of the last line of option_name (may be multi-line).
+  auto nl_pos = option_name.rfind('\n');
+  size_t last_len = (nl_pos == std::string::npos)
+                        ? option_name.size()
+                        : (option_name.size() - nl_pos - 1);
+
+  std::string result = option_name;
+
+  // Split the description on existing \n (intentional hard breaks),
+  // word-wrap each segment, then emit every line with proper indentation.
+  size_t seg_start = 0;
+  bool first_out_line = true;
+
+  while (seg_start <= description.size()) {
+    auto hard_nl = description.find('\n', seg_start);
+    auto segment = (hard_nl == std::string::npos)
+                       ? description.substr(seg_start)
+                       : description.substr(seg_start, hard_nl - seg_start);
+
+    // Word-wrap this segment.
+    auto wrapped = word_wrap(segment, desc_width);
+
+    // Emit the wrapped lines.
+    size_t wpos = 0;
+    while (wpos < wrapped.size()) {
+      auto wnl = wrapped.find('\n', wpos);
+      auto line = (wnl == std::string::npos)
+                      ? wrapped.substr(wpos)
+                      : wrapped.substr(wpos, wnl - wpos);
+
+      if (first_out_line && last_len < width) {
+        // First description line goes on the same line as the option.
+        result.append(width - last_len, ' ');
+      } else {
+        result += '\n';
+        result.append(width, ' ');
+      }
+      result += line;
+      first_out_line = false;
+
+      if (wnl == std::string::npos) break;
+      wpos = wnl + 1;
+    }
+
+    if (hard_nl == std::string::npos) break;
+    seg_start = hard_nl + 1;
   }
 
-  if (last_option_name_width >= width) {
-    ret += " ";
-  } else {
-    ret += std::string(width - last_option_name_width, ' ');
-  }
-
-  size_t pos = 0;
-  auto desc = description;
-  auto replacement = "\n" + std::string(width, ' ');
-  while ((pos = desc.find("\n", pos)) != std::string::npos) {
-    desc.replace(pos, 1, replacement);
-    pos += replacement.length();
-  }
-
-  ret += desc;
-
-  return ret;
+  return result;
 }
 
 #if defined(_WIN32)
@@ -1929,7 +1993,7 @@ class Command {
     }
     for (const auto& arg : args_) {
       if ((arg->is_option() || arg->is_flag()) && !arg->hidden_) {
-        usage_str << "\n " << arg->usage();
+        usage_str << "\n  " << arg->usage();
       }
     }
 
@@ -1940,7 +2004,7 @@ class Command {
     }
     for (const auto& arg : args_) {
       if (arg->is_positional() && !arg->hidden_) {
-        usage_str << "\n " << arg->usage();
+        usage_str << "\n  " << arg->usage();
       }
     }
     if (!usage_footer_.empty()) {
@@ -2079,7 +2143,7 @@ class ArgParser : public Command {
         if (cmd->is_hidden()) {
           continue;
         }
-        usage_str << "\n " << cmd->one_line_usage();
+        usage_str << "\n  " << cmd->one_line_usage();
       }
     }
 
