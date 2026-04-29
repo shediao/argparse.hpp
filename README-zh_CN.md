@@ -572,8 +572,80 @@ add_subdirectory(/path/to/argparse.hpp)
 
 将 `argparse.hpp` 复制到 myproject/dir/include
 
+## Shell 自动补全
+
+`argparse.hpp` 可以为 **Bash**、**Zsh** 和 **Fish** 生成 shell 自动补全脚本。在定义完所有参数后，调用以下方法之一将补全脚本打印到输出流：
+
+- **`parser.print_bash_complete(std::ostream& os)`**: 打印使用 `complete -F` 的 Bash 补全脚本。
+- **`parser.print_zsh_complete(std::ostream& os)`**: 打印使用 `#compdef` 和 `_arguments` 的 Zsh 补全脚本。
+- **`parser.print_fish_complete(std::ostream& os)`**: 打印使用 `complete -c` 的 Fish 补全脚本。
+
+生成的脚本具有上下文感知能力：
+- 自动补全**标志和选项名称**（包括 `--no-*` 否定形式变体）。
+- 对于定义了 `.choices()` / `.choices_description()` 的选项值，会**提示可选值**。
+- 对于**没有显式选项限制的选项**，默认使用文件/目录补全（Bash: `compgen -f`，Zsh: `_files`）。
+- 自动补全**子命令**（Bash: 使用 `compgen`，Zsh: 使用 `_values`，Fish: 使用 `-n '__fish_use_subcommand'`）。
+
+### 安装示例
+
+**Bash**：添加到 `~/.bash_completion` 或在 `~/.bashrc` 中 source：
+```bash
+./my_program --print-bash-complete >> ~/.bash_completion
+# 或者
+source <(./my_program --print-bash-complete)
+```
+
+**Zsh**：保存到 `$fpath` 目录中：
+```zsh
+./my_program --print-zsh-complete > /usr/local/share/zsh/site-functions/_my_program
+# 或者
+./my_program --print-zsh-complete > ~/.zsh/completions/_my_program  # 如果已添加到 $fpath
+```
+
+**Fish**：保存到 Fish 补全目录：
+```fish
+./my_program --print-fish-complete > ~/.config/fish/completions/my_program.fish
+```
+
+### 集成到您的 CLI 中
+
+常见的做法是添加隐藏标志来导出补全脚本：
+
+```cpp
+struct CompletionArgs {
+  bool print_bash_completion = false;
+  bool print_zsh_completion = false;
+  bool print_fish_completion = false;
+};
+
+// ...
+parser.add_flag("print-bash-complete", "打印 bash 补全脚本",
+                 completion_args.print_bash_completion)
+      .hidden();
+parser.add_flag("print-zsh-complete", "打印 zsh 补全脚本",
+                 completion_args.print_zsh_completion)
+      .hidden();
+parser.add_flag("print-fish-complete", "打印 fish 补全脚本",
+                 completion_args.print_fish_completion)
+      .hidden();
+
+parser.parse(argc, argv);
+
+if (completion_args.print_bash_completion) {
+  parser.print_bash_complete();
+  return 0;
+}
+if (completion_args.print_zsh_completion) {
+  parser.print_zsh_complete();
+  return 0;
+}
+if (completion_args.print_fish_completion) {
+  parser.print_fish_complete();
+  return 0;
+}
+```
+
 ## TODO
-- [ ] bash/zsh 自动补全
 - [ ] Windows 风格
 
 ## 文档

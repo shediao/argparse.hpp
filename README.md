@@ -566,8 +566,80 @@ add_subdirectory(/path/to/argparse.hpp)
 
 copy `argparse.hpp` to myproject/dir/include
 
+## Shell Completion
+
+`argparse.hpp` can generate shell completion scripts for **Bash**, **Zsh**, and **Fish**. After defining all your arguments, call one of the following methods to print a completion script to an output stream:
+
+- **`parser.print_bash_complete(std::ostream& os)`**: Prints a Bash completion script using `complete -F`.
+- **`parser.print_zsh_complete(std::ostream& os)`**: Prints a Zsh completion script using `#compdef` and `_arguments`.
+- **`parser.print_fish_complete(std::ostream& os)`**: Prints a Fish completion script using `complete -c`.
+
+The generated scripts are context-aware:
+- **Flag and option names** are completed (including `--no-*` negatable variants).
+- **Option values** with defined `.choices()` / `.choices_description()` will suggest those choices.
+- **Options without explicit choices** default to file/directory completion (Bash: `compgen -f`, Zsh: `_files`).
+- **Subcommands** are completed (Bash: using `compgen`, Zsh: using `_values`, Fish: using `-n '__fish_use_subcommand'`).
+
+### Installation Examples
+
+**Bash**: Add to `~/.bash_completion` or source in `~/.bashrc`:
+```bash
+./my_program --print-bash-complete >> ~/.bash_completion
+# or
+source <(./my_program --print-bash-complete)
+```
+
+**Zsh**: Save to a directory in your `$fpath`:
+```zsh
+./my_program --print-zsh-complete > /usr/local/share/zsh/site-functions/_my_program
+# or
+./my_program --print-zsh-complete > ~/.zsh/completions/_my_program  # if added to $fpath
+```
+
+**Fish**: Save to the Fish completions directory:
+```fish
+./my_program --print-fish-complete > ~/.config/fish/completions/my_program.fish
+```
+
+### Integrating with Your CLI
+
+A common pattern is to add a hidden flag for dumping completions:
+
+```cpp
+struct CompletionArgs {
+  bool print_bash_completion = false;
+  bool print_zsh_completion = false;
+  bool print_fish_completion = false;
+};
+
+// ...
+parser.add_flag("print-bash-complete", "Print bash completion script",
+                 completion_args.print_bash_completion)
+      .hidden();
+parser.add_flag("print-zsh-complete", "Print zsh completion script",
+                 completion_args.print_zsh_completion)
+      .hidden();
+parser.add_flag("print-fish-complete", "Print fish completion script",
+                 completion_args.print_fish_completion)
+      .hidden();
+
+parser.parse(argc, argv);
+
+if (completion_args.print_bash_completion) {
+  parser.print_bash_complete();
+  return 0;
+}
+if (completion_args.print_zsh_completion) {
+  parser.print_zsh_complete();
+  return 0;
+}
+if (completion_args.print_fish_completion) {
+  parser.print_fish_complete();
+  return 0;
+}
+```
+
 ## TODO
-- [ ] bash/zsh completion
 - [ ] windows style
 
 ## docs
