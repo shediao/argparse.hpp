@@ -325,14 +325,14 @@ T parse_from_string(std::string const& s) {
                                       s);
     }
     return result;
-  }
-  if constexpr (std::is_same_v<T, bool>) {
+  } else if constexpr (std::is_same_v<T, bool>) {
     return parse_from_string<bool>(s);
-  }
-  if constexpr (std::is_same_v<T, std::string>) {
+  } else if constexpr (std::is_same_v<T, std::string>) {
     return s;
+  } else {
+    detail::report_invalid_argument("Unsupported type for parse_from_string");
+    return T{};
   }
-  detail::report_invalid_argument("Unsupported type for parse_from_string");
 }
 
 template <ParseFromStringCustomType T>
