@@ -2492,8 +2492,13 @@ class ArgParser : public Command {
     auto escape_zsh_desc = [](std::string const& s) -> std::string {
       std::string result;
       for (char c : s) {
-        if (c == ':' || c == '[' || c == ']' || c == '\'') {
+        if (c == ':' || c == '[' || c == ']') {
           result += '\\';
+        }
+        // Single quotes cannot be escaped inside single-quoted shell
+        // strings; simply omit them from the description.
+        if (c == '\'') {
+          result += "\\'\\'";
         }
         result += c;
       }
