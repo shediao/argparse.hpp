@@ -209,6 +209,101 @@ TEST_F(CompletionTest, BashNoOptionsProducesMinimalScript) {
 }
 
 // ---------------------------------------------------------------------------
+// Bash recursive subcommand tests (new in refactored print_bash_complete)
+// ---------------------------------------------------------------------------
+
+TEST_F(CompletionTest, BashRootImplFunctionExists) {
+  auto& p = parser();
+  std::ostringstream os;
+  p.print_bash_complete(os);
+  std::string out = os.str();
+
+  // The root implementation function carries the actual completion logic
+  EXPECT_TRUE(out.find("_myprog_impl() {") != std::string::npos);
+  // It receives cur/prev as arguments $1/$2
+  EXPECT_TRUE(out.find("local cur=\"$1\" prev=\"$2\"") != std::string::npos);
+}
+
+TEST_F(CompletionTest, BashSubcommandFunctionExists) {
+  auto& p = parser();
+  std::ostringstream os;
+  p.print_bash_complete(os);
+  std::string out = os.str();
+
+  // Each visible subcommand gets its own completion function
+  EXPECT_TRUE(out.find("_myprog_build() {") != std::string::npos);
+  EXPECT_TRUE(out.find("_myprog_test() {") != std::string::npos);
+  // Hidden subcommand must not have a function
+  EXPECT_TRUE(out.find("_myprog_hidden_cmd") == std::string::npos);
+}
+
+TEST_F(CompletionTest, BashDispatcherDelegatesToSubFunction) {
+  auto& p = parser();
+  std::ostringstream os;
+  p.print_bash_complete(os);
+  std::string out = os.str();
+
+  // The dispatcher walks COMP_WORDS and sets cmd to the right function
+  EXPECT_TRUE(out.find("cmd=\"_myprog_build\"") != std::string::npos);
+  EXPECT_TRUE(out.find("cmd=\"_myprog_test\"") != std::string::npos);
+  // It calls the sub-function when cmd is set
+  EXPECT_TRUE(out.find("\"$cmd\" \"$cur\" \"$prev\"") != std::string::npos);
+}
+
+TEST_F(CompletionTest, BashDispatcherFallsBackToImpl) {
+  auto& p = parser();
+  std::ostringstream os;
+  p.print_bash_complete(os);
+  std::string out = os.str();
+
+  // When no subcommand is matched, the dispatcher falls back to _impl
+  EXPECT_TRUE(out.find("_myprog_impl \"$cur\" \"$prev\"") != std::string::npos);
+}
+
+TEST_F(CompletionTest, BashDispatcherSkipsOptionsInLoop) {
+  auto& p = parser();
+  std::ostringstream os;
+  p.print_bash_complete(os);
+  std::string out = os.str();
+
+  // Options (words starting with -) are skipped so that
+  // e.g. `myprog --verbose build` still detects "build"
+  EXPECT_TRUE(out.find("-*)") != std::string::npos);
+  EXPECT_TRUE(out.find("continue ;;") != std::string::npos);
+}
+
+TEST_F(CompletionTest, BashSubcommandFunctionReceivesCurPrev) {
+  auto& p = parser();
+  std::ostringstream os;
+  p.print_bash_complete(os);
+  std::string out = os.str();
+
+  // Every generated function (root _impl and subcommands) uses the
+  // same argument convention: $1 = cur, $2 = prev
+  EXPECT_TRUE(out.find("_myprog_build() {\n    local cur=\"$1\" prev=\"$2\"") !=
+              std::string::npos);
+  EXPECT_TRUE(out.find("_myprog_test() {\n    local cur=\"$1\" prev=\"$2\"") !=
+              std::string::npos);
+}
+
+TEST_F(CompletionTest, BashNoSubcommandsStillGeneratesDispatcher) {
+  ArgParser parser("simple", "A simple program");
+  bool flag = false;
+  parser.add_flag("verbose", "Verbose output", flag);
+
+  std::ostringstream os;
+  parser.print_bash_complete(os);
+  std::string out = os.str();
+
+  // Even without subcommands we get both the impl and dispatcher
+  EXPECT_TRUE(out.find("_simple_impl() {") != std::string::npos);
+  EXPECT_TRUE(out.find("_simple() {") != std::string::npos);
+  EXPECT_TRUE(out.find("_simple_impl \"$cur\" \"$prev\"") != std::string::npos);
+  // No subcommand delegation
+  EXPECT_TRUE(out.find("cmd=\"_simple_") == std::string::npos);
+}
+
+// ---------------------------------------------------------------------------
 // Zsh completion tests
 // ---------------------------------------------------------------------------
 
@@ -333,6 +428,66 @@ TEST_F(CompletionTest, ZshNoSubcommandsUsesSimpleArguments) {
 }
 
 // ---------------------------------------------------------------------------
+// Zsh recursive subcommand tests (new in refactored print_zsh_complete)
+// ---------------------------------------------------------------------------
+
+TEST_F(CompletionTest, ZshArgsStateDispatch) {
+  auto& p = parser();
+  std::ostringstream os;
+  p.print_zsh_complete(os);
+  std::string out = os.str();
+
+  // The _arguments line should include '*::arg:->args' for subcommand
+  // argument delegation
+  EXPECT_TRUE(out.find("'*::arg:->args'") != std::string::npos);
+  // There must be an args) case in the state machine
+  EXPECT_TRUE(out.find("args)") != std::string::npos);
+}
+
+TEST_F(CompletionTest, ZshSubcommandFunctionExists) {
+  auto& p = parser();
+  std::ostringstream os;
+  p.print_zsh_complete(os);
+  std::string out = os.str();
+
+  // Each visible subcommand gets its own Zsh completion function
+  EXPECT_TRUE(out.find("_myprog_build() {") != std::string::npos);
+  EXPECT_TRUE(out.find("_myprog_test() {") != std::string::npos);
+  // Hidden subcommand must not have a function
+  EXPECT_TRUE(out.find("_myprog_hidden_cmd") == std::string::npos);
+}
+
+TEST_F(CompletionTest, ZshArgsCaseDelegatesToSubFunction) {
+  auto& p = parser();
+  std::ostringstream os;
+  p.print_zsh_complete(os);
+  std::string out = os.str();
+
+  // The args) case should delegate to the per-subcommand function
+  // by calling e.g. _myprog_build
+  EXPECT_TRUE(out.find("_myprog_build") != std::string::npos);
+}
+
+TEST_F(CompletionTest, ZshSubcommandFunctionDefinesOptions) {
+  ArgParser parser("demo", "Demo");
+  auto& sub = parser.add_command("run", "Run something");
+  bool fast = false;
+  sub.add_flag("fast", "Fast mode", fast);
+  std::string cfg;
+  sub.add_option("config", "Config file", cfg).value_placeholder("FILE");
+
+  std::ostringstream os;
+  parser.print_zsh_complete(os);
+  std::string out = os.str();
+
+  // The subcommand function should define its own options array
+  EXPECT_TRUE(out.find("_demo_run() {") != std::string::npos);
+  EXPECT_TRUE(out.find("'--fast[Fast mode]'") != std::string::npos);
+  EXPECT_TRUE(out.find("'--config[Config file]:<FILE>:_files'") !=
+              std::string::npos);
+}
+
+// ---------------------------------------------------------------------------
 // Fish completion tests
 // ---------------------------------------------------------------------------
 
@@ -438,6 +593,68 @@ TEST_F(CompletionTest, FishNoArgumentsProducesNoOutput) {
 
   // With no flags/options and no subcommands, output should be empty
   EXPECT_TRUE(out.empty());
+}
+
+// ---------------------------------------------------------------------------
+// Fish scoped-completion tests (new in refactored print_fish_complete)
+// ---------------------------------------------------------------------------
+
+TEST_F(CompletionTest, FishSubcommandOptionsAreScoped) {
+  ArgParser parser("demo", "Demo");
+  auto& sub = parser.add_command("run", "Run something");
+  bool fast = false;
+  sub.add_flag("fast", "Fast mode", fast);
+
+  std::ostringstream os;
+  parser.print_fish_complete(os);
+  std::string out = os.str();
+
+  // Subcommand-specific flags/options must be scoped with -n
+  EXPECT_TRUE(out.find("-n '__fish_seen_subcommand_from run' -l fast") !=
+              std::string::npos);
+}
+
+TEST_F(CompletionTest, FishTopLevelOptionsNotScoped) {
+  ArgParser parser("demo", "Demo");
+  bool verbose = false;
+  parser.add_flag("verbose", "Verbose", verbose);
+  parser.add_command("run", "Run");
+
+  std::ostringstream os;
+  parser.print_fish_complete(os);
+  std::string out = os.str();
+
+  // Top-level options do NOT have a -n condition
+  // (they appear without __fish_seen_subcommand_from)
+  auto pos = out.find("-l verbose");
+  EXPECT_TRUE(pos != std::string::npos);
+  // Check that the line with -l verbose does NOT contain __fish_seen
+  auto line_end = out.find('\n', pos);
+  std::string line = out.substr(pos, line_end - pos);
+  EXPECT_TRUE(line.find("__fish_seen_subcommand_from") == std::string::npos);
+}
+
+TEST_F(CompletionTest, FishSubcommandListingUsesCorrectCondition) {
+  auto& p = parser();
+  std::ostringstream os;
+  p.print_fish_complete(os);
+  std::string out = os.str();
+
+  // Top-level subcommands use __fish_use_subcommand
+  EXPECT_TRUE(out.find("-n '__fish_use_subcommand' -f -a 'build'") !=
+              std::string::npos);
+  EXPECT_TRUE(out.find("-n '__fish_use_subcommand' -f -a 'test'") !=
+              std::string::npos);
+}
+
+TEST_F(CompletionTest, FishHiddenItemsNotScoped) {
+  auto& p = parser();
+  std::ostringstream os;
+  p.print_fish_complete(os);
+  std::string out = os.str();
+
+  // Hidden items must not generate any fish output whatsoever
+  EXPECT_TRUE(out.find("hidden_cmd") == std::string::npos);
 }
 
 // ---------------------------------------------------------------------------
