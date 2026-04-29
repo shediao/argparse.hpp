@@ -136,6 +136,19 @@ int main(int argc, const char* argv[]) {
 }
 ```
 
+### 其他解析方式
+
+除了标准的 `parse(argc, argv)` 方法，您还可以直接从 `std::vector<std::string>` 解析：
+
+```cpp
+std::vector<std::string> args = {"--debug", "--model", "gpt-4", "hello world"};
+parser.parse(args);  // 便捷重载，内部将 vector 转换为 C 风格 argv
+```
+
+当您已经将参数存储在 vector 中（例如分割命令字符串后）时，这非常有用。在 Windows 上，还有一个 `parse(std::vector<std::wstring> const&)` 重载用于宽字符串。
+
+> **注意：** 所有 `parse()` 方法中的 `argc` 参数类型现在是 `size_t`（之前为 `int`）。由于隐式转换，从 `main(int argc, char** argv)` 调用时无需任何更改。
+
 ## API 详解
 
 本节提供有关定义命令行参数的主要方法的更多详细信息。

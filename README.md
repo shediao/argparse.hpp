@@ -137,6 +137,19 @@ int main(int argc, const char* argv[]) {
 }
 ```
 
+### Alternative Parse Methods
+
+In addition to the standard `parse(argc, argv)` method, you can also parse from a `std::vector<std::string>` directly:
+
+```cpp
+std::vector<std::string> args = {"--debug", "--model", "gpt-4", "hello world"};
+parser.parse(args);  // convenience overload, converts vector to C-style argv internally
+```
+
+This is useful when you already have arguments in a vector, e.g., when splitting a command string. On Windows, there is also a `parse(std::vector<std::wstring> const&)` overload for wide-string usage.
+
+> **Note:** The `argc` parameter type in all `parse()` methods is now `size_t` (previously `int`). This is transparent when calling from `main(int argc, char** argv)` due to implicit conversion.
+
 ## API Details
 
 This section provides more details on the primary methods for defining command-line arguments.

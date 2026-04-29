@@ -1777,7 +1777,7 @@ class Command {
     return *this;
   }
 
-  void parse(int argc, char const* const* argv) {
+  void parse(size_t argc, char const* const* argv) {
     this->is_parsed_ = true;
     std::vector<const char*> commands{argv, argv + argc};
     ARG_PARSER_DEBUG(
@@ -1904,8 +1904,7 @@ class Command {
               ARG_PARSER_DEBUG(
                   "subcmd: " << detail::join(
                       std::vector<std::string>{argv + i, argv + argc}, ' '));
-              return (*subcmd_ptr_it)
-                  ->parse(argc - static_cast<int>(i), argv + i);
+              return (*subcmd_ptr_it)->parse(argc - i, argv + i);
             } else {
               detail::die("Unknown subcommand: " + arg);
             }
@@ -2167,7 +2166,7 @@ class ArgParser : public Command {
     return usage_str.str();
   }
   void print_usage() const override { std::cerr << this->usage() << '\n'; }
-  Command& parse(int argc, const char* const* argv) {
+  Command& parse(size_t argc, const char* const* argv) {
     add_default_help_flag();
     for (auto& sc : subcommands_) {
       sc->add_default_help_flag();
@@ -2180,8 +2179,15 @@ class ArgParser : public Command {
     }
     return *this;
   }
+  Command& parse(std::vector<std::string> const& args) {
+    std::vector<const char*> args_cstr(args.size() + 1, nullptr);  // NOLINT>
+
+    std::transform(args.begin(), args.end(), args_cstr.begin(),
+                   [](const std::string& s) { return s.data(); });
+    return parse(args.size(), args_cstr.data());
+  }
 #if defined(_WIN32)
-  Command& parse(int argc, wchar_t const* const* wargv) {
+  Command& parse(size_t argc, wchar_t const* const* wargv) {
     std::vector<std::string> args;
     args.reserve(argc);
     std::transform(wargv, wargv + argc, std::back_inserter(args),
@@ -2192,6 +2198,13 @@ class ArgParser : public Command {
     std::transform(args.begin(), args.end(), args_cstr.begin(),
                    [](const std::string& s) { return s.data(); });
     return parse(argc, args_cstr.data());
+  }
+  Command& parse(std::vector<std::wstring> const& args) {
+    std::vector<const wchar_t*> args_cstr(args.size() + 1, nullptr);  // NOLINT>
+
+    std::transform(args.begin(), args.end(), args_cstr.begin(),
+                   [](const std::wstring& s) { return s.data(); });
+    return parse(args.size(), args_cstr.data());
   }
 #endif
 
