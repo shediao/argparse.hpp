@@ -2041,6 +2041,7 @@ class Command {
 
   std::string const& command() const { return command_; }
   std::string const& name() const { return command_; }
+  std::string const& description() const { return description_; }
   Command& hidden(bool v = true) {
     is_hidden_ = v;
     return *this;
@@ -2189,6 +2190,351 @@ class ArgParser : public Command {
     return *cmd_ptr;
   }
   void set_option_width(int width) { this->Command::set_option_width(width); }
+
+  /// Print a Bash completion script to @p os.
+  void print_bash_complete(std::ostream& os = std::cout) const {
+    auto escape_bash = [](std::string const& s) -> std::string {
+      std::string result;
+      for (char c : s) {
+        if (c == '\'')
+          result += "'\\''";
+        else
+          result += c;
+      }
+      return result;
+    };
+
+    // Sanitize program name for the shell function identifier.
+    std::string func_name = "_" + command_;
+    for (char& c : func_name) {
+      if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_') c = '_';
+    }
+
+    os << func_name << "() {\n";
+    os << "    local cur prev\n";
+    os << "    cur=\"${COMP_WORDS[COMP_CWORD]}\"\n";
+    os << "    prev=\"${COMP_WORDS[COMP_CWORD-1]}\"\n";
+    os << "\n";
+
+    // ---- prev-word dispatch (space-separated option values) ----
+    bool has_prev_cases = false;
+    for (auto const& arg : args_) {
+      if (arg->hidden_) continue;
+      if (!arg->is_option()) continue;
+      auto* opt = dynamic_cast<OptionBase*>(arg.get());
+      if (!opt || opt->choices_descriptions_.empty()) continue;
+
+      if (!has_prev_cases) {
+        os << "    case \"$prev\" in\n";
+        has_prev_cases = true;
+      }
+
+      std::vector<std::string> patterns;
+      for (auto const& s : arg->short_opt_names_)
+        patterns.push_back("-" + s);
+      for (auto const& l : arg->long_opt_names_)
+        patterns.push_back("--" + l);
+      os << "        " << detail::join(patterns, '|') << ")\n";
+
+      std::vector<std::string> choice_keys;
+      for (auto const& [k, _] : opt->choices_descriptions_)
+        choice_keys.push_back(k);
+      os << "            COMPREPLY=($(compgen -W \""
+         << escape_bash(detail::join(choice_keys, ' '))
+         << "\" -- \"$cur\"))\n";
+      os << "            return 0\n";
+      os << "            ;;\n";
+    }
+    // Also emit prev-case entries for options that take a value but have
+    // no explicit choices — default to file completion.
+    for (auto const& arg : args_) {
+      if (arg->hidden_) continue;
+      if (!arg->is_option()) continue;
+      auto* opt = dynamic_cast<OptionBase*>(arg.get());
+      if (!opt || !opt->choices_descriptions_.empty()) continue;
+
+      if (!has_prev_cases) {
+        os << "    case \"$prev\" in\n";
+        has_prev_cases = true;
+      }
+
+      std::vector<std::string> patterns;
+      for (auto const& s : arg->short_opt_names_)
+        patterns.push_back("-" + s);
+      for (auto const& l : arg->long_opt_names_)
+        patterns.push_back("--" + l);
+      os << "        " << detail::join(patterns, '|') << ")\n";
+      os << "            COMPREPLY=($(compgen -f -- \"$cur\"))\n";
+      os << "            return 0\n";
+      os << "            ;;\n";
+    }
+    if (has_prev_cases) {
+      os << "    esac\n";
+    }
+    os << "\n";
+
+    // ---- --opt=value dispatch (equals-separated long-option values) ----
+    bool has_eq_cases = false;
+    for (auto const& arg : args_) {
+      if (arg->hidden_) continue;
+      if (!arg->is_option()) continue;
+      auto* opt = dynamic_cast<OptionBase*>(arg.get());
+      if (!opt || opt->choices_descriptions_.empty()) continue;
+
+      if (!has_eq_cases) {
+        os << "    if [[ \"$cur\" == --*=* ]]; then\n";
+        os << "        local opt=\"${cur%%=*}\"\n";
+        os << "        local val=\"${cur#*=}\"\n";
+        os << "        case \"$opt\" in\n";
+        has_eq_cases = true;
+      }
+      for (auto const& l : arg->long_opt_names_) {
+        os << "            --" << l << ")\n";
+        std::vector<std::string> choice_keys;
+        for (auto const& [k, _] : opt->choices_descriptions_)
+          choice_keys.push_back(k);
+        os << "                COMPREPLY=($(compgen -W \""
+           << escape_bash(detail::join(choice_keys, ' '))
+           << "\" -- \"$val\"))\n";
+        os << "                return 0\n";
+        os << "                ;;\n";
+      }
+    }
+    if (has_eq_cases) {
+      os << "        esac\n";
+      os << "    fi\n";
+      os << "\n";
+    }
+
+    // ---- complete option names ----
+    os << "    if [[ \"$cur\" == -* ]]; then\n";
+    os << "        local opts=\"";
+    std::vector<std::string> opt_names;
+    for (auto const& arg : args_) {
+      if (arg->hidden_) continue;
+      if (arg->is_flag() || arg->is_option()) {
+        for (auto const& s : arg->short_opt_names_)
+          opt_names.push_back("-" + s);
+        for (auto const& l : arg->long_opt_names_)
+          opt_names.push_back("--" + l);
+        // negatable long-flag variants
+        if (arg->is_flag()) {
+          auto* flag = dynamic_cast<FlagBase*>(arg.get());
+          if (flag && flag->is_negatable()) {
+            for (auto const& l : arg->long_opt_names_)
+              opt_names.push_back("--no-" + l);
+          }
+        }
+      }
+    }
+    os << escape_bash(detail::join(opt_names, ' ')) << "\"\n";
+    os << "        COMPREPLY=($(compgen -W \"$opts\" -- \"$cur\"))\n";
+    os << "        return 0\n";
+    os << "    fi\n";
+    os << "\n";
+
+    // ---- complete subcommands ----
+    if (!subcommands_.empty()) {
+      os << "    local cmds=\"";
+      std::vector<std::string> cmd_names;
+      for (auto const& cmd : subcommands_) {
+        if (cmd->is_hidden()) continue;
+        cmd_names.push_back(cmd->command());
+      }
+      os << escape_bash(detail::join(cmd_names, ' ')) << "\"\n";
+      os << "    COMPREPLY=($(compgen -W \"$cmds\" -- \"$cur\"))\n";
+    }
+    os << "    return 0\n";
+    os << "}\n";
+    os << "\n";
+    os << "complete -F " << func_name << " " << command_ << "\n";
+  }
+
+  /// Print a Zsh completion script to @p os.
+  void print_zsh_complete(std::ostream& os = std::cout) const {
+    auto escape_zsh_desc = [](std::string const& s) -> std::string {
+      std::string result;
+      for (char c : s) {
+        if (c == ':' || c == '[' || c == ']' || c == '\'') result += '\\';
+        result += c;
+      }
+      return result;
+    };
+
+    os << "#compdef " << command_ << "\n";
+    os << "\n";
+    os << "_" << command_ << "() {\n";
+    os << "    local -a options\n";
+    os << "    options=(\n";
+
+    for (auto const& arg : args_) {
+      if (arg->hidden_) continue;
+      if (!arg->is_flag() && !arg->is_option()) continue;
+
+      std::string desc = escape_zsh_desc(arg->description());
+      bool is_opt = arg->is_option();
+      auto* opt = is_opt ? dynamic_cast<OptionBase*>(arg.get()) : nullptr;
+      bool has_choices =
+          opt && !opt->choices_descriptions_.empty();
+
+      for (auto const& s : arg->short_opt_names_) {
+        os << "        '-" << s;
+        if (!desc.empty()) os << "[" << desc << "]";
+        if (is_opt) {
+          os << ":"
+             << (opt->value_placeholder_.empty() ? "arg"
+                                                 : opt->value_placeholder_);
+          if (has_choices) {
+            os << ":(";
+            std::vector<std::string> choice_keys;
+            for (auto const& [k, _] : opt->choices_descriptions_)
+              choice_keys.push_back(k);
+            os << detail::join(choice_keys, ' ');
+            os << ")";
+          } else {
+            os << ":_files";
+          }
+        }
+        os << "'\n";
+      }
+      for (auto const& l : arg->long_opt_names_) {
+        os << "        '--" << l;
+        if (!desc.empty()) os << "[" << desc << "]";
+        if (is_opt) {
+          os << ":"
+             << (opt->value_placeholder_.empty() ? "arg"
+                                                 : opt->value_placeholder_);
+          if (has_choices) {
+            os << ":(";
+            std::vector<std::string> choice_keys;
+            for (auto const& [k, _] : opt->choices_descriptions_)
+              choice_keys.push_back(k);
+            os << detail::join(choice_keys, ' ');
+            os << ")";
+          } else {
+            os << ":_files";
+          }
+        }
+        os << "'\n";
+      }
+
+      // negatable long-flag variants
+      if (arg->is_flag()) {
+        auto* flag = dynamic_cast<FlagBase*>(arg.get());
+        if (flag && flag->is_negatable()) {
+          for (auto const& l : arg->long_opt_names_) {
+            os << "        '--no-" << l;
+            if (!desc.empty()) os << "[" << desc << "]";
+            os << "'\n";
+          }
+        }
+      }
+    }
+
+    os << "    )\n";
+    os << "\n";
+
+    if (!subcommands_.empty()) {
+      os << "    _arguments -s $options \\\n";
+      os << "        '1:subcommand:->subcmds'\n";
+      os << "\n";
+      os << "    case $state in\n";
+      os << "        subcmds)\n";
+      os << "            _values 'subcommand'";
+      for (auto const& cmd : subcommands_) {
+        if (cmd->is_hidden()) continue;
+        os << " \\\n                '" << cmd->command();
+        if (!cmd->description().empty())
+          os << "[" << escape_zsh_desc(cmd->description()) << "]";
+        os << "'";
+      }
+      os << "\n            ;;\n";
+      os << "    esac\n";
+    } else {
+      os << "    _arguments -s $options\n";
+    }
+    os << "}\n";
+    os << "\n";
+    os << "_" << command_ << " \"$@\"\n";
+  }
+
+  /// Print a Fish completion script to @p os.
+  void print_fish_complete(std::ostream& os = std::cout) const {
+    auto escape_fish = [](std::string const& s) -> std::string {
+      std::string result;
+      for (char c : s) {
+        if (c == '\'') result += "\\'";
+        else result += c;
+      }
+      return result;
+    };
+
+    for (auto const& arg : args_) {
+      if (arg->hidden_) continue;
+      if (!arg->is_flag() && !arg->is_option()) continue;
+
+      std::string desc = arg->description();
+      bool is_opt = arg->is_option();
+      auto* opt = is_opt ? dynamic_cast<OptionBase*>(arg.get()) : nullptr;
+      bool has_choices =
+          opt && !opt->choices_descriptions_.empty();
+
+      for (auto const& s : arg->short_opt_names_) {
+        os << "complete -c " << command_ << " -s " << s;
+        if (!desc.empty()) os << " -d '" << escape_fish(desc) << "'";
+        if (is_opt) {
+          os << " -r";
+          if (has_choices) {
+            os << " -f";
+            std::vector<std::string> choice_keys;
+            for (auto const& [k, _] : opt->choices_descriptions_)
+              choice_keys.push_back(k);
+            os << " -a '"
+               << escape_fish(detail::join(choice_keys, ' ')) << "'";
+          }
+        }
+        os << "\n";
+      }
+      for (auto const& l : arg->long_opt_names_) {
+        os << "complete -c " << command_ << " -l " << l;
+        if (!desc.empty()) os << " -d '" << escape_fish(desc) << "'";
+        if (is_opt) {
+          os << " -r";
+          if (has_choices) {
+            os << " -f";
+            std::vector<std::string> choice_keys;
+            for (auto const& [k, _] : opt->choices_descriptions_)
+              choice_keys.push_back(k);
+            os << " -a '"
+               << escape_fish(detail::join(choice_keys, ' ')) << "'";
+          }
+        }
+        os << "\n";
+      }
+
+      // negatable long-flag variants
+      if (arg->is_flag()) {
+        auto* flag = dynamic_cast<FlagBase*>(arg.get());
+        if (flag && flag->is_negatable()) {
+          for (auto const& l : arg->long_opt_names_) {
+            os << "complete -c " << command_ << " -l no-" << l;
+            if (!desc.empty()) os << " -d '" << escape_fish(desc) << "'";
+            os << "\n";
+          }
+        }
+      }
+    }
+
+    // subcommands
+    for (auto const& cmd : subcommands_) {
+      if (cmd->is_hidden()) continue;
+      os << "complete -c " << command_
+         << " -n '__fish_use_subcommand' -f -a '" << cmd->command() << "'";
+      if (!cmd->description().empty())
+        os << " -d '" << escape_fish(cmd->description()) << "'";
+      os << "\n";
+    }
+  }
 };
 
 }  // namespace argparse
