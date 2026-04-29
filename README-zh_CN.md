@@ -136,6 +136,19 @@ int main(int argc, const char* argv[]) {
 }
 ```
 
+### 重要：`argv[0]`（程序名）的处理方式
+
+当调用 `parse(argc, argv)` 时，库遵循标准约定，将 `argv[0]` 视为程序名（或程序路径）。因此，`argv[0]` 会被**跳过**，不会被当作命令行参数处理。只有 `argv[1]` 到 `argv[argc-1]` 会被解析为标志、选项和位置参数。
+
+但是，如果 `argv[0]` 以 `-`（破折号）开头，则库会假定**没有**提供程序名，并将 `argv` 的**所有**元素都视为命令行参数。这种启发式方法处理了 `argv` 全部是参数的特殊情况。
+
+**示例：**
+
+| `argv` | 行为 |
+|--------|------|
+| `{"./my_program", "--debug", "input.txt"}` | `argv[0]` = `"./my_program"` 作为程序名被跳过；解析 `--debug` 和 `input.txt` |
+| `{"--debug", "--model", "gpt-4"}` | `argv[0]` = `"--debug"` 以 `-` 开头，因此所有元素都被解析为参数 |
+
 ### 其他解析方式
 
 除了标准的 `parse(argc, argv)` 方法，您还可以直接从 `std::vector<std::string>` 解析：
@@ -146,6 +159,8 @@ parser.parse(args);  // 便捷重载，内部将 vector 转换为 C 风格 argv
 ```
 
 当您已经将参数存储在 vector 中（例如分割命令字符串后）时，这非常有用。在 Windows 上，还有一个 `parse(std::vector<std::wstring> const&)` 重载用于宽字符串。
+
+> **注意：** `parse(std::vector<std::string> const&)` 重载会应用**相同**的程序名跳过逻辑：vector 的第一个元素会被视为程序名并跳过，除非它以 `-` 开头。如果您的 vector 只包含参数（不包含程序名），请确保第一个元素以 `-` 开头，或者使用 `parse(argc, argv)` 并传入参数数量和虚拟的第一个元素。
 
 > **注意：** 所有 `parse()` 方法中的 `argc` 参数类型现在是 `size_t`（之前为 `int`）。由于隐式转换，从 `main(int argc, char** argv)` 调用时无需任何更改。
 

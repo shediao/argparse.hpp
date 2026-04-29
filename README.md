@@ -137,6 +137,19 @@ int main(int argc, const char* argv[]) {
 }
 ```
 
+### Important: How `argv[0]` (Program Name) Is Handled
+
+When calling `parse(argc, argv)`, the library follows the standard convention that `argv[0]` is the program name (or path). Therefore, `argv[0]` is **skipped** and not treated as a command-line argument. Only `argv[1]` through `argv[argc-1]` are parsed as flags, options, and positional arguments.
+
+However, if `argv[0]` starts with `-` (a dash), the library assumes that **no** program name was provided and treats **all** elements of `argv` as command-line arguments. This heuristic handles edge cases where `argv` consists entirely of arguments.
+
+**Examples:**
+
+| `argv` | Behavior |
+|--------|----------|
+| `{"./my_program", "--debug", "input.txt"}` | `argv[0]` = `"./my_program"` is skipped as program name; `--debug` and `input.txt` are parsed |
+| `{"--debug", "--model", "gpt-4"}` | `argv[0]` = `"--debug"` starts with `-`, so all elements are parsed as arguments |
+
 ### Alternative Parse Methods
 
 In addition to the standard `parse(argc, argv)` method, you can also parse from a `std::vector<std::string>` directly:
@@ -147,6 +160,8 @@ parser.parse(args);  // convenience overload, converts vector to C-style argv in
 ```
 
 This is useful when you already have arguments in a vector, e.g., when splitting a command string. On Windows, there is also a `parse(std::vector<std::wstring> const&)` overload for wide-string usage.
+
+> **Note:** The `parse(std::vector<std::string> const&)` overload applies the **same** program-name-skipping logic: the first element of the vector is treated as the program name and skipped unless it starts with `-`. If your vector contains only arguments (no program name), make sure the first element starts with `-`, or use `parse(argc, argv)` with `argc` equal to the number of arguments and a dummy first element.
 
 > **Note:** The `argc` parameter type in all `parse()` methods is now `size_t` (previously `int`). This is transparent when calling from `main(int argc, char** argv)` due to implicit conversion.
 
