@@ -2659,7 +2659,7 @@ class ArgParser : public Command {
       std::string result;
       for (char c : s) {
         if (c == '\'') {
-          result += "\\'\\''";
+          result += "'\\''";
         } else {
           result += c;
         }
