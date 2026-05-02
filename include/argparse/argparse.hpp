@@ -15,22 +15,22 @@
  *  Copyright (c) 2024-2026 shediao.xsd
  *
  *  Permission is hereby granted, free of charge, to any person obtaining a copy
- *  of this software and associated documentation files (the "Software"), to deal
- *  in the Software without restriction, including without limitation the rights
- *  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- *  copies of the Software, and to permit persons to whom the Software is
+ *  of this software and associated documentation files (the "Software"), to
+ * deal in the Software without restriction, including without limitation the
+ * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the Software is
  *  furnished to do so, subject to the following conditions:
  *
- *  The above copyright notice and this permission notice shall be included in all
- *  copies or substantial portions of the Software.
+ *  The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
  *
  *  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  *  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  *  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  *  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- *  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- *  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- *  SOFTWARE.
+ *  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ * IN THE SOFTWARE.
  *
  *  SPDX-License-Identifier: MIT
  */
@@ -354,8 +354,7 @@ T parse_from_string(std::string const& s) {
   } else if constexpr (std::is_same_v<T, long double>) {
     auto result = std::stold(s, &pos);
     if (pos != s.size()) {
-      detail::report_invalid_argument("Invalid long double number: " +
-                                      s);
+      detail::report_invalid_argument("Invalid long double number: " + s);
     }
     return result;
   } else if constexpr (std::is_same_v<T, bool>) {
@@ -1010,7 +1009,24 @@ class OptionBase : public ArgBase {
     }
   }
   std::string usage() const override {
-    constexpr int max_width = 80;
+    std::string extra_str;
+    if (!this->choices_descriptions_.empty()) {
+      std::vector<std::string> choice_strs;
+      for (auto const& [value, help] : this->choices_descriptions_) {
+        choice_strs.push_back("[" + value + "] " + help);
+      }
+      extra_str += " (";
+      extra_str += detail::join(choice_strs, ", ");
+      extra_str += ")";
+    }
+    if (auto default_value = get_default_value(); default_value.has_value()) {
+      extra_str += " (default: " + *default_value;
+      if (!env_key_.empty()) {
+        extra_str += ", ENV:" + env_key_;
+      }
+      extra_str += ")";
+    }
+
     std::stringstream usage_str;
     if (is_option()) {
       std::string delimiter = ",";
@@ -1052,7 +1068,8 @@ class OptionBase : public ArgBase {
           usage_str << *it << ' ' << value_placeholder_ << '\n';
         }
         usage_str << detail::format(*end + " " + value_placeholder_,
-                                    option_width(), description(), "  ");
+                                    option_width(), description() + extra_str,
+                                    "  ");
       } else {
         auto s = detail::join(short_names_with_dash, delimiter);
         auto l = detail::join(long_names_with_dash_dash, delimiter);
@@ -1060,56 +1077,22 @@ class OptionBase : public ArgBase {
           std::string options_str =
               "  " + std::string(delimiter_of_short_and_long.length(), ' ') + l;
           usage_str << detail::format(options_str + " " + value_placeholder_,
-                                      option_width(), description(), "  ");
+                                      option_width(), description() + extra_str,
+                                      "  ");
         } else {
           std::string options_str = long_names_with_dash_dash.empty()
                                         ? s
                                         : (s + delimiter_of_short_and_long + l);
           usage_str << detail::format(options_str + " " + value_placeholder_,
-                                      option_width(), description(), "  ");
+                                      option_width(), description() + extra_str,
+                                      "  ");
         }
       }
 
-      if (auto default_value = get_default_value(); default_value.has_value()) {
-        auto default_value_string = " (default: " + *default_value;
-        if (!env_key_.empty()) {
-          default_value_string += ", ENV:" + env_key_;
-        }
-        default_value_string += ")";
-        if (option_width() + description().length() +
-                default_value_string.length() >
-            max_width) {
-          usage_str << "\n"
-                    << detail::format("", option_width(), default_value_string,
-                                      "  ");
-        } else {
-          usage_str << default_value_string;
-        }
-      }
-      if (!this->choices_descriptions_.empty()) {
-        std::vector<std::string> choice_strs;
-        for (auto const& [value, help] : this->choices_descriptions_) {
-          choice_strs.push_back("[" + value + "] " + help);
-        }
-        usage_str << " (" << detail::join(choice_strs, ", ") << ")";
-      }
     } else {
       std::string options_str{long_opt_names_[0]};
-      usage_str << detail::format(options_str, option_width(), description(),
-                                  "  ");
-      if (auto default_value = get_default_value(); default_value.has_value()) {
-        auto default_value_string = " (default: " + *default_value + ")";
-        if (option_width() + description().length() +
-                default_value_string.length() >
-            max_width) {
-          usage_str << "\n"
-                    << detail::format("", option_width(), default_value_string,
-                                      "  ")
-                    << '\n';
-        } else {
-          usage_str << default_value_string;
-        }
-      }
+      usage_str << detail::format(options_str, option_width(),
+                                  description() + extra_str, "  ");
     }
     return usage_str.str();
   }
@@ -1241,8 +1224,8 @@ class Option final : public OptionBaseCRTP<Option<T>> {
       using return_type = std::pair<bool, std::string>;
       auto ok = r_min <= val && val <= r_max;
       if (!ok) {
-        std::string err_msg = "not in range: [" + std::to_string(r_min) + " - " +
-                              std::to_string(r_max) + "]";
+        std::string err_msg = "not in range: [" + std::to_string(r_min) +
+                              " - " + std::to_string(r_max) + "]";
         return return_type{ok, err_msg};
       } else {
         return return_type{ok, ""};
@@ -1294,7 +1277,8 @@ class Option final : public OptionBaseCRTP<Option<T>> {
       if (auto [ok, err_msg] = validator(parsed_value); !ok) {
         std::string msg = "Validation failed: ";
         msg += detail::join(ArgBase::long_opt_names_, ',');
-        if (!ArgBase::long_opt_names_.empty() && !ArgBase::short_opt_names_.empty()) {
+        if (!ArgBase::long_opt_names_.empty() &&
+            !ArgBase::short_opt_names_.empty()) {
           msg += ", ";
         }
         msg += detail::join(ArgBase::short_opt_names_, ',');
@@ -1480,8 +1464,8 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
       using return_type = std::pair<bool, std::string>;
       auto ok = r_min <= val && val <= r_max;
       if (!ok) {
-        std::string err_msg = "not in range: [" + std::to_string(r_min) + " - " +
-                              std::to_string(r_max) + "]";
+        std::string err_msg = "not in range: [" + std::to_string(r_min) +
+                              " - " + std::to_string(r_max) + "]";
         return return_type{ok, err_msg};
       } else {
         return return_type{ok, ""};
@@ -1533,7 +1517,8 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
       if (auto [ok, err_msg] = validator(parsed_value); !ok) {
         std::string msg = "Validation failed: ";
         msg += detail::join(ArgBase::long_opt_names_, ',');
-        if (!ArgBase::long_opt_names_.empty() && !ArgBase::short_opt_names_.empty()) {
+        if (!ArgBase::long_opt_names_.empty() &&
+            !ArgBase::short_opt_names_.empty()) {
           msg += ", ";
         }
         msg += detail::join(ArgBase::short_opt_names_, ',');
