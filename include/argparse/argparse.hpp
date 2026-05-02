@@ -354,7 +354,7 @@ T parse_from_string(std::string const& s) {
   } else if constexpr (std::is_same_v<T, long double>) {
     auto result = std::stold(s, &pos);
     if (pos != s.size()) {
-      detail::report_invalid_argument("Invalid long double-precision number: " +
+      detail::report_invalid_argument("Invalid long double number: " +
                                       s);
     }
     return result;
@@ -578,7 +578,7 @@ inline std::string word_wrap(const std::string& text, size_t width) {
 //   column 2 : description (word-wrapped to fit within 80 - width chars)
 //
 // If the option_name already contains embedded '\\n' (because the caller
-// placed multiple names on separate lines) only the *last* line is used
+// placed multiple names on separate lines), only the *last* line is used
 // to decide where the description begins.
 //
 // The 'prefix' parameter is prepended to the first line and to every
@@ -968,10 +968,13 @@ class OptionBase : public ArgBase {
       if (auto [ok, err_msg] = validator(opt_value); !ok) {
         std::string msg = "Validation failed: ";
         msg += detail::join(long_opt_names_, ',');
+        if (!long_opt_names_.empty() && !short_opt_names_.empty()) {
+          msg += ", ";
+        }
         msg += detail::join(short_opt_names_, ',');
-        msg += "==> ";
+        msg += ": `";
         msg += opt_value;
-        msg += " is an invalid value. ";
+        msg += "` is an invalid value. ";
         detail::report_invalid_argument(msg + err_msg);
       }
     }
@@ -1068,7 +1071,7 @@ class OptionBase : public ArgBase {
       }
 
       if (auto default_value = get_default_value(); default_value.has_value()) {
-        auto default_value_string = " (default:" + *default_value;
+        auto default_value_string = " (default: " + *default_value;
         if (!env_key_.empty()) {
           default_value_string += ", ENV:" + env_key_;
         }
@@ -1239,7 +1242,7 @@ class Option final : public OptionBaseCRTP<Option<T>> {
       using return_type = std::pair<bool, std::string>;
       auto ok = r_min <= val && val <= r_max;
       if (!ok) {
-        std::string err_msg = "not in range: [" + std::to_string(r_min) + "~" +
+        std::string err_msg = "not in range: [" + std::to_string(r_min) + " - " +
                               std::to_string(r_max) + "]";
         return return_type{ok, err_msg};
       } else {
@@ -1292,6 +1295,9 @@ class Option final : public OptionBaseCRTP<Option<T>> {
       if (auto [ok, err_msg] = validator(parsed_value); !ok) {
         std::string msg = "Validation failed: ";
         msg += detail::join(ArgBase::long_opt_names_, ',');
+        if (!ArgBase::long_opt_names_.empty() && !ArgBase::short_opt_names_.empty()) {
+          msg += ", ";
+        }
         msg += detail::join(ArgBase::short_opt_names_, ',');
         msg += ": `";
         msg += opt_value;
@@ -1475,7 +1481,7 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
       using return_type = std::pair<bool, std::string>;
       auto ok = r_min <= val && val <= r_max;
       if (!ok) {
-        std::string err_msg = "not in range: [" + std::to_string(r_min) + "~" +
+        std::string err_msg = "not in range: [" + std::to_string(r_min) + " - " +
                               std::to_string(r_max) + "]";
         return return_type{ok, err_msg};
       } else {
@@ -1528,6 +1534,9 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
       if (auto [ok, err_msg] = validator(parsed_value); !ok) {
         std::string msg = "Validation failed: ";
         msg += detail::join(ArgBase::long_opt_names_, ',');
+        if (!ArgBase::long_opt_names_.empty() && !ArgBase::short_opt_names_.empty()) {
+          msg += ", ";
+        }
         msg += detail::join(ArgBase::short_opt_names_, ',');
         msg += ": `";
         msg += opt_value;
@@ -1614,7 +1623,7 @@ class Command {
                                   std::move(action), std::move(negated_action));
     auto& ret = *(flag.get());
     if (flag_or_option_exists(ret)) {
-      detail::die("Flag or Option already exists: " + name);
+      detail::die("Flag or option already exists: " + name);
     }
     args_.push_back(std::move(flag));
     return ret;
@@ -1634,7 +1643,7 @@ class Command {
                                   std::move(action), std::move(negated_action));
     auto& ret = *(flag.get());
     if (flag_or_option_exists(ret)) {
-      detail::die("Flag or Option already exists: " + name);
+      detail::die("Flag or option already exists: " + name);
     }
     args_.push_back(std::move(flag));
     return ret;
@@ -1705,7 +1714,7 @@ class Command {
 
     auto& ret = *(alias.get());
     if (flag_or_option_exists(ret)) {
-      detail::die("Flag or Option already exists: " + name);
+      detail::die("Flag or option already exists: " + name);
     }
     args_.push_back(std::move(alias));
     return ret;
@@ -1717,7 +1726,7 @@ class Command {
     auto option = std::make_unique<Option<T>>(name, description, bind_value);
     auto& ret = *(option.get());
     if (flag_or_option_exists(ret)) {
-      detail::die("Flag or Option already exists: " + name);
+      detail::die("Flag or option already exists: " + name);
     }
     args_.push_back(std::move(option));
     return ret;
@@ -1730,7 +1739,7 @@ class Command {
         std::make_unique<Option<T>>(name, description, bind_value, delim);
     auto& ret = *(option.get());
     if (flag_or_option_exists(ret)) {
-      detail::die("Flag or Option already exists: " + name);
+      detail::die("Flag or option already exists: " + name);
     }
     args_.push_back(std::move(option));
     return ret;
@@ -1748,7 +1757,7 @@ class Command {
         }) != args_.end()) {
       detail::die(
           "Only one container positional argument is supported, "
-          "and it must be the last one");
+          "and it must be the last one.");
     }
     auto positional =
         std::make_unique<Positional<T>>(name, description, bind_value);
@@ -2255,7 +2264,7 @@ class ArgParser : public Command {
   Command& add_command(std::string const& cmd, std::string const& description) {
     if (std::any_of(begin(args_), end(args_),
                     [](auto const& a) { return a->is_positional(); })) {
-      detail::die("Cannot add subcommand when positional arguments exist");
+      detail::die("Cannot add a subcommand when positional arguments exist");
     }
     auto cmd_ptr = std::make_shared<Command>(cmd, description);
     cmd_ptr->set_parent(this);
@@ -2265,7 +2274,7 @@ class ArgParser : public Command {
   void set_option_width(int width) { this->Command::set_option_width(width); }
 
  private:
-  /// Build a sanitised shell function name from a command path
+  /// Build a sanitized shell function name from a command path
   /// (e.g. {"myprog","build"} → "_myprog_build").
   static std::string bash_func_name(std::vector<std::string> const& path) {
     std::string name = "_" + detail::join(path, "_");
@@ -2725,7 +2734,7 @@ class ArgParser : public Command {
     };
 
     // Build the condition string for having seen the given subcommand
-    // path.  E.g. for {"myprog","build","release"} →
+    // path.  E.g., for {"myprog","build","release"} →
     //   "__fish_seen_subcommand_from build; and __fish_seen_subcommand_from
     //   release"
     auto seen_condition =
