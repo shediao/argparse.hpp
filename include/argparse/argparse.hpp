@@ -2182,9 +2182,12 @@ class ArgParser : public Command {
   std::string usage() const override {
     std::stringstream usage_str;
     if (!description_.empty()) {
-      usage_str << description_ << "\n";
+      usage_str << description_;
+      if(description_.back() != '\n') {
+        usage_str << '\n';
+      }
     }
-    usage_str << "\nUsage: \n  ";
+    usage_str << "\nUsage:\n";
     usage_str << this->Command::usage();
 
     if (!subcommands_.empty()) {
