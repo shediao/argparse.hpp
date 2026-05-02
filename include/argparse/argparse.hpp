@@ -1087,12 +1087,11 @@ class OptionBase : public ArgBase {
         }
       }
       if (!this->choices_descriptions_.empty()) {
+        std::vector<std::string> choice_strs;
         for (auto const& [value, help] : this->choices_descriptions_) {
-          usage_str << '\n'
-                    << detail::format("      [" + value + "]", option_width(),
-                                      " " + help, "  ");
+          choice_strs.push_back("[" + value + "] " + help);
         }
-        usage_str << '\n';
+        usage_str << " (" << detail::join(choice_strs, ", ") << ")";
       }
     } else {
       std::string options_str{long_opt_names_[0]};
