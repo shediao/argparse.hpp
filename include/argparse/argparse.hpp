@@ -847,19 +847,19 @@ class FlagBase : public ArgBase {
       for (auto it = all_names.begin(); it != end; ++it) {
         usage_str << *it << '\n';
       }
-      usage_str << detail::format(*end, description(), "  ");
+      usage_str << detail::format(*end, description(), " ");
     } else {
       auto s = detail::join(short_names_with_dash, delimiter);
       auto l = detail::join(long_names_with_dash_dash, delimiter);
       if (short_names_with_dash.empty()) {
         std::string options_str =
             "  " + std::string(delimiter_of_short_and_long.length(), ' ') + l;
-        usage_str << detail::format(options_str, description(), "  ");
+        usage_str << detail::format(options_str, description(), " ");
       } else {
         std::string options_str = long_names_with_dash_dash.empty()
                                       ? s
                                       : (s + delimiter_of_short_and_long + l);
-        usage_str << detail::format(options_str, description(), "  ");
+        usage_str << detail::format(options_str, description(), " ");
       }
     }
 
@@ -1067,7 +1067,7 @@ class OptionBase : public ArgBase {
           usage_str << *it << ' ' << value_placeholder_ << '\n';
         }
         usage_str << detail::format(*end + " " + value_placeholder_,
-                                    description() + extra_str, "  ");
+                                    description() + extra_str, " ");
       } else {
         auto s = detail::join(short_names_with_dash, delimiter);
         auto l = detail::join(long_names_with_dash_dash, delimiter);
@@ -1075,19 +1075,19 @@ class OptionBase : public ArgBase {
           std::string options_str =
               "  " + std::string(delimiter_of_short_and_long.length(), ' ') + l;
           usage_str << detail::format(options_str + " " + value_placeholder_,
-                                      description() + extra_str, "  ");
+                                      description() + extra_str, " ");
         } else {
           std::string options_str = long_names_with_dash_dash.empty()
                                         ? s
                                         : (s + delimiter_of_short_and_long + l);
           usage_str << detail::format(options_str + " " + value_placeholder_,
-                                      description() + extra_str, "  ");
+                                      description() + extra_str, " ");
         }
       }
 
     } else {
       std::string options_str{long_opt_names_[0]};
-      usage_str << detail::format(options_str, description() + extra_str, "  ");
+      usage_str << detail::format(options_str, description() + extra_str, " ");
     }
     return usage_str.str();
   }
@@ -2061,7 +2061,7 @@ class Command {
   }
   std::string one_line_usage() {
     std::stringstream usage_str;
-    usage_str << detail::format(command_, description_, "  ");
+    usage_str << detail::format(command_, description_, " ");
     return usage_str.str();
   }
   void add_default_help_flag() {
@@ -2174,7 +2174,7 @@ class ArgParser : public Command {
     usage_str << this->Command::usage();
 
     if (!subcommands_.empty()) {
-      usage_str << "\n\nAvailable Commands:";
+      usage_str << "\nAvailable Commands:";
       for (auto const& cmd : subcommands_) {
         if (cmd->is_hidden()) {
           continue;
