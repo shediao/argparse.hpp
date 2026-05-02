@@ -547,8 +547,13 @@ inline std::string word_wrap(const std::string& text, size_t width) {
 // If the option_name already contains embedded '\\n' (because the caller
 // placed multiple names on separate lines) only the *last* line is used
 // to decide where the description begins.
+//
+// The 'prefix' parameter is prepended to the first line and to every
+// continuation line, ensuring consistent indentation when the caller
+// places the formatted block inside a larger layout.
 inline std::string format(std::string const& option_name, size_t width,
-                          std::string const& description) {
+                          std::string const& description,
+                          std::string const& prefix = "") {
   constexpr size_t total_width = 80;
   size_t desc_width = (total_width > width + 2) ? (total_width - width) : 40;
 
@@ -558,7 +563,7 @@ inline std::string format(std::string const& option_name, size_t width,
                         ? option_name.size()
                         : (option_name.size() - nl_pos - 1);
 
-  std::string result = option_name;
+  std::string result = prefix + option_name;
 
   // Split the description on existing \n (intentional hard breaks),
   // word-wrap each segment, then emit every line with proper indentation.
@@ -586,6 +591,7 @@ inline std::string format(std::string const& option_name, size_t width,
         result.append(width - last_len, ' ');
       } else {
         result += '\n';
+        result += prefix;
         result.append(width, ' ');
       }
       result += line;
@@ -808,19 +814,21 @@ class FlagBase : public ArgBase {
       for (auto it = all_names.begin(); it != end; ++it) {
         usage_str << *it << '\n';
       }
-      usage_str << detail::format(*end, option_width(), description());
+      usage_str << detail::format(*end, option_width(), description(), "  ");
     } else {
       auto s = detail::join(short_names_with_dash, delimiter);
       auto l = detail::join(long_names_with_dash_dash, delimiter);
       if (short_names_with_dash.empty()) {
         std::string options_str =
             "  " + std::string(delimiter_of_short_and_long.length(), ' ') + l;
-        usage_str << detail::format(options_str, option_width(), description());
+        usage_str << detail::format(options_str, option_width(), description(),
+                                    "  ");
       } else {
         std::string options_str = long_names_with_dash_dash.empty()
                                       ? s
                                       : (s + delimiter_of_short_and_long + l);
-        usage_str << detail::format(options_str, option_width(), description());
+        usage_str << detail::format(options_str, option_width(), description(),
+                                    "  ");
       }
     }
 
@@ -1008,7 +1016,7 @@ class OptionBase : public ArgBase {
           usage_str << *it << ' ' << value_placeholder_ << '\n';
         }
         usage_str << detail::format(*end + " " + value_placeholder_,
-                                    option_width(), description());
+                                    option_width(), description(), "  ");
       } else {
         auto s = detail::join(short_names_with_dash, delimiter);
         auto l = detail::join(long_names_with_dash_dash, delimiter);
@@ -1016,13 +1024,13 @@ class OptionBase : public ArgBase {
           std::string options_str =
               "  " + std::string(delimiter_of_short_and_long.length(), ' ') + l;
           usage_str << detail::format(options_str + " " + value_placeholder_,
-                                      option_width(), description());
+                                      option_width(), description(), "  ");
         } else {
           std::string options_str = long_names_with_dash_dash.empty()
                                         ? s
                                         : (s + delimiter_of_short_and_long + l);
           usage_str << detail::format(options_str + " " + value_placeholder_,
-                                      option_width(), description());
+                                      option_width(), description(), "  ");
         }
       }
 
@@ -1036,7 +1044,8 @@ class OptionBase : public ArgBase {
                 default_value_string.length() >
             max_width) {
           usage_str << "\n"
-                    << detail::format("", option_width(), default_value_string);
+                    << detail::format("", option_width(), default_value_string,
+                                      "  ");
         } else {
           usage_str << default_value_string;
         }
@@ -1045,20 +1054,22 @@ class OptionBase : public ArgBase {
         for (auto const& [value, help] : this->choices_descriptions_) {
           usage_str << '\n'
                     << detail::format("      [" + value + "]", option_width(),
-                                      " " + help);
+                                      " " + help, "  ");
         }
         usage_str << '\n';
       }
     } else {
       std::string options_str{long_opt_names_[0]};
-      usage_str << detail::format(options_str, option_width(), description());
+      usage_str << detail::format(options_str, option_width(), description(),
+                                  "  ");
       if (auto default_value = get_default_value(); default_value.has_value()) {
         auto default_value_string = " (default: " + *default_value + ")";
         if (option_width() + description().length() +
                 default_value_string.length() >
             max_width) {
           usage_str << "\n"
-                    << detail::format("", option_width(), default_value_string)
+                    << detail::format("", option_width(), default_value_string,
+                                      "  ")
                     << '\n';
         } else {
           usage_str << default_value_string;
@@ -2008,7 +2019,7 @@ class Command {
     }
     for (const auto& arg : args_) {
       if ((arg->is_option() || arg->is_flag()) && !arg->hidden_) {
-        usage_str << "\n  " << arg->usage();
+        usage_str << "\n" << arg->usage();
       }
     }
 
@@ -2019,7 +2030,7 @@ class Command {
     }
     for (const auto& arg : args_) {
       if (arg->is_positional() && !arg->hidden_) {
-        usage_str << "\n  " << arg->usage();
+        usage_str << "\n" << arg->usage();
       }
     }
     if (!usage_footer_.empty()) {
@@ -2029,7 +2040,7 @@ class Command {
   }
   std::string one_line_usage() {
     std::stringstream usage_str;
-    usage_str << detail::format(command_, option_width(), description_);
+    usage_str << detail::format(command_, option_width(), description_, "  ");
     return usage_str.str();
   }
   void add_default_help_flag() {
@@ -2159,7 +2170,7 @@ class ArgParser : public Command {
         if (cmd->is_hidden()) {
           continue;
         }
-        usage_str << "\n  " << cmd->one_line_usage();
+        usage_str << "\n" << cmd->one_line_usage();
       }
     }
 
