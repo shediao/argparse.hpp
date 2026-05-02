@@ -127,8 +127,22 @@
 
 namespace argparse {
 
-inline constexpr size_t OPTION_NAME_WIDTH = 24;
 inline constexpr size_t TOTAL_WIDTH = 80;
+
+namespace detail {
+inline size_t& option_name_width_impl() {
+  static size_t width = 24;
+  return width;
+}
+}  // namespace detail
+
+/// Get the current option name width (default: 24).
+inline size_t option_name_width() { return detail::option_name_width_impl(); }
+
+/// Set the option name width globally for help/usage formatting.
+inline void set_option_name_width(size_t width) {
+  detail::option_name_width_impl() = width;
+}
 
 namespace detail {
 
@@ -589,8 +603,8 @@ inline std::string format(std::string const& option_name,
                           std::string const& prefix = "") {
   constexpr size_t MINIMUM_DESCRIPTION_WIDTH = 40;
   size_t desc_width =
-      (TOTAL_WIDTH > OPTION_NAME_WIDTH + MINIMUM_DESCRIPTION_WIDTH)
-          ? (TOTAL_WIDTH - OPTION_NAME_WIDTH)
+      (TOTAL_WIDTH > option_name_width() + MINIMUM_DESCRIPTION_WIDTH)
+          ? (TOTAL_WIDTH - option_name_width())
           : MINIMUM_DESCRIPTION_WIDTH;
 
   // Length of the last line of option_name (may be multi-line).
@@ -622,13 +636,13 @@ inline std::string format(std::string const& option_name,
       auto line = (wnl == std::string::npos) ? wrapped.substr(wpos)
                                              : wrapped.substr(wpos, wnl - wpos);
 
-      if (first_out_line && last_len < OPTION_NAME_WIDTH) {
+      if (first_out_line && last_len < option_name_width()) {
         // First description line goes on the same line as the option.
-        result.append(OPTION_NAME_WIDTH - last_len, ' ');
+        result.append(option_name_width() - last_len, ' ');
       } else {
         result += '\n';
         result += prefix;
-        result.append(OPTION_NAME_WIDTH, ' ');
+        result.append(option_name_width(), ' ');
       }
       result += line;
       first_out_line = false;
@@ -837,7 +851,7 @@ class FlagBase : public ArgBase {
                              return negatable ? ("--[no-]" + s) : ("--" + s);
                            });
 
-    bool use_multiple_lines = flag_names_length > OPTION_NAME_WIDTH;
+    bool use_multiple_lines = flag_names_length > option_name_width();
 
     if (use_multiple_lines) {
       std::vector<std::string> all_names{short_names_with_dash};
@@ -1056,7 +1070,7 @@ class OptionBase : public ArgBase {
                              back_inserter(long_names_with_dash_dash),
                              [](auto const& s) { return "--" + s; });
 
-      bool use_multiple_lines = opt_names_length > OPTION_NAME_WIDTH;
+      bool use_multiple_lines = opt_names_length > option_name_width();
 
       if (use_multiple_lines) {
         std::vector<std::string> all_names{short_names_with_dash};
