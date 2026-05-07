@@ -671,7 +671,7 @@ inline std::wstring to_wstring(const std::string_view& str) {
   int size_needed =
       MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
   if (size_needed <= 0) {
-    // TODO: throw an exception for conversion errors
+    // TODO: throw an exception on conversion errors
     return {};
   }
   std::wstring wstr(size_needed, 0);
@@ -688,7 +688,7 @@ inline std::string to_string(const std::wstring_view& wstr) {
   int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(),
                                         NULL, 0, NULL, NULL);
   if (size_needed <= 0) {
-    // TODO: throw an exception for conversion errors
+    // TODO: throw an exception on conversion errors
     return {};
   }
   std::string str(size_needed, 0);
