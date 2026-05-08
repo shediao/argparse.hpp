@@ -127,6 +127,10 @@
 #endif
 
 namespace argparse {
+using std::to_string;
+using std::to_wstring;
+inline std::string to_string(std::string const& s) { return s; }
+inline std::wstring to_wstring(std::wstring const& s) { return s; }
 
 inline constexpr size_t TOTAL_WIDTH = 80;
 
@@ -210,15 +214,29 @@ concept IsContainer = requires(T t) {
   t.insert(t.end(), std::declval<typename T::value_type>());
 };
 
-template <typename T, typename = void>
-struct has_std_to_string : std::false_type {};
+template <typename T>
+struct has_to_string : std::false_type {};
 
 template <typename T>
-struct has_std_to_string<T, void_t<decltype(std::to_string(std::declval<T>()))>>
-    : std::is_same<decltype(std::to_string(std::declval<T>())), std::string> {};
+  requires(requires(const T& t) {
+    { to_string(t) } -> std::convertible_to<std::string>;
+  })
+struct has_to_string<T> : std::true_type {};
 
 template <typename T>
-constexpr bool has_std_to_string_v = has_std_to_string<T>::value;
+constexpr bool has_to_string_v = has_to_string<T>::value;
+
+template <typename T>
+struct has_to_wstring : std::false_type {};
+
+template <typename T>
+  requires(requires(const T& t) {
+    { to_wstring(t) } -> std::convertible_to<std::wstring>;
+  })
+struct has_to_wstring<T> : std::true_type {};
+
+template <typename T>
+constexpr bool has_to_wstring_v = has_to_wstring<T>::value;
 
 template <typename T>
 concept ParseFromStringBasicType =
@@ -542,7 +560,7 @@ T parse_from_string(std::string const& s, const char delim) {
   if (v.size() != std::tuple_size_v<std::decay_t<T>>) {
     detail::report_invalid_argument(
         "Invalid delimited string: expected " +
-        std::to_string(std::tuple_size_v<std::decay_t<T>>) +
+        argparse::to_string(std::tuple_size_v<std::decay_t<T>>) +
         " elements, got: " + s);
   }
   return make_tuple_from_container<T>(v);
@@ -721,6 +739,11 @@ inline std::optional<std::string> getenv(std::string const& name) {
 }
 
 }  // namespace detail
+
+#if defined(_WIN32)
+using argparse::detail::to_string;
+using argparse::detail::to_wstring;
+#endif
 
 inline void store_true(bool& value) { value = true; }
 
@@ -1252,8 +1275,8 @@ class Option final : public OptionBaseCRTP<Option<T>> {
       using return_type = std::pair<bool, std::string>;
       auto ok = r_min <= val && val <= r_max;
       if (!ok) {
-        std::string err_msg = "not in range: [" + std::to_string(r_min) +
-                              " - " + std::to_string(r_max) + "]";
+        std::string err_msg = "not in range: [" + argparse::to_string(r_min) +
+                              " - " + argparse::to_string(r_max) + "]";
         return return_type{ok, err_msg};
       } else {
         return return_type{ok, ""};
@@ -1310,15 +1333,14 @@ class Option final : public OptionBaseCRTP<Option<T>> {
         msg += opt_value;
         msg += "` is an invalid value. Valid choices are: ";
 
-        if constexpr (std::is_same_v<parsed_value_type, std::string> ||
-                      detail::has_std_to_string_v<parsed_value_type> ||
+        if constexpr (detail::has_to_string_v<parsed_value_type> ||
                       std::is_constructible_v<std::string, parsed_value_type>) {
           std::vector<std::string> keys;
           std::transform(
               value_choices_.begin(), value_choices_.end(),
               std::back_inserter(keys), [](auto const& pair) {
-                if constexpr (detail::has_std_to_string_v<parsed_value_type>) {
-                  return std::to_string(pair.first);
+                if constexpr (detail::has_to_string_v<parsed_value_type>) {
+                  return argparse::to_string(pair.first);
                 } else {
                   return pair.first;
                 }
@@ -1505,8 +1527,8 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
       using return_type = std::pair<bool, std::string>;
       auto ok = r_min <= val && val <= r_max;
       if (!ok) {
-        std::string err_msg = "not in range: [" + std::to_string(r_min) +
-                              " - " + std::to_string(r_max) + "]";
+        std::string err_msg = "not in range: [" + argparse::to_string(r_min) +
+                              " - " + argparse::to_string(r_max) + "]";
         return return_type{ok, err_msg};
       } else {
         return return_type{ok, ""};
@@ -1562,14 +1584,14 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
         msg += "` is an invalid value. Valid choices are: ";
 
         if constexpr (std::is_same_v<parsed_value_type, std::string> ||
-                      detail::has_std_to_string_v<parsed_value_type> ||
+                      detail::has_to_string_v<parsed_value_type> ||
                       std::is_constructible_v<std::string, parsed_value_type>) {
           std::vector<std::string> keys;
           std::transform(
               value_choices_.begin(), value_choices_.end(),
               std::back_inserter(keys), [](auto const& pair) {
-                if constexpr (detail::has_std_to_string_v<parsed_value_type>) {
-                  return std::to_string(pair.first);
+                if constexpr (detail::has_to_string_v<parsed_value_type>) {
+                  return argparse::to_string(pair.first);
                 } else {
                   return pair.first;
                 }
@@ -2840,7 +2862,7 @@ class ArgParser : public Command {
               for (size_t idx = 0; idx < positionals.size(); ++idx) {
                 os << " \\\n        '" << (idx + 1) << ":"
                    << (positionals[idx]->value_placeholder_.empty()
-                           ? "arg" + std::to_string(idx + 1)
+                           ? "arg" + argparse::to_string(idx + 1)
                            : positionals[idx]->value_placeholder_);
                 if (!positionals[idx]->choices_.empty()) {
                   os << ":(";

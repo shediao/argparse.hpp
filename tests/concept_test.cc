@@ -549,3 +549,142 @@ TEST(ConceptTest, BindableWithDelimiterType) {
   ASSERT_FALSE((argparse::detail::BindableWithDelimiterType<
                 std::tuple<std::tuple<int>>>));
 }
+
+// ============================================================
+// Tests for has_to_string / has_to_wstring traits
+// ============================================================
+
+// Custom type with a free to_string in its own namespace (ADL)
+namespace custom_ns {
+struct WithToString {};
+inline std::string to_string(WithToString const&) { return "custom"; }
+
+struct WithToWstring {};
+inline std::wstring to_wstring(WithToWstring const&) { return L"custom"; }
+
+struct WithBoth {};
+inline std::string to_string(WithBoth const&) { return "both"; }
+inline std::wstring to_wstring(WithBoth const&) { return L"both"; }
+
+// A type with to_string that returns something not convertible to std::string
+struct BadToString {};
+inline int to_string(BadToString const&) { return 42; }
+
+struct BadToWstring {};
+inline int to_wstring(BadToWstring const&) { return 42; }
+}  // namespace custom_ns
+
+// 测试 has_to_string trait
+TEST(ConceptTest, HasToString) {
+  // std::to_string 支持的标准类型
+  ASSERT_TRUE(argparse::detail::has_to_string_v<int>);
+  ASSERT_TRUE(argparse::detail::has_to_string_v<long>);
+  ASSERT_TRUE(argparse::detail::has_to_string_v<long long>);
+  ASSERT_TRUE(argparse::detail::has_to_string_v<unsigned>);
+  ASSERT_TRUE(argparse::detail::has_to_string_v<unsigned long>);
+  ASSERT_TRUE(argparse::detail::has_to_string_v<unsigned long long>);
+  ASSERT_TRUE(argparse::detail::has_to_string_v<float>);
+  ASSERT_TRUE(argparse::detail::has_to_string_v<double>);
+  ASSERT_TRUE(argparse::detail::has_to_string_v<long double>);
+
+  // std::string（通过 argparse 中的 identity 重载）
+  ASSERT_TRUE(argparse::detail::has_to_string_v<std::string>);
+
+  // 通过 ADL 找到的自定义类型
+  ASSERT_TRUE(argparse::detail::has_to_string_v<custom_ns::WithToString>);
+  ASSERT_TRUE(argparse::detail::has_to_string_v<custom_ns::WithBoth>);
+
+  // bool / char / short 等可通过整型提升隐式转换为 int
+  ASSERT_TRUE(argparse::detail::has_to_string_v<bool>);
+  ASSERT_TRUE(argparse::detail::has_to_string_v<char>);
+  ASSERT_TRUE(argparse::detail::has_to_string_v<short>);
+  ASSERT_TRUE(argparse::detail::has_to_string_v<unsigned short>);
+  ASSERT_TRUE(argparse::detail::has_to_string_v<unsigned char>);
+
+  // wchar_t / char16_t / char32_t 的整型提升结果因平台而异，
+  // 但通常也能落到 std::to_string 的某个重载上
+  // （此处仅验证 trait 行为一致，结果可为 true 或 false）
+
+  // std::to_string 不支持的类型
+  ASSERT_FALSE(argparse::detail::has_to_string_v<std::wstring>);
+  ASSERT_FALSE(argparse::detail::has_to_string_v<std::vector<int>>);
+  ASSERT_FALSE((argparse::detail::has_to_string_v<std::pair<int, int>>));
+  ASSERT_FALSE(argparse::detail::has_to_string_v<custom_ns::WithToWstring>);
+
+  // 返回类型不匹配（返回 int 而非 std::string）
+  ASSERT_FALSE(argparse::detail::has_to_string_v<custom_ns::BadToString>);
+
+  // const char* 可隐式构造 std::string，匹配 identity 重载
+  ASSERT_TRUE(argparse::detail::has_to_string_v<const char*>);
+
+  // 不相关指针类型
+  ASSERT_FALSE(argparse::detail::has_to_string_v<int*>);
+}
+
+// 测试 has_to_wstring trait
+TEST(ConceptTest, HasToWstring) {
+  // std::to_wstring 支持的标准类型
+  ASSERT_TRUE(argparse::detail::has_to_wstring_v<int>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring_v<long>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring_v<long long>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring_v<unsigned>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring_v<unsigned long>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring_v<unsigned long long>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring_v<float>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring_v<double>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring_v<long double>);
+
+  // std::wstring（通过 argparse 中的 identity 重载）
+  ASSERT_TRUE(argparse::detail::has_to_wstring_v<std::wstring>);
+
+  // 通过 ADL 找到的自定义类型
+  ASSERT_TRUE(argparse::detail::has_to_wstring_v<custom_ns::WithToWstring>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring_v<custom_ns::WithBoth>);
+
+  // bool / char / short 等可通过整型提升隐式转换为 int
+  ASSERT_TRUE(argparse::detail::has_to_wstring_v<bool>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring_v<char>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring_v<short>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring_v<unsigned short>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring_v<unsigned char>);
+
+  // std::to_wstring 不支持的类型
+  ASSERT_FALSE(argparse::detail::has_to_wstring_v<std::string>);
+  ASSERT_FALSE(argparse::detail::has_to_wstring_v<std::vector<int>>);
+  ASSERT_FALSE((argparse::detail::has_to_wstring_v<std::pair<int, int>>));
+  ASSERT_FALSE(argparse::detail::has_to_wstring_v<custom_ns::WithToString>);
+
+  // 返回类型不匹配（返回 int 而非 std::wstring）
+  ASSERT_FALSE(argparse::detail::has_to_wstring_v<custom_ns::BadToWstring>);
+
+  // const wchar_t* 可隐式构造 std::wstring，匹配 identity 重载
+  ASSERT_TRUE(argparse::detail::has_to_wstring_v<const wchar_t*>);
+
+  // 不相关指针类型
+  ASSERT_FALSE(argparse::detail::has_to_wstring_v<int*>);
+}
+
+// 测试 has_to_string 与 const/volatile 修饰符
+TEST(ConceptTest, HasToStringConstVolatile) {
+  ASSERT_TRUE(argparse::detail::has_to_string_v<const int>);
+  ASSERT_TRUE(argparse::detail::has_to_string_v<const double>);
+  ASSERT_TRUE(argparse::detail::has_to_string_v<const std::string>);
+
+  ASSERT_TRUE(argparse::detail::has_to_wstring_v<const int>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring_v<const double>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring_v<const std::wstring>);
+}
+
+// 测试 has_to_string 与枚举类型（std::to_string 不直接支持枚举）
+TEST(ConceptTest, HasToStringEnum) {
+  enum Color { Red, Green, Blue };
+  enum class Fruit { Apple, Banana };
+
+  // 无作用域枚举可隐式转换为 int，因此 std::to_string 可用
+  ASSERT_TRUE(argparse::detail::has_to_string_v<Color>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring_v<Color>);
+
+  // 有作用域枚举不可隐式转换，std::to_string 不可用
+  ASSERT_FALSE(argparse::detail::has_to_string_v<Fruit>);
+  ASSERT_FALSE(argparse::detail::has_to_wstring_v<Fruit>);
+}
