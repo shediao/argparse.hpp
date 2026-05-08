@@ -714,6 +714,29 @@ inline std::vector<std::string> split(std::string const& s, char delim,
   return result;
 }
 
+template <typename T>
+  requires(
+      requires { std::tuple_size_v<T> > 0; } &&
+      requires {
+        []<typename U, std::size_t... I>(U, std::integer_sequence<std::size_t, I...>) {
+          return U{from_string<std::tuple_element_t<I, U>>(std::string{})...};
+        }(T{}, std::make_index_sequence<std::tuple_size_v<T>>());
+      })
+T from_string(const std::string& s, char delim) {
+  auto values = split(s, delim, -1);
+  if (values.size() != std::tuple_size_v<T>) {
+    detail::report_invalid_argument(
+        "Invalid tuple value: " + s + " expected " +
+        std::to_string(std::tuple_size_v<T>) + " " +
+        (std::tuple_size_v<T> == 1 ? "value" : "values") + ".");
+  }
+  return []<size_t... I>(std::vector<std::string> const& values,
+                         std::integer_sequence<std::size_t, I...>) {
+    return T{
+        from_string<std::decay_t<std::tuple_element_t<I, T>>>(values[I])...};
+  }(values, std::make_index_sequence<std::tuple_size_v<std::decay_t<T>>>());
+}
+
 template <typename T, std::size_t... I>
 T make_tuple_from_container_impl(std::vector<std::string> const& v,
                                  std::integer_sequence<std::size_t, I...>) {

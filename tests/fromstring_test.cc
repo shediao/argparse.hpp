@@ -230,6 +230,112 @@ TEST(FromStringTest, UnsignedShort) {
   EXPECT_THROW(from_string<unsigned short>("65536"), std::invalid_argument);
 }
 
+// --- from_string: tuple-like types (pair, tuple, array) ---
+
+TEST(FromStringTest, Pair) {
+  auto p = from_string<std::pair<int, int>>("1,2", ',');
+  EXPECT_EQ(p.first, 1);
+  EXPECT_EQ(p.second, 2);
+
+  auto ps =
+      from_string<std::pair<std::string, std::string>>("hello,world", ',');
+  EXPECT_EQ(ps.first, "hello");
+  EXPECT_EQ(ps.second, "world");
+
+  auto pm = from_string<std::pair<int, double>>("42,3.14", ',');
+  EXPECT_EQ(pm.first, 42);
+  EXPECT_DOUBLE_EQ(pm.second, 3.14);
+}
+
+TEST(FromStringTest, TupleBasic) {
+  auto t2 = from_string<std::tuple<int, int>>("10,20", ',');
+  EXPECT_EQ(std::get<0>(t2), 10);
+  EXPECT_EQ(std::get<1>(t2), 20);
+
+  auto t3 = from_string<std::tuple<int, int, int>>("1,2,3", ',');
+  EXPECT_EQ(std::get<0>(t3), 1);
+  EXPECT_EQ(std::get<1>(t3), 2);
+  EXPECT_EQ(std::get<2>(t3), 3);
+}
+
+TEST(FromStringTest, TupleSingleElement) {
+  auto t1 = from_string<std::tuple<int>>("42", ',');
+  EXPECT_EQ(std::get<0>(t1), 42);
+
+  auto ts1 = from_string<std::tuple<std::string>>("hello", ',');
+  EXPECT_EQ(std::get<0>(ts1), "hello");
+}
+
+TEST(FromStringTest, TupleMixedTypes) {
+  auto t =
+      from_string<std::tuple<int, double, std::string>>("1,3.14,hello", ',');
+  EXPECT_EQ(std::get<0>(t), 1);
+  EXPECT_DOUBLE_EQ(std::get<1>(t), 3.14);
+  EXPECT_EQ(std::get<2>(t), "hello");
+}
+
+TEST(FromStringTest, TupleCustomDelimiter) {
+  auto t = from_string<std::tuple<int, int, int>>("1:2:3", ':');
+  EXPECT_EQ(std::get<0>(t), 1);
+  EXPECT_EQ(std::get<1>(t), 2);
+  EXPECT_EQ(std::get<2>(t), 3);
+
+  auto p = from_string<std::pair<std::string, std::string>>("key=value", '=');
+  EXPECT_EQ(p.first, "key");
+  EXPECT_EQ(p.second, "value");
+}
+
+TEST(FromStringTest, TupleTooManyElements) {
+  EXPECT_THROW((from_string<std::tuple<int, int>>("1,2,3", ',')),
+               std::invalid_argument);
+  EXPECT_THROW((from_string<std::pair<int, int>>("1,2,3", ',')),
+               std::invalid_argument);
+  EXPECT_THROW((from_string<std::tuple<int>>("1,2", ',')),
+               std::invalid_argument);
+}
+
+TEST(FromStringTest, TupleTooFewElements) {
+  EXPECT_THROW((from_string<std::tuple<int, int, int>>("1,2", ',')),
+               std::invalid_argument);
+  EXPECT_THROW((from_string<std::pair<int, int>>("1", ',')),
+               std::invalid_argument);
+}
+
+TEST(FromStringTest, TupleInvalidElement) {
+  EXPECT_THROW((from_string<std::tuple<int, int>>("1,abc", ',')),
+               std::invalid_argument);
+  EXPECT_THROW((from_string<std::tuple<int, double>>("abc,3.14", ',')),
+               std::invalid_argument);
+  EXPECT_THROW((from_string<std::tuple<int, int, int>>("1,,3", ',')),
+               std::invalid_argument);
+}
+
+TEST(FromStringTest, Array) {
+  auto a = from_string<std::array<int, 3>>("1,2,3", ',');
+  EXPECT_EQ(a[0], 1);
+  EXPECT_EQ(a[1], 2);
+  EXPECT_EQ(a[2], 3);
+
+  auto a2 = from_string<std::array<int, 4>>("10,20,30,40", ',');
+  EXPECT_EQ(a2[0], 10);
+  EXPECT_EQ(a2[1], 20);
+  EXPECT_EQ(a2[2], 30);
+  EXPECT_EQ(a2[3], 40);
+
+  // Too many elements for array
+  EXPECT_THROW((from_string<std::array<int, 2>>("1,2,3", ',')),
+               std::invalid_argument);
+  // Too few elements for array
+  EXPECT_THROW((from_string<std::array<int, 3>>("1,2", ',')),
+               std::invalid_argument);
+}
+
+TEST(FromStringTest, TupleEmptyString) {
+  // Empty string with a 1-element tuple: split gives [""], which is 1 element
+  // from_string<int>("") throws, so this should throw
+  EXPECT_THROW((from_string<std::tuple<int>>("", ',')), std::invalid_argument);
+}
+
 // --- from_wstring: types constructible from std::wstring ---
 
 TEST(FromWStringTest, ConstructibleFromWString) {
