@@ -2505,7 +2505,105 @@ class ArgParser : public Command {
       os << escape_bash(detail::join(cmd_names, ' ')) << "\"\n";
       os << "    COMPREPLY=($(compgen -W \"$cmds\" -- \"$cur\"))\n";
     }
-    os << "    return 0\n";
+
+    // ---- complete positional arguments ----
+    // Positionals and subcommands are mutually exclusive.
+    if (cmd.subcommands_.empty()) {
+      std::vector<OptionBase*> positionals;
+      for (auto const& arg : cmd.args_) {
+        if (arg->hidden_) {
+          continue;
+        }
+        if (!arg->is_positional()) {
+          continue;
+        }
+        auto* pos = dynamic_cast<OptionBase*>(arg.get());
+        if (pos) {
+          positionals.push_back(pos);
+        }
+      }
+      if (!positionals.empty()) {
+        // Detect which options take a value so we can skip their
+        // arguments when counting positional arguments.
+        os << "    # Count positional arguments already provided\n";
+        os << "    local _pos_count=0 _skip=false\n";
+        os << "    for ((_i=1; _i < $COMP_CWORD; _i++)); do\n";
+        os << "        if $_skip; then _skip=false; continue; fi\n";
+        os << "        local _w=\"${COMP_WORDS[$_i]}\"\n";
+        os << "        if [[ \"$_w\" == -* ]]; then\n";
+        // Emit a case to skip the value word for each option that
+        // takes an argument.
+        bool has_value_opts = false;
+        for (auto const& arg : cmd.args_) {
+          if (arg->hidden_) {
+            continue;
+          }
+          if (!arg->is_option()) {
+            continue;
+          }
+          has_value_opts = true;
+        }
+        if (has_value_opts) {
+          os << "            case \"$_w\" in\n";
+          for (auto const& arg : cmd.args_) {
+            if (arg->hidden_) {
+              continue;
+            }
+            if (!arg->is_option()) {
+              continue;
+            }
+            std::vector<std::string> patterns;
+            for (auto const& s : arg->short_opt_names_) {
+              patterns.push_back("-" + s);
+            }
+            for (auto const& l : arg->long_opt_names_) {
+              patterns.push_back("--" + l);
+            }
+            os << "                " << detail::join(patterns, '|') << ")\n";
+            os << "                    _skip=true\n";
+            os << "                    ;;\n";
+          }
+          os << "            esac\n";
+        }
+        os << "            continue\n";
+        os << "        fi\n";
+        os << "        _pos_count=$((_pos_count + 1))\n";
+        os << "    done\n";
+        os << "\n";
+        os << "    case $_pos_count in\n";
+        for (size_t idx = 0; idx < positionals.size(); ++idx) {
+          os << "        " << idx << ")\n";
+          if (!positionals[idx]->choices_.empty()) {
+            std::vector<std::string> choice_keys;
+            for (auto const& [k, _] : positionals[idx]->choices_) {
+              choice_keys.push_back(k);
+            }
+            os << "            COMPREPLY=($(compgen -W \""
+               << escape_bash(detail::join(choice_keys, ' '))
+               << "\" -- \"$cur\"))\n";
+          } else {
+            os << "            COMPREPLY=($(compgen -f -- \"$cur\"))\n";
+          }
+          os << "            ;;\n";
+        }
+        os << "    esac\n";
+        os << "    return 0\n";
+      }
+    }
+
+    // Final return; omit when positionals already provide their own return.
+    bool has_visible_positionals = false;
+    if (cmd.subcommands_.empty()) {
+      for (auto const& arg : cmd.args_) {
+        if (!arg->hidden_ && arg->is_positional()) {
+          has_visible_positionals = true;
+          break;
+        }
+      }
+    }
+    if (!has_visible_positionals) {
+      os << "    return 0\n";
+    }
     os << "}\n";
     os << "\n";
 
@@ -2723,7 +2821,44 @@ class ArgParser : public Command {
             os << "            ;;\n";
             os << "    esac\n";
           } else {
-            os << "    _arguments -s $options\n";
+            // Collect positional arguments for this command
+            std::vector<OptionBase*> positionals;
+            for (auto const& arg : cmd->args_) {
+              if (arg->hidden_) {
+                continue;
+              }
+              if (!arg->is_positional()) {
+                continue;
+              }
+              auto* pos = dynamic_cast<OptionBase*>(arg.get());
+              if (pos) {
+                positionals.push_back(pos);
+              }
+            }
+            if (!positionals.empty()) {
+              os << "    _arguments -s $options";
+              for (size_t idx = 0; idx < positionals.size(); ++idx) {
+                os << " \\\n        '" << (idx + 1) << ":"
+                   << (positionals[idx]->value_placeholder_.empty()
+                           ? "arg" + std::to_string(idx + 1)
+                           : positionals[idx]->value_placeholder_);
+                if (!positionals[idx]->choices_.empty()) {
+                  os << ":(";
+                  std::vector<std::string> choice_keys;
+                  for (auto const& [k, _] : positionals[idx]->choices_) {
+                    choice_keys.push_back(k);
+                  }
+                  os << detail::join(choice_keys, ' ');
+                  os << ")";
+                } else {
+                  os << ":_files";
+                }
+                os << "'";
+              }
+              os << "\n";
+            } else {
+              os << "    _arguments -s $options\n";
+            }
           }
           os << "}\n";
           os << "\n";
@@ -2883,6 +3018,37 @@ class ArgParser : public Command {
                  << "' -f -a '" << sc->command() << "'";
               if (!sc->description().empty()) {
                 os << " -d '" << escape_fish(sc->description()) << "'";
+              }
+              os << "\n";
+            }
+          } else {
+            // Positional arguments (only when there are no subcommands,
+            // as they are mutually exclusive).
+            std::vector<OptionBase*> positionals;
+            for (auto const& arg : cmd->args_) {
+              if (arg->hidden_) {
+                continue;
+              }
+              if (!arg->is_positional()) {
+                continue;
+              }
+              auto* pos = dynamic_cast<OptionBase*>(arg.get());
+              if (pos) {
+                positionals.push_back(pos);
+              }
+            }
+            for (auto const* pos : positionals) {
+              if (pos->choices_.empty()) {
+                continue;
+              }
+              std::vector<std::string> choice_keys;
+              for (auto const& [k, _] : pos->choices_) {
+                choice_keys.push_back(k);
+              }
+              os << "complete -c " << command_ << cond_prefix << " -f -a '"
+                 << escape_fish(detail::join(choice_keys, ' ')) << "'";
+              if (!pos->description().empty()) {
+                os << " -d '" << escape_fish(pos->description()) << "'";
               }
               os << "\n";
             }

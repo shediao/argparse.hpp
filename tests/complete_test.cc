@@ -818,3 +818,322 @@ TEST_F(CompletionTest, CustomOutputStream) {
   EXPECT_NE(bash_out, fish_out);
   EXPECT_NE(zsh_out, fish_out);
 }
+
+// ---------------------------------------------------------------------------
+// Tests for option with choices completion (detailed, per-shell)
+// ---------------------------------------------------------------------------
+
+TEST_F(CompletionTest, OptionWithChoicesBashPrevWord) {
+  // When the previous word is an option that has choices, bash should
+  // offer the choice values.
+  ArgParser parser("mycmd", "Test option choices");
+  std::string type;
+  parser.add_option("t,type", "Build type", type)
+      .value_placeholder("TYPE")
+      .choices({{"debug", "Debug build"}, {"release", "Release build"}});
+
+  std::ostringstream os;
+  parser.print_bash_complete(os);
+  std::string out = os.str();
+
+  // The prev-word case for -t and --type should complete "debug release"
+  EXPECT_TRUE(out.find("-t|--type)") != std::string::npos ||
+              out.find("--type|") != std::string::npos);
+  // Choices should appear as compgen arguments
+  EXPECT_TRUE(out.find("compgen -W \"debug release\"") != std::string::npos ||
+              out.find("compgen -W \"release debug\"") != std::string::npos);
+}
+
+TEST_F(CompletionTest, OptionWithChoicesBashEqualsDispatch) {
+  // Long options with choices should support --opt=value dispatch
+  ArgParser parser("mycmd", "Test option choices");
+  std::string type;
+  parser.add_option("t,type", "Build type", type)
+      .value_placeholder("TYPE")
+      .choices({{"debug", "Debug build"}, {"release", "Release build"}});
+
+  std::ostringstream os;
+  parser.print_bash_complete(os);
+  std::string out = os.str();
+
+  // The equals dispatch should have a case for --type
+  EXPECT_TRUE(out.find("--type)") != std::string::npos);
+  // And it should complete choices
+  EXPECT_TRUE(out.find("debug") != std::string::npos);
+  EXPECT_TRUE(out.find("release") != std::string::npos);
+}
+
+TEST_F(CompletionTest, OptionWithChoicesZsh) {
+  // Zsh should list choices in parentheses after the option spec
+  ArgParser parser("mycmd", "Test option choices");
+  std::string type;
+  parser.add_option("t,type", "Build type", type)
+      .value_placeholder("TYPE")
+      .choices({{"debug", "Debug build"}, {"release", "Release build"}});
+
+  std::ostringstream os;
+  parser.print_zsh_complete(os);
+  std::string out = os.str();
+
+  // Should contain the choices in parentheses (alphabetically sorted: debug
+  // release)
+  EXPECT_TRUE(out.find("(debug release)") != std::string::npos);
+  EXPECT_TRUE(out.find("'-t") != std::string::npos);
+  EXPECT_TRUE(out.find("'--type") != std::string::npos);
+}
+
+TEST_F(CompletionTest, OptionWithChoicesFish) {
+  // Fish should emit -a with the choice list
+  ArgParser parser("mycmd", "Test option choices");
+  std::string type;
+  parser.add_option("t,type", "Build type", type)
+      .value_placeholder("TYPE")
+      .choices({{"debug", "Debug build"}, {"release", "Release build"}});
+
+  std::ostringstream os;
+  parser.print_fish_complete(os);
+  std::string out = os.str();
+
+  EXPECT_TRUE(out.find("-s t") != std::string::npos);
+  EXPECT_TRUE(out.find("-l type") != std::string::npos);
+  // -r -f -a 'debug release'  (sorted alphabetically: debug release)
+  EXPECT_TRUE(out.find("-a 'debug release'") != std::string::npos ||
+              out.find("-a 'release debug'") != std::string::npos);
+}
+
+// ---------------------------------------------------------------------------
+// Tests for positional argument with choices completion
+// ---------------------------------------------------------------------------
+
+TEST_F(CompletionTest, PositionalWithChoicesBash) {
+  // Positionals with choices should be completed in bash scripts.
+  ArgParser parser("mycmd", "Test positional choices");
+  std::string ip;
+  parser.add_positional("ip", "IP address", ip)
+      .value_placeholder("IP")
+      .choices({{"127.0.0.1", "localhost"}, {"192.168.0.1", "localnet"}});
+
+  std::ostringstream os;
+  parser.print_bash_complete(os);
+  std::string out = os.str();
+
+  // Positional counting logic should be present
+  EXPECT_TRUE(out.find("_pos_count") != std::string::npos);
+  // The case for the first positional (index 0) should complete the choices
+  EXPECT_TRUE(out.find("127.0.0.1") != std::string::npos);
+  EXPECT_TRUE(out.find("192.168.0.1") != std::string::npos);
+  // Should use compgen -W with the choices
+  EXPECT_TRUE(out.find("compgen -W") != std::string::npos);
+}
+
+TEST_F(CompletionTest, PositionalWithChoicesZsh) {
+  // Zsh positionals should appear as positional specs in _arguments
+  ArgParser parser("mycmd", "Test positional choices");
+  std::string ip;
+  parser.add_positional("ip", "IP address", ip)
+      .value_placeholder("IP")
+      .choices({{"127.0.0.1", "localhost"}, {"192.168.0.1", "localnet"}});
+
+  std::ostringstream os;
+  parser.print_zsh_complete(os);
+  std::string out = os.str();
+
+  // The positional spec: '1:IP:(127.0.0.1 192.168.0.1)'
+  EXPECT_TRUE(out.find("'1:IP:(") != std::string::npos ||
+              out.find("'1:") != std::string::npos);
+  EXPECT_TRUE(out.find("127.0.0.1") != std::string::npos);
+  EXPECT_TRUE(out.find("192.168.0.1") != std::string::npos);
+}
+
+TEST_F(CompletionTest, PositionalWithChoicesFish) {
+  // Fish positionals with choices should emit -a completions
+  ArgParser parser("mycmd", "Test positional choices");
+  std::string ip;
+  parser.add_positional("ip", "IP address", ip)
+      .value_placeholder("IP")
+      .choices({{"127.0.0.1", "localhost"}, {"192.168.0.1", "localnet"}});
+
+  std::ostringstream os;
+  parser.print_fish_complete(os);
+  std::string out = os.str();
+
+  EXPECT_TRUE(out.find("127.0.0.1") != std::string::npos);
+  EXPECT_TRUE(out.find("192.168.0.1") != std::string::npos);
+  EXPECT_TRUE(out.find("-f -a '") != std::string::npos);
+}
+
+// ---------------------------------------------------------------------------
+// Tests for multiple positionals with mixed choices / no-choices
+// ---------------------------------------------------------------------------
+
+TEST_F(CompletionTest, MixedPositionalsBash) {
+  // Two positionals: first with choices, second without (→ file completion)
+  ArgParser parser("mycmd", "Test mixed positionals");
+  std::string ip, host;
+  parser.add_positional("ip", "IP address", ip)
+      .value_placeholder("IP")
+      .choices({{"127.0.0.1", "localhost"}, {"192.168.0.1", "localnet"}});
+  parser.add_positional("host", "Hostname", host).value_placeholder("HOST");
+
+  std::ostringstream os;
+  parser.print_bash_complete(os);
+  std::string out = os.str();
+
+  // Index 0 → choices
+  EXPECT_TRUE(out.find("127.0.0.1") != std::string::npos);
+  EXPECT_TRUE(out.find("192.168.0.1") != std::string::npos);
+  // Index 1 → file completion
+  EXPECT_TRUE(out.find("compgen -f") != std::string::npos);
+}
+
+TEST_F(CompletionTest, MixedPositionalsZsh) {
+  ArgParser parser("mycmd", "Test mixed positionals");
+  std::string ip, host;
+  parser.add_positional("ip", "IP address", ip)
+      .value_placeholder("IP")
+      .choices({{"127.0.0.1", "localhost"}, {"192.168.0.1", "localnet"}});
+  parser.add_positional("host", "Hostname", host).value_placeholder("HOST");
+
+  std::ostringstream os;
+  parser.print_zsh_complete(os);
+  std::string out = os.str();
+
+  // First positional with choices
+  EXPECT_TRUE(out.find("127.0.0.1") != std::string::npos);
+  // Second positional with _files
+  EXPECT_TRUE(out.find(":_files") != std::string::npos);
+}
+
+TEST_F(CompletionTest, MixedPositionalsFish) {
+  ArgParser parser("mycmd", "Test mixed positionals");
+  std::string ip, host;
+  parser.add_positional("ip", "IP address", ip)
+      .value_placeholder("IP")
+      .choices({{"127.0.0.1", "localhost"}, {"192.168.0.1", "localnet"}});
+  parser.add_positional("host", "Hostname", host).value_placeholder("HOST");
+
+  std::ostringstream os;
+  parser.print_fish_complete(os);
+  std::string out = os.str();
+
+  // First positional with choices should appear
+  EXPECT_TRUE(out.find("127.0.0.1") != std::string::npos);
+  // Second positional without choices should NOT produce a fish completion
+  // (fish defaults to file completion for unmatched arguments)
+}
+
+// ---------------------------------------------------------------------------
+// Tests for option + positional together
+// ---------------------------------------------------------------------------
+
+TEST_F(CompletionTest, OptionAndPositionalWithChoicesBash) {
+  // An option with choices AND a positional with choices
+  ArgParser parser("mycmd", "Test option and positional");
+  std::string type, ip;
+  parser.add_option("t,type", "Build type", type)
+      .value_placeholder("TYPE")
+      .choices({{"debug", "Debug"}, {"release", "Release"}});
+  parser.add_positional("ip", "IP address", ip)
+      .value_placeholder("IP")
+      .choices({{"127.0.0.1", "localhost"}, {"192.168.0.1", "localnet"}});
+
+  std::ostringstream os;
+  parser.print_bash_complete(os);
+  std::string out = os.str();
+
+  // Option choices should appear in prev-word dispatch
+  EXPECT_TRUE(out.find("debug") != std::string::npos);
+  EXPECT_TRUE(out.find("release") != std::string::npos);
+  // Positional choices should appear in positional section
+  EXPECT_TRUE(out.find("127.0.0.1") != std::string::npos);
+  EXPECT_TRUE(out.find("192.168.0.1") != std::string::npos);
+  // Positional counting logic should be present
+  EXPECT_TRUE(out.find("_pos_count") != std::string::npos);
+  // The option should be listed in the skip case for counting positionals
+  EXPECT_TRUE(out.find("-t|--type)") != std::string::npos ||
+              out.find("--type|") != std::string::npos ||
+              out.find("-t") != std::string::npos);
+}
+
+TEST_F(CompletionTest, OptionAndPositionalWithChoicesZsh) {
+  ArgParser parser("mycmd", "Test option and positional");
+  std::string type, ip;
+  parser.add_option("t,type", "Build type", type)
+      .value_placeholder("TYPE")
+      .choices({{"debug", "Debug"}, {"release", "Release"}});
+  parser.add_positional("ip", "IP address", ip)
+      .value_placeholder("IP")
+      .choices({{"127.0.0.1", "localhost"}, {"192.168.0.1", "localnet"}});
+
+  std::ostringstream os;
+  parser.print_zsh_complete(os);
+  std::string out = os.str();
+
+  // Option choices in parentheses
+  EXPECT_TRUE(out.find("(debug release)") != std::string::npos);
+  // Positional spec with choices (placeholder includes angle brackets)
+  EXPECT_TRUE(out.find("'1:<IP>:(") != std::string::npos);
+  EXPECT_TRUE(out.find("127.0.0.1") != std::string::npos);
+  EXPECT_TRUE(out.find("192.168.0.1") != std::string::npos);
+}
+
+TEST_F(CompletionTest, OptionAndPositionalWithChoicesFish) {
+  ArgParser parser("mycmd", "Test option and positional");
+  std::string type, ip;
+  parser.add_option("t,type", "Build type", type)
+      .value_placeholder("TYPE")
+      .choices({{"debug", "Debug"}, {"release", "Release"}});
+  parser.add_positional("ip", "IP address", ip)
+      .value_placeholder("IP")
+      .choices({{"127.0.0.1", "localhost"}, {"192.168.0.1", "localnet"}});
+
+  std::ostringstream os;
+  parser.print_fish_complete(os);
+  std::string out = os.str();
+
+  // Option with choices: -r -f -a 'debug release'
+  EXPECT_TRUE(out.find("-a 'debug release'") != std::string::npos ||
+              out.find("-a 'release debug'") != std::string::npos);
+  // Positional with choices
+  EXPECT_TRUE(out.find("127.0.0.1") != std::string::npos);
+  EXPECT_TRUE(out.find("192.168.0.1") != std::string::npos);
+}
+
+// ---------------------------------------------------------------------------
+// Edge case: hidden positional with choices must not appear
+// ---------------------------------------------------------------------------
+
+TEST_F(CompletionTest, HiddenPositionalWithChoicesDoesNotAppear) {
+  ArgParser parser("mycmd", "Test hidden positional");
+  std::string secret_ip;
+  parser.add_positional("secret", "Secret IP", secret_ip)
+      .value_placeholder("IP")
+      .choices({{"10.0.0.1", "secret-host"}})
+      .hidden(true);
+  std::string ip;
+  parser.add_positional("ip", "IP address", ip)
+      .value_placeholder("IP")
+      .choices({{"127.0.0.1", "localhost"}});
+
+  {
+    std::ostringstream os;
+    parser.print_bash_complete(os);
+    std::string out = os.str();
+    EXPECT_TRUE(out.find("10.0.0.1") == std::string::npos);
+    EXPECT_TRUE(out.find("127.0.0.1") != std::string::npos);
+  }
+  {
+    std::ostringstream os;
+    parser.print_zsh_complete(os);
+    std::string out = os.str();
+    EXPECT_TRUE(out.find("10.0.0.1") == std::string::npos);
+    EXPECT_TRUE(out.find("127.0.0.1") != std::string::npos);
+  }
+  {
+    std::ostringstream os;
+    parser.print_fish_complete(os);
+    std::string out = os.str();
+    EXPECT_TRUE(out.find("10.0.0.1") == std::string::npos);
+    EXPECT_TRUE(out.find("127.0.0.1") != std::string::npos);
+  }
+}
