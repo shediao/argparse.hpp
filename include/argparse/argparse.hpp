@@ -129,8 +129,6 @@
 namespace argparse {
 using std::to_string;
 using std::to_wstring;
-inline std::string to_string(std::string const& s) { return s; }
-inline std::wstring to_wstring(std::wstring const& s) { return s; }
 
 inline constexpr size_t TOTAL_WIDTH = 80;
 
@@ -150,6 +148,11 @@ inline void set_option_name_width(size_t width) {
 }
 
 namespace detail {
+inline std::string to_string(std::string const& s) { return s; }
+inline std::wstring to_wstring(std::wstring const& s) { return s; }
+
+using std::to_string;
+using std::to_wstring;
 
 inline void die(std::string const& msg) {
 #if ARGPARSE_HAS_EXCEPTIONS
@@ -218,7 +221,7 @@ template <typename T>
 struct has_to_string : std::false_type {};
 
 template <typename T>
-  requires(requires(const T& t) {
+  requires(requires(T& t) {
     { to_string(t) } -> std::convertible_to<std::string>;
   })
 struct has_to_string<T> : std::true_type {};
@@ -230,7 +233,7 @@ template <typename T>
 struct has_to_wstring : std::false_type {};
 
 template <typename T>
-  requires(requires(const T& t) {
+  requires(requires(T& t) {
     { to_wstring(t) } -> std::convertible_to<std::wstring>;
   })
 struct has_to_wstring<T> : std::true_type {};
@@ -798,12 +801,35 @@ inline std::optional<std::string> getenv(std::string const& name) {
 #endif
 }
 
+template <typename T>
+inline std::string to_string(T const& value)
+  requires(has_to_string_memfunc_v<T> || has_string_memfunc_v<T> ||
+           has_c_str_memfunc_v<T>)
+{
+  if constexpr (has_to_string_memfunc_v<T>) {
+    return value.to_string();
+  } else if constexpr (has_string_memfunc_v<T>) {
+    return value.string();
+  } else if constexpr (has_c_str_memfunc_v<T>) {
+    return value.c_str();
+  }
+}
+
+template <typename T>
+inline std::wstring to_wstring(T const& value)
+  requires(has_to_wstring_memfunc_v<T> || has_wstring_memfunc_v<T>)
+{
+  if constexpr (has_to_wstring_memfunc_v<T>) {
+    return value.to_wstring();
+  } else if constexpr (has_wstring_memfunc_v<T>) {
+    return value.wstring();
+  }
+}
+
 }  // namespace detail
 
-#if defined(_WIN32)
 using argparse::detail::to_string;
 using argparse::detail::to_wstring;
-#endif
 
 inline void store_true(bool& value) { value = true; }
 

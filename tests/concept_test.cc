@@ -965,3 +965,75 @@ TEST(ConceptTest, MemfuncTraitsCombined) {
   ASSERT_FALSE(argparse::detail::has_wstring_memfunc_v<Empty>);
   ASSERT_FALSE(argparse::detail::has_c_str_memfunc_v<Empty>);
 }
+
+// ============================================================
+// Tests for detail::to_string / detail::to_wstring with member
+// function dispatch (the new overloads added for cross-platform
+// support, previously guarded by #if defined(_WIN32))
+// ============================================================
+
+TEST(ConceptTest, ToStringViaMemberFunctions) {
+  using namespace memfunc_ns;
+
+  // to_string via to_string() member function
+  WithToStringMemfunc obj1;
+  EXPECT_EQ(argparse::detail::to_string(obj1), "via to_string()");
+
+  // to_string via string() member function
+  WithStringMemfunc obj2;
+  EXPECT_EQ(argparse::detail::to_string(obj2), "via string()");
+
+  // to_string via c_str() member function
+  WithCStrMemfunc obj3;
+  EXPECT_EQ(argparse::detail::to_string(obj3), "via c_str()");
+
+  // std::string: has c_str() returning const char* (convertible to
+  // std::string), and has_string_memfunc_v is false, so it matches
+  // the c_str() overload
+  std::string s = "hello";
+  EXPECT_EQ(argparse::detail::to_string(s), "hello");
+}
+
+TEST(ConceptTest, ToWstringViaMemberFunctions) {
+  using namespace memfunc_ns;
+
+  // to_wstring via to_wstring() member function
+  WithToWstringMemfunc obj1;
+  EXPECT_EQ(argparse::detail::to_wstring(obj1), L"via to_wstring()");
+
+  // to_wstring via wstring() member function
+  WithWstringMemfunc obj2;
+  EXPECT_EQ(argparse::detail::to_wstring(obj2), L"via wstring()");
+}
+
+TEST(ConceptTest, ToStringCStrWorksForStdString) {
+  // std::string has c_str() returning const char* (convertible to
+  // std::string), and has_string_memfunc_v<std::string> is false,
+  // so it matches the c_str() overload exclusively.
+  std::string s = "test";
+  EXPECT_EQ(argparse::detail::to_string(s), "test");
+
+  // Verify the c_str overload also works with a temporary
+  EXPECT_EQ(argparse::detail::to_string(std::string("temp")), "temp");
+}
+
+TEST(ConceptTest, ToStringAndToWstringNoMatch) {
+  // Types without any matching member function should not match
+  // detail::to_string / detail::to_wstring (compile-time constraint).
+  // We verify that standard types without matching members are
+  // correctly excluded by the traits.
+
+  // int has none of the member functions
+  ASSERT_FALSE(argparse::detail::has_to_string_memfunc_v<int>);
+  ASSERT_FALSE(argparse::detail::has_string_memfunc_v<int>);
+  ASSERT_FALSE(argparse::detail::has_c_str_memfunc_v<int>);
+  ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc_v<int>);
+  ASSERT_FALSE(argparse::detail::has_wstring_memfunc_v<int>);
+
+  // std::wstring also has none of the member functions
+  ASSERT_FALSE(argparse::detail::has_to_string_memfunc_v<std::wstring>);
+  ASSERT_FALSE(argparse::detail::has_string_memfunc_v<std::wstring>);
+  ASSERT_FALSE(argparse::detail::has_c_str_memfunc_v<std::wstring>);
+  ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc_v<std::wstring>);
+  ASSERT_FALSE(argparse::detail::has_wstring_memfunc_v<std::wstring>);
+}
