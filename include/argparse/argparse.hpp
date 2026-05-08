@@ -716,9 +716,11 @@ inline std::vector<std::string> split(std::string const& s, char delim,
 
 template <typename T>
   requires(
+      requires { std::get<0>(std::declval<T&>()); } &&
       requires { std::tuple_size_v<T> > 0; } &&
       requires {
-        []<typename U, std::size_t... I>(U, std::integer_sequence<std::size_t, I...>) {
+        []<typename U, std::size_t... I>(
+            U, std::integer_sequence<std::size_t, I...>) {
           return U{from_string<std::tuple_element_t<I, U>>(std::string{})...};
         }(T{}, std::make_index_sequence<std::tuple_size_v<T>>());
       })
@@ -735,6 +737,25 @@ T from_string(const std::string& s, char delim) {
     return T{
         from_string<std::decay_t<std::tuple_element_t<I, T>>>(values[I])...};
   }(values, std::make_index_sequence<std::tuple_size_v<std::decay_t<T>>>());
+}
+
+template <typename T>
+  requires(requires {
+    std::declval<T>().size();
+    std::declval<T>().begin();
+    std::declval<T>().end();
+    T{std::declval<std::vector<typename T::value_type>>().begin(),
+      std::declval<std::vector<typename T::value_type>>().end()};
+    from_string<typename T::value_type>(std::declval<std::string>());
+  })
+T from_string(const std::string& s, char delim) {
+  auto values = split(s, delim, -1);
+  std::vector<typename T::value_type> tmp;
+  std::transform(values.begin(), values.end(), std::back_inserter(tmp),
+                 [](std::string const& s) {
+                   return from_string<typename T::value_type>(s);
+                 });
+  return T{tmp.begin(), tmp.end()};
 }
 
 template <typename T, std::size_t... I>

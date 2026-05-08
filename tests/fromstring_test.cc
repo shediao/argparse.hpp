@@ -5,7 +5,12 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <deque>
 #include <limits>
+#include <list>
+#include <set>
+#include <string>
+#include <vector>
 
 #include "argparse/argparse.hpp"
 
@@ -334,6 +339,122 @@ TEST(FromStringTest, TupleEmptyString) {
   // Empty string with a 1-element tuple: split gives [""], which is 1 element
   // from_string<int>("") throws, so this should throw
   EXPECT_THROW((from_string<std::tuple<int>>("", ',')), std::invalid_argument);
+}
+
+// --- from_string: container types (vector, list, set, deque, etc.) ---
+
+TEST(FromStringTest, VectorInt) {
+  auto v = from_string<std::vector<int>>("1,2,3,4,5", ',');
+  EXPECT_EQ(v.size(), 5);
+  EXPECT_EQ(v[0], 1);
+  EXPECT_EQ(v[1], 2);
+  EXPECT_EQ(v[2], 3);
+  EXPECT_EQ(v[3], 4);
+  EXPECT_EQ(v[4], 5);
+}
+
+TEST(FromStringTest, VectorString) {
+  auto v = from_string<std::vector<std::string>>("hello,world,foo,bar", ',');
+  EXPECT_EQ(v.size(), 4);
+  EXPECT_EQ(v[0], "hello");
+  EXPECT_EQ(v[1], "world");
+  EXPECT_EQ(v[2], "foo");
+  EXPECT_EQ(v[3], "bar");
+}
+
+TEST(FromStringTest, VectorDouble) {
+  auto v = from_string<std::vector<double>>("1.1,2.2,3.3", ',');
+  EXPECT_EQ(v.size(), 3);
+  EXPECT_DOUBLE_EQ(v[0], 1.1);
+  EXPECT_DOUBLE_EQ(v[1], 2.2);
+  EXPECT_DOUBLE_EQ(v[2], 3.3);
+}
+
+TEST(FromStringTest, VectorSingleElement) {
+  auto v = from_string<std::vector<int>>("42", ',');
+  EXPECT_EQ(v.size(), 1);
+  EXPECT_EQ(v[0], 42);
+}
+
+TEST(FromStringTest, VectorEmptyString) {
+  // Empty string: split gives [""], from_string<int>("") throws
+  EXPECT_THROW((from_string<std::vector<int>>("", ',')), std::invalid_argument);
+}
+
+TEST(FromStringTest, VectorTrailingDelimiter) {
+  // "1,2," -> split with -1 gives ["1", "2", ""]
+  // from_string<int>("") throws
+  EXPECT_THROW((from_string<std::vector<int>>("1,2,", ',')),
+               std::invalid_argument);
+}
+
+TEST(FromStringTest, VectorLeadingDelimiter) {
+  // ",1,2" -> split with -1 gives ["", "1", "2"]
+  EXPECT_THROW((from_string<std::vector<int>>(",1,2", ',')),
+               std::invalid_argument);
+}
+
+TEST(FromStringTest, VectorCustomDelimiter) {
+  auto v = from_string<std::vector<int>>("10:20:30:40", ':');
+  EXPECT_EQ(v.size(), 4);
+  EXPECT_EQ(v[0], 10);
+  EXPECT_EQ(v[1], 20);
+  EXPECT_EQ(v[2], 30);
+  EXPECT_EQ(v[3], 40);
+}
+
+TEST(FromStringTest, VectorInvalidElement) {
+  EXPECT_THROW((from_string<std::vector<int>>("1,abc,3", ',')),
+               std::invalid_argument);
+  EXPECT_THROW((from_string<std::vector<double>>("1.0,xyz,3.0", ',')),
+               std::invalid_argument);
+}
+
+TEST(FromStringTest, ListInt) {
+  auto l = from_string<std::list<int>>("10,20,30,40", ',');
+  EXPECT_EQ(l.size(), 4);
+  auto it = l.begin();
+  EXPECT_EQ(*it++, 10);
+  EXPECT_EQ(*it++, 20);
+  EXPECT_EQ(*it++, 30);
+  EXPECT_EQ(*it++, 40);
+  EXPECT_EQ(it, l.end());
+}
+
+TEST(FromStringTest, ListString) {
+  auto l = from_string<std::list<std::string>>("a,b,c", ',');
+  EXPECT_EQ(l.size(), 3);
+  auto it = l.begin();
+  EXPECT_EQ(*it++, "a");
+  EXPECT_EQ(*it++, "b");
+  EXPECT_EQ(*it++, "c");
+}
+
+TEST(FromStringTest, SetInt) {
+  auto s = from_string<std::set<int>>("3,1,2,2,1", ',');
+  // std::set deduplicates and sorts
+  EXPECT_EQ(s.size(), 3);
+  auto it = s.begin();
+  EXPECT_EQ(*it++, 1);
+  EXPECT_EQ(*it++, 2);
+  EXPECT_EQ(*it++, 3);
+}
+
+TEST(FromStringTest, SetString) {
+  auto s = from_string<std::set<std::string>>("c,a,b", ',');
+  EXPECT_EQ(s.size(), 3);
+  auto it = s.begin();
+  EXPECT_EQ(*it++, "a");
+  EXPECT_EQ(*it++, "b");
+  EXPECT_EQ(*it++, "c");
+}
+
+TEST(FromStringTest, DequeInt) {
+  auto d = from_string<std::deque<int>>("1,2,3", ',');
+  EXPECT_EQ(d.size(), 3);
+  EXPECT_EQ(d[0], 1);
+  EXPECT_EQ(d[1], 2);
+  EXPECT_EQ(d[2], 3);
 }
 
 // --- from_wstring: types constructible from std::wstring ---
