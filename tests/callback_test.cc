@@ -175,7 +175,7 @@ TEST_F(CallbackArgsMaker, Callback6) {
   argparse::ArgParser parser("prog", "");
   std::string m;
 
-  parser.add_option("m", "", m).choices({"1", "2", "3"});
+  parser.add_option("m", "", m).choices({{"1", ""}, {"2", ""}, {"3", ""}});
 
   bool callback_is_called{false};
   parser.callback([&callback_is_called]() { callback_is_called = true; });
@@ -190,7 +190,7 @@ TEST_F(CallbackArgsMaker, Callback7) {
   argparse::ArgParser parser("prog", "");
   std::string m;
 
-  parser.add_option("m", "", m).choices({"1", "2", "3"});
+  parser.add_option("m", "", m).choices({{"1", ""}, {"2", ""}, {"3", ""}});
 
   bool callback_is_called{false};
   parser.callback([&callback_is_called]() { callback_is_called = true; });

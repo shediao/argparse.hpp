@@ -39,9 +39,9 @@ class CompletionTest : public ::testing::Test {
     std::string mode;
     parser.add_option("m,mode", "Operation mode", mode)
         .value_placeholder("MODE")
-        .choices_description({{"fast", "Fast mode"},
-                              {"slow", "Slow mode"},
-                              {"auto", "Automatic mode"}});
+        .choices({{"fast", "Fast mode"},
+                  {"slow", "Slow mode"},
+                  {"auto", "Automatic mode"}});
 
     // An option without choices (file argument)
     std::string infile;
@@ -736,9 +736,9 @@ TEST_F(CompletionTest, OptionWithChoicesInAllShells) {
   std::string color;
   parser.add_option("color", "Choose a color", color)
       .value_placeholder("COLOR")
-      .choices_description({{"red", "Red color"},
-                            {"green", "Green color"},
-                            {"blue", "Blue color"}});
+      .choices({{"red", "Red color"},
+                {"green", "Green color"},
+                {"blue", "Blue color"}});
 
   {
     std::ostringstream os;

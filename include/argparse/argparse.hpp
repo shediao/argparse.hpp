@@ -44,6 +44,7 @@
 #include <concepts>
 #include <cstdlib>
 #include <functional>
+#include <initializer_list>
 #include <iostream>
 #include <iterator>
 #include <map>
@@ -990,6 +991,24 @@ class OptionBase : public ArgBase {
         detail::report_invalid_argument(msg + err_msg);
       }
     }
+    if (!choices_.empty()) {
+      if (choices_.find(opt_value) == choices_.end()) {
+        std::string msg = "Invalid choice: ";
+        msg += detail::join(long_opt_names_, ',');
+        if (!long_opt_names_.empty() && !short_opt_names_.empty()) {
+          msg += ", ";
+        }
+        msg += detail::join(short_opt_names_, ',');
+        msg += ": `";
+        msg += opt_value;
+        msg += "` is an invalid value. Valid choices are: ";
+        std::vector<std::string> keys;
+        std::transform(choices_.begin(), choices_.end(), back_inserter(keys),
+                       [](auto const& pair) { return pair.first; });
+        msg += detail::join(keys, ',');
+        detail::report_invalid_argument(msg);
+      }
+    }
     this->opt_values.push_back(opt_value);
     count_++;
   }
@@ -1023,9 +1042,9 @@ class OptionBase : public ArgBase {
   }
   std::string usage() const override {
     std::string extra_str;
-    if (!this->choices_descriptions_.empty()) {
+    if (!this->choices_.empty()) {
       std::vector<std::string> choice_strs;
-      for (auto const& [value, help] : this->choices_descriptions_) {
+      for (auto const& [value, help] : this->choices_) {
         choice_strs.push_back("[" + value + "] " + help);
       }
       extra_str += " (";
@@ -1110,7 +1129,7 @@ class OptionBase : public ArgBase {
   std::vector<std::string> opt_values;
   std::vector<std::function<std::pair<bool, std::string>(std::string const&)>>
       pre_parse_validators_;
-  std::map<std::string, std::string> choices_descriptions_;
+  std::map<std::string, std::string> choices_;
 };
 
 template <typename Derived>
@@ -1124,19 +1143,24 @@ class OptionBaseCRTP : public OptionBase {
     return static_cast<Derived&>(*this);
   }
 
-  Derived& choices(std::vector<std::string> const& allowed_values) {
-    return OptionBaseCRTP<Derived>::validator(
-        [allowed_values](const std::string& value) {
-          using return_type = std::pair<bool, std::string>;
-          auto ok = std::ranges::find(allowed_values, value) !=
-                    std::ranges::end(allowed_values);
-          if (!ok) {
-            return return_type{ok, "not in choices: [" +
-                                       detail::join(allowed_values, ',') + "]"};
-          } else {
-            return return_type{ok, ""};
-          }
-        });
+  Derived& choices(
+      std::map<std::string, std::string> const& choices_description) {
+    this->choices_ = choices_description;
+    return static_cast<Derived&>(*this);
+  }
+
+  template <typename T>
+  Derived& choices(std::initializer_list<T> const& choices)
+    requires(std::is_same_v<T, std::string> ||
+             std::is_same_v<T, std::string_view> ||
+             std::is_same_v<T, const char*>)
+  {
+    std::map<std::string, std::string> choices_description;
+    for (auto const& choice : choices) {
+      choices_description[choice] = "";
+    }
+    this->choices_ = choices_description;
+    return static_cast<Derived&>(*this);
   }
 
   Derived& value_placeholder(std::string const& value_placeholder) {
@@ -1153,11 +1177,6 @@ class OptionBaseCRTP : public OptionBase {
     return static_cast<Derived&>(*this);
   }
 
-  Derived& choices_description(
-      std::map<std::string, std::string> const& choices_description) {
-    this->choices_descriptions_ = choices_description;
-    return static_cast<Derived&>(*this);
-  }
   Derived& hidden(bool v = true) {
     ArgBase::hidden(v);
     return static_cast<Derived&>(*this);
@@ -1244,34 +1263,12 @@ class Option final : public OptionBaseCRTP<Option<T>> {
   }
 
   using OptionBaseCRTP<Option<T>>::choices;
-  Option<T>& choices(std::vector<parsed_value_type> const& allowed_values) {
-    return Option<T>::validator([allowed_values](parsed_value_type const& val) {
-      using return_type = std::pair<bool, std::string>;
-      auto ok = std::find(begin(allowed_values), end(allowed_values), val) !=
-                end(allowed_values);
-      if (!ok) {
-        std::string err_msg{};
-        if constexpr (std::is_same_v<parsed_value_type, std::string> ||
-                      detail::has_std_to_string_v<parsed_value_type> ||
-                      std::is_constructible_v<parsed_value_type, std::string>) {
-          std::vector<std::string> tmp;
-          std::transform(
-              begin(allowed_values), end(allowed_values),
-              std::back_inserter(tmp),
-              [](parsed_value_type const& v) -> std::string {
-                if constexpr (detail::has_std_to_string_v<parsed_value_type>) {
-                  return std::to_string(v);
-                } else {
-                  return v;
-                }
-              });
-          err_msg = "not in choices: [" + detail::join(tmp, ',') + "]";
-        }
-        return return_type{ok, err_msg};
-      } else {
-        return return_type{ok, ""};
-      }
-    });
+  Option<T>& choices(
+      std::map<parsed_value_type, std::string> const& value_and_helpers)
+    requires(!std::is_same_v<parsed_value_type, std::string>)
+  {
+    value_choices_ = value_and_helpers;
+    return *this;
   }
 
   T const& value() const { return bind_value_; }
@@ -1295,6 +1292,40 @@ class Option final : public OptionBaseCRTP<Option<T>> {
         msg += opt_value;
         msg += "` is an invalid value. ";
         detail::report_invalid_argument(msg + err_msg);
+      }
+    }
+    if constexpr (requires(parsed_value_type a, parsed_value_type b) {
+                    a < b;
+                  }) {
+      if (!value_choices_.empty() &&
+          (value_choices_.find(parsed_value) == value_choices_.end())) {
+        std::string msg = "Invalid choice: ";
+        msg += detail::join(ArgBase::long_opt_names_, ',');
+        if (!ArgBase::long_opt_names_.empty() &&
+            !ArgBase::short_opt_names_.empty()) {
+          msg += ", ";
+        }
+        msg += detail::join(ArgBase::short_opt_names_, ',');
+        msg += ": `";
+        msg += opt_value;
+        msg += "` is an invalid value. Valid choices are: ";
+
+        if constexpr (std::is_same_v<parsed_value_type, std::string> ||
+                      detail::has_std_to_string_v<parsed_value_type> ||
+                      std::is_constructible_v<std::string, parsed_value_type>) {
+          std::vector<std::string> keys;
+          std::transform(
+              value_choices_.begin(), value_choices_.end(),
+              std::back_inserter(keys), [](auto const& pair) {
+                if constexpr (detail::has_std_to_string_v<parsed_value_type>) {
+                  return std::to_string(pair.first);
+                } else {
+                  return pair.first;
+                }
+              });
+          msg += detail::join(keys, ',');
+        }
+        detail::report_invalid_argument(msg);
       }
     }
     if constexpr (detail::ParseFromStringContainerType<T>) {
@@ -1359,6 +1390,7 @@ class Option final : public OptionBaseCRTP<Option<T>> {
   std::vector<
       std::function<std::pair<bool, std::string>(parsed_value_type const&)>>
       value_validators_;
+  std::map<parsed_value_type, std::string> value_choices_;
 };
 
 class OptionAlias : public FlagBase {
@@ -1484,36 +1516,12 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
   }
 
   using OptionBaseCRTP<Positional<T>>::choices;
-  Positional<T>& choices(std::vector<parsed_value_type> const& allowed_values) {
-    return Positional<T>::validator([allowed_values](
-                                        parsed_value_type const& val) {
-      using return_type = std::pair<bool, std::string>;
-      auto ok = std::find(begin(allowed_values), end(allowed_values), val) !=
-                end(allowed_values);
-      if (!ok) {
-        std::string err_msg{};
-        if constexpr (std::is_same_v<parsed_value_type, std::string> ||
-                      detail::has_std_to_string_v<parsed_value_type> ||
-                      std::is_constructible_v<parsed_value_type, std::string>) {
-          std::vector<std::string> tmp;
-          std::transform(
-              begin(allowed_values), end(allowed_values),
-              std::back_inserter(tmp),
-              [](parsed_value_type const& v) -> std::string {
-                if constexpr (detail::has_std_to_string_v<parsed_value_type>) {
-                  return std::to_string(v);
-                } else {
-                  return v;
-                }
-              });
-          err_msg = "not in choices: [" + detail::join(tmp, ',') + "]";
-        }
-
-        return return_type{ok, err_msg};
-      } else {
-        return return_type{ok, ""};
-      }
-    });
+  Positional<T>& choices(
+      std::map<parsed_value_type, std::string> const& value_and_helpers)
+    requires(!std::is_same_v<parsed_value_type, std::string>)
+  {
+    value_choices_ = value_and_helpers;
+    return *this;
   }
 
  protected:
@@ -1535,6 +1543,40 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
         msg += opt_value;
         msg += "` is an invalid value. ";
         detail::report_invalid_argument(msg + err_msg);
+      }
+    }
+    if constexpr (requires(parsed_value_type a, parsed_value_type b) {
+                    a < b;
+                  }) {
+      if (!value_choices_.empty() &&
+          (value_choices_.find(parsed_value) == value_choices_.end())) {
+        std::string msg = "Invalid choice: ";
+        msg += detail::join(ArgBase::long_opt_names_, ',');
+        if (!ArgBase::long_opt_names_.empty() &&
+            !ArgBase::short_opt_names_.empty()) {
+          msg += ", ";
+        }
+        msg += detail::join(ArgBase::short_opt_names_, ',');
+        msg += ": `";
+        msg += opt_value;
+        msg += "` is an invalid value. Valid choices are: ";
+
+        if constexpr (std::is_same_v<parsed_value_type, std::string> ||
+                      detail::has_std_to_string_v<parsed_value_type> ||
+                      std::is_constructible_v<std::string, parsed_value_type>) {
+          std::vector<std::string> keys;
+          std::transform(
+              value_choices_.begin(), value_choices_.end(),
+              std::back_inserter(keys), [](auto const& pair) {
+                if constexpr (detail::has_std_to_string_v<parsed_value_type>) {
+                  return std::to_string(pair.first);
+                } else {
+                  return pair.first;
+                }
+              });
+          msg += detail::join(keys, ',');
+        }
+        detail::report_invalid_argument(msg);
       }
     }
     if constexpr (detail::ParseFromStringContainerType<T>) {
@@ -1599,6 +1641,7 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
   std::vector<
       std::function<std::pair<bool, std::string>(parsed_value_type const&)>>
       value_validators_;
+  std::map<parsed_value_type, std::string> value_choices_;
 };
 
 class Command {
@@ -2183,7 +2226,7 @@ class ArgParser : public Command {
     std::stringstream usage_str;
     if (!description_.empty()) {
       usage_str << description_;
-      if(description_.back() != '\n') {
+      if (description_.back() != '\n') {
         usage_str << '\n';
       }
     }
@@ -2312,7 +2355,7 @@ class ArgParser : public Command {
         continue;
       }
       auto* opt = dynamic_cast<OptionBase*>(arg.get());
-      if (!opt || opt->choices_descriptions_.empty()) {
+      if (!opt || opt->choices_.empty()) {
         continue;
       }
 
@@ -2331,7 +2374,7 @@ class ArgParser : public Command {
       os << "        " << detail::join(patterns, '|') << ")\n";
 
       std::vector<std::string> choice_keys;
-      for (auto const& [k, _] : opt->choices_descriptions_) {
+      for (auto const& [k, _] : opt->choices_) {
         choice_keys.push_back(k);
       }
       os << "            COMPREPLY=($(compgen -W \""
@@ -2349,7 +2392,7 @@ class ArgParser : public Command {
         continue;
       }
       auto* opt = dynamic_cast<OptionBase*>(arg.get());
-      if (!opt || !opt->choices_descriptions_.empty()) {
+      if (!opt || !opt->choices_.empty()) {
         continue;
       }
 
@@ -2385,7 +2428,7 @@ class ArgParser : public Command {
         continue;
       }
       auto* opt = dynamic_cast<OptionBase*>(arg.get());
-      if (!opt || opt->choices_descriptions_.empty()) {
+      if (!opt || opt->choices_.empty()) {
         continue;
       }
 
@@ -2399,7 +2442,7 @@ class ArgParser : public Command {
       for (auto const& l : arg->long_opt_names_) {
         os << "            --" << l << ")\n";
         std::vector<std::string> choice_keys;
-        for (auto const& [k, _] : opt->choices_descriptions_) {
+        for (auto const& [k, _] : opt->choices_) {
           choice_keys.push_back(k);
         }
         os << "                COMPREPLY=($(compgen -W \""
@@ -2575,7 +2618,7 @@ class ArgParser : public Command {
             std::string desc = escape_zsh_desc(arg->description());
             bool is_opt = arg->is_option();
             auto* opt = is_opt ? dynamic_cast<OptionBase*>(arg.get()) : nullptr;
-            bool has_choices = opt && !opt->choices_descriptions_.empty();
+            bool has_choices = opt && !opt->choices_.empty();
 
             for (auto const& s : arg->short_opt_names_) {
               os << "        '-" << s;
@@ -2590,7 +2633,7 @@ class ArgParser : public Command {
                 if (has_choices) {
                   os << ":(";
                   std::vector<std::string> choice_keys;
-                  for (auto const& [k, _] : opt->choices_descriptions_) {
+                  for (auto const& [k, _] : opt->choices_) {
                     choice_keys.push_back(k);
                   }
                   os << detail::join(choice_keys, ' ');
@@ -2614,7 +2657,7 @@ class ArgParser : public Command {
                 if (has_choices) {
                   os << ":(";
                   std::vector<std::string> choice_keys;
-                  for (auto const& [k, _] : opt->choices_descriptions_) {
+                  for (auto const& [k, _] : opt->choices_) {
                     choice_keys.push_back(k);
                   }
                   os << detail::join(choice_keys, ' ');
@@ -2758,7 +2801,7 @@ class ArgParser : public Command {
             std::string desc = arg->description();
             bool is_opt = arg->is_option();
             auto* opt = is_opt ? dynamic_cast<OptionBase*>(arg.get()) : nullptr;
-            bool has_choices = opt && !opt->choices_descriptions_.empty();
+            bool has_choices = opt && !opt->choices_.empty();
 
             for (auto const& s : arg->short_opt_names_) {
               os << "complete -c " << command_ << cond_prefix << " -s " << s;
@@ -2770,7 +2813,7 @@ class ArgParser : public Command {
                 if (has_choices) {
                   os << " -f";
                   std::vector<std::string> choice_keys;
-                  for (auto const& [k, _] : opt->choices_descriptions_) {
+                  for (auto const& [k, _] : opt->choices_) {
                     choice_keys.push_back(k);
                   }
                   os << " -a '" << escape_fish(detail::join(choice_keys, ' '))
@@ -2789,7 +2832,7 @@ class ArgParser : public Command {
                 if (has_choices) {
                   os << " -f";
                   std::vector<std::string> choice_keys;
-                  for (auto const& [k, _] : opt->choices_descriptions_) {
+                  for (auto const& [k, _] : opt->choices_) {
                     choice_keys.push_back(k);
                   }
                   os << " -a '" << escape_fish(detail::join(choice_keys, ' '))

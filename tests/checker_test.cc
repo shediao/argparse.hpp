@@ -36,7 +36,8 @@ TEST_F(CheckerArgsMaker, Allowed) {
 
   argparse::ArgParser parser("prog", "");
   std::string type;
-  parser.add_option("t", "type", type).choices({"debug", "release"});
+  parser.add_option("t", "type", type)
+      .choices({{"debug", ""}, {"release", ""}});
 
   ASSERT_THROW(parser.parse(args.size(), args.data()), std::invalid_argument);
   args = make_args("prog", "-t", "debug");
@@ -47,7 +48,8 @@ TEST_F(CheckerArgsMaker, AllowedOptional) {
 
   argparse::ArgParser parser("prog", "");
   std::optional<std::string> type;
-  parser.add_option("t", "type", type).choices({"debug", "release"});
+  parser.add_option("t", "type", type)
+      .choices({{"debug", ""}, {"release", ""}});
 
   ASSERT_THROW(parser.parse(args.size(), args.data()), std::invalid_argument);
   args = make_args("prog", "-t", "debug");
@@ -241,17 +243,15 @@ TEST_F(CheckerArgsMaker, Checker5) {
   std::vector<std::pair<std::string, int>> p;
   int count = 0;
   parser.add_option("p", "", p, ',')
-      .choices({std::pair<std::string, int>{"s1", 1},
-                {"s2", 2},
-                {"s3", 3},
-                {"s4", 4}})
+      .choices(std::map<std::pair<std::string, int>, std::string>{
+          {{{"s1", 1}, ""}, {{"s2", 2}, ""}, {{"s3", 3}, ""}, {{"s4", 4}, ""}}})
       .validator(
           [&](std::vector<std::pair<std::string, int>>::value_type const& p) {
             count++;
             return std::pair<bool, std::string>{p.second == count,
                                                 "first equals second"};
           })
-      .choices({"s1,1", "s2,2", "s3,3", "s4,4"});
+      .choices({{"s1,1", ""}, {"s2,2", ""}, {"s3,3", ""}, {"s4,4", ""}});
 
   ASSERT_NO_THROW(parser.parse(args.size(), args.data()));
   ASSERT_EQ(4, p.size());

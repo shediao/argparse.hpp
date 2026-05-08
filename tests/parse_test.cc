@@ -630,9 +630,9 @@ TEST_F(ArgParserTest, ChoicesTest) {
 
   ArgParser parser("prog", "the prog description");
   parser.add_option("color", "Color choice", color)
-      .choices({"red", "green", "blue"});
+      .choices({{"red", ""}, {"green", ""}, {"blue", ""}});
   parser.add_option("size", "Size choice", size)
-      .choices({"small", "medium", "large"});
+      .choices({{"small", ""}, {"medium", ""}, {"large", ""}});
 
   parser.parse(args.size(), args.data());
 
@@ -647,7 +647,7 @@ TEST_F(ArgParserTest, InvalidChoiceTest) {
 
   ArgParser parser("prog", "the prog description");
   parser.add_option("color", "Color choice", color)
-      .choices({"red", "green", "blue"});
+      .choices({{"red", ""}, {"green", ""}, {"blue", ""}});
 
   EXPECT_THROW(parser.parse(args.size(), args.data()), std::invalid_argument);
 }
