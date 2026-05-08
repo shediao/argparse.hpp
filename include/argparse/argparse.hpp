@@ -186,6 +186,117 @@ inline void report_invalid_argument(std::string const& msg) {
 #endif
 }
 
+template <typename T>
+T from_string(std::string const& s);
+template <typename T>
+T from_wstring(std::wstring const& s);
+
+template <typename T>
+  requires std::is_constructible_v<T, std::string>
+T from_string(std::string const& s) {
+  return T{s};
+}
+template <typename T>
+  requires std::is_constructible_v<T, std::wstring>
+T from_wstring(std::wstring const& s) {
+  return T{s};
+}
+
+template <typename T>
+  requires((std::is_integral_v<T> || std::is_floating_point_v<T>) &&
+           !std::is_same_v<char, T> && !std::is_same_v<wchar_t, T> &&
+           !std::is_same_v<bool, T> && !std::is_same_v<char16_t, T> &&
+           !std::is_same_v<char32_t, T> && !std::is_same_v<char8_t, T>)
+T from_string(std::string const& s) {
+  try {
+    size_t pos = 0;
+    if constexpr (std::is_same_v<T, int>) {
+      auto result = std::stoi(s, &pos);
+      if (pos != s.size()) {
+        detail::report_invalid_argument("Invalid integer: " + s);
+      }
+      return result;
+    } else if constexpr (std::is_same_v<T, long>) {
+      auto result = std::stol(s, &pos);
+      if (pos != s.size()) {
+        detail::report_invalid_argument("Invalid long integer: " + s);
+      }
+      return result;
+    } else if constexpr (std::is_same_v<T, unsigned long>) {
+      auto result = std::stoul(s, &pos);
+      if (pos != s.size()) {
+        detail::report_invalid_argument("Invalid unsigned long integer: " + s);
+      }
+      return result;
+    } else if constexpr (std::is_same_v<T, long long>) {
+      auto result = std::stoll(s, &pos);
+      if (pos != s.size()) {
+        detail::report_invalid_argument("Invalid long long integer: " + s);
+      }
+      return result;
+    } else if constexpr (std::is_same_v<T, unsigned long long>) {
+      auto result = std::stoull(s, &pos);
+      if (pos != s.size()) {
+        detail::report_invalid_argument("Invalid unsigned long long integer: " +
+                                        s);
+      }
+      return result;
+    } else if constexpr (std::is_same_v<T, float>) {
+      auto result = std::stof(s, &pos);
+      if (pos != s.size()) {
+        detail::report_invalid_argument("Invalid floating-point number: " + s);
+      }
+      return result;
+    } else if constexpr (std::is_same_v<T, double>) {
+      auto result = std::stod(s, &pos);
+      if (pos != s.size()) {
+        detail::report_invalid_argument("Invalid double-precision number: " +
+                                        s);
+      }
+      return result;
+    } else if constexpr (std::is_same_v<T, long double>) {
+      auto result = std::stold(s, &pos);
+      if (pos != s.size()) {
+        detail::report_invalid_argument("Invalid long double number: " + s);
+      }
+      return result;
+    } else if constexpr (std::is_same_v<T, unsigned int> ||
+                         std::is_same_v<T, unsigned short>) {
+      auto result = std::stoul(s, &pos);
+      if (pos != s.size()) {
+        if constexpr (std::is_same_v<T, unsigned int>) {
+          detail::report_invalid_argument("Invalid unsigned integer: " + s);
+        }
+        if constexpr (std::is_same_v<T, unsigned short>) {
+          detail::report_invalid_argument("Invalid unsigned short: " + s);
+        }
+      }
+      if (result > (std::numeric_limits<T>::max)()) {
+        detail::report_invalid_argument("Overflow: " + s);
+      }
+      return static_cast<T>(result);
+    } else if constexpr (std::is_same_v<T, short>) {
+      auto result = std::stoi(s, &pos);
+      if (pos != s.size()) {
+        detail::report_invalid_argument("Invalid short: " + s);
+      }
+      if (result > (std::numeric_limits<T>::max)() ||
+          result < (std::numeric_limits<T>::min)()) {
+        detail::report_invalid_argument("Overflow: " + s);
+      }
+      return static_cast<T>(result);
+    } else {
+      detail::report_invalid_argument("Unsupported type for parse_from_string");
+      return T{};
+    }
+  } catch (const std::out_of_range&) {
+    detail::report_invalid_argument("Out of range: " + s);
+  } catch (const std::invalid_argument&) {
+    detail::report_invalid_argument("Invalid number: " + s);
+  }
+  return T{};
+}
+
 template <typename...>
 using void_t = void;
 
