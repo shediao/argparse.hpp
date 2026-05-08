@@ -758,6 +758,26 @@ T from_string(const std::string& s, char delim) {
   return T{tmp.begin(), tmp.end()};
 }
 
+template <typename T>
+  requires(requires {
+    std::declval<T>().size();
+    std::declval<T>().begin();
+    std::declval<T>().end();
+    std::tuple_size<typename T::value_type>::value > 0;
+    T{std::declval<std::vector<typename T::value_type>>().begin(),
+      std::declval<std::vector<typename T::value_type>>().end()};
+    from_string<typename T::value_type>(std::declval<std::string>(), ',');
+  })
+T from_string(const std::string& s, char delim1, char delim2) {
+  auto values = split(s, delim1, -1);
+  std::vector<typename T::value_type> tmp;
+  std::transform(values.begin(), values.end(), std::back_inserter(tmp),
+                 [delim2](std::string const& s) {
+                   return from_string<typename T::value_type>(s, delim2);
+                 });
+  return T{tmp.begin(), tmp.end()};
+}
+
 template <typename T, std::size_t... I>
 T make_tuple_from_container_impl(std::vector<std::string> const& v,
                                  std::integer_sequence<std::size_t, I...>) {
