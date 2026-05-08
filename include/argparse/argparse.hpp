@@ -239,6 +239,66 @@ template <typename T>
 constexpr bool has_to_wstring_v = has_to_wstring<T>::value;
 
 template <typename T>
+struct has_to_string_memfunc : std::false_type {};
+
+template <typename T>
+  requires(requires(T& t) {
+    { t.to_string() } -> std::convertible_to<std::string>;
+  })
+struct has_to_string_memfunc<T> : std::true_type {};
+
+template <typename T>
+constexpr bool has_to_string_memfunc_v = has_to_string_memfunc<T>::value;
+
+template <typename T>
+struct has_string_memfunc : std::false_type {};
+
+template <typename T>
+  requires(requires(T& t) {
+    { t.string() } -> std::convertible_to<std::string>;
+  })
+struct has_string_memfunc<T> : std::true_type {};
+
+template <typename T>
+constexpr bool has_string_memfunc_v = has_string_memfunc<T>::value;
+
+template <typename T>
+struct has_to_wstring_memfunc : std::false_type {};
+
+template <typename T>
+  requires(requires(T& t) {
+    { t.to_wstring() } -> std::convertible_to<std::wstring>;
+  })
+struct has_to_wstring_memfunc<T> : std::true_type {};
+
+template <typename T>
+constexpr bool has_to_wstring_memfunc_v = has_to_wstring_memfunc<T>::value;
+
+template <typename T>
+struct has_wstring_memfunc : std::false_type {};
+
+template <typename T>
+  requires(requires(T& t) {
+    { t.wstring() } -> std::convertible_to<std::wstring>;
+  })
+struct has_wstring_memfunc<T> : std::true_type {};
+
+template <typename T>
+constexpr bool has_wstring_memfunc_v = has_wstring_memfunc<T>::value;
+
+template <typename T>
+struct has_c_str_memfunc : std::false_type {};
+
+template <typename T>
+  requires(requires(T& t) {
+    { t.c_str() } -> std::convertible_to<std::string>;
+  })
+struct has_c_str_memfunc<T> : std::true_type {};
+
+template <typename T>
+constexpr bool has_c_str_memfunc_v = has_c_str_memfunc<T>::value;
+
+template <typename T>
 concept ParseFromStringBasicType =
     is_string_v<std::remove_cv_t<T>> ||
     std::same_as<std::remove_cv_t<T>, bool> ||
