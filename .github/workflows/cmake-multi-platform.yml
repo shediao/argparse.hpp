@@ -24,7 +24,7 @@ jobs:
       # To add more build types (Release, Debug, RelWithDebInfo, etc.) customize the build_type list.
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        build_type: [Release,Debug]
+        build_type: [Release, Debug]
         c_compiler: [gcc, clang, cl]
         include:
           - os: windows-latest
@@ -82,3 +82,30 @@ jobs:
         # Execute tests defined by the CMake configuration. Note that --build-config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
         # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
         run: ctest --build-config ${{ matrix.build_type }} --rerun-failed --output-on-failure
+
+  freebsd-build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Release, Debug]
+    name: FreeBSD ${{ matrix.build_type }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build and Test on FreeBSD
+        uses: vmactions/freebsd-vm@v1
+        with:
+          usesh: true
+          mem: 4096
+          prepare: |
+            pkg install -y cmake git zip bash
+
+          run: |
+            set -e
+            cmake -B build \
+              -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+              -DARGPARSE_BUILD_TESTS=ON \
+              -S .
+            cmake --build build --config ${{ matrix.build_type }}
+            ctest --test-dir build --build-config ${{ matrix.build_type }} --rerun-failed --output-on-failure
