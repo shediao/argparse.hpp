@@ -19,6 +19,7 @@
 using argparse::detail::from_string;
 using argparse::detail::from_wstring;
 using argparse::detail::split;
+using argparse::detail::split_to_if;
 
 // Test bool
 TEST(ParseFromStringTest, BoolTest) {
@@ -72,6 +73,393 @@ TEST(ParseFromStringTest, split) {
   EXPECT_EQ(split("1,2,3", ',', 3), (std::vector<std::string>{"1", "2", "3"}));
   EXPECT_EQ(split("1,", ',', -1), (std::vector<std::string>{"1", ""}));
   EXPECT_EQ(split(",1", ',', -1), (std::vector<std::string>{"", "1"}));
+}
+
+// ============================================================
+// Tests for split_to_if (return-by-value, C++20 concepts)
+// ============================================================
+
+// --- Basic return-by-value semantics ---
+
+TEST(SplitToIfTest, BasicSplitComma) {
+  auto is_comma = [](char c) { return c == ','; };
+  auto result =
+      split_to_if<std::vector<std::string>>(std::string("a,b,c"), is_comma);
+  EXPECT_EQ(result, (std::vector<std::string>{"a", "b", "c"}));
+}
+
+TEST(SplitToIfTest, BasicSplitSpace) {
+  auto is_space = [](char c) { return c == ' '; };
+  auto result = split_to_if<std::vector<std::string>>(
+      std::string("hello world foo"), is_space);
+  EXPECT_EQ(result, (std::vector<std::string>{"hello", "world", "foo"}));
+}
+
+TEST(SplitToIfTest, SingleElement) {
+  auto is_comma = [](char c) { return c == ','; };
+  auto result =
+      split_to_if<std::vector<std::string>>(std::string("hello"), is_comma);
+  EXPECT_EQ(result, (std::vector<std::string>{"hello"}));
+}
+
+TEST(SplitToIfTest, EmptyString) {
+  auto is_comma = [](char c) { return c == ','; };
+  auto result =
+      split_to_if<std::vector<std::string>>(std::string(""), is_comma);
+  EXPECT_EQ(result, (std::vector<std::string>{""}));
+}
+
+TEST(SplitToIfTest, OnlyDelimiters) {
+  auto is_comma = [](char c) { return c == ','; };
+  auto result =
+      split_to_if<std::vector<std::string>>(std::string(",,,"), is_comma);
+  EXPECT_EQ(result, (std::vector<std::string>{"", "", "", ""}));
+}
+
+TEST(SplitToIfTest, TrailingDelimiter) {
+  auto is_comma = [](char c) { return c == ','; };
+  auto result =
+      split_to_if<std::vector<std::string>>(std::string("a,b,"), is_comma);
+  EXPECT_EQ(result, (std::vector<std::string>{"a", "b", ""}));
+}
+
+TEST(SplitToIfTest, LeadingDelimiter) {
+  auto is_comma = [](char c) { return c == ','; };
+  auto result =
+      split_to_if<std::vector<std::string>>(std::string(",a,b"), is_comma);
+  EXPECT_EQ(result, (std::vector<std::string>{"", "a", "b"}));
+}
+
+TEST(SplitToIfTest, AdjacentDelimiters) {
+  auto is_comma = [](char c) { return c == ','; };
+  auto result =
+      split_to_if<std::vector<std::string>>(std::string("a,,b"), is_comma);
+  EXPECT_EQ(result, (std::vector<std::string>{"a", "", "b"}));
+}
+
+// --- split_count parameter ---
+
+TEST(SplitToIfTest, SplitCountZero) {
+  auto is_comma = [](char c) { return c == ','; };
+  // split_count=0 means the loop condition (split_count < 0 || count++ < 0)
+  // is false from the start, so no splits occur and the entire string is
+  // returned as a single element.
+  auto result =
+      split_to_if<std::vector<std::string>>(std::string("1,2,3"), is_comma, 0);
+  EXPECT_EQ(result, (std::vector<std::string>{"1,2,3"}));
+}
+
+TEST(SplitToIfTest, SplitCountOne) {
+  auto is_comma = [](char c) { return c == ','; };
+  auto result =
+      split_to_if<std::vector<std::string>>(std::string("1,2,3"), is_comma, 1);
+  EXPECT_EQ(result, (std::vector<std::string>{"1", "2,3"}));
+}
+
+TEST(SplitToIfTest, SplitCountTwo) {
+  auto is_comma = [](char c) { return c == ','; };
+  auto result =
+      split_to_if<std::vector<std::string>>(std::string("1,2,3"), is_comma, 2);
+  EXPECT_EQ(result, (std::vector<std::string>{"1", "2", "3"}));
+}
+
+TEST(SplitToIfTest, SplitCountExceedsDelimiters) {
+  auto is_comma = [](char c) { return c == ','; };
+  auto result =
+      split_to_if<std::vector<std::string>>(std::string("a,b"), is_comma, 10);
+  EXPECT_EQ(result, (std::vector<std::string>{"a", "b"}));
+}
+
+TEST(SplitToIfTest, SplitCountNegative) {
+  auto is_comma = [](char c) { return c == ','; };
+  auto result = split_to_if<std::vector<std::string>>(std::string("a,b,c,d"),
+                                                      is_comma, -1);
+  EXPECT_EQ(result, (std::vector<std::string>{"a", "b", "c", "d"}));
+}
+
+// --- compress_tokens mode ---
+
+TEST(SplitToIfTest, CompressTokensBasic) {
+  auto is_space = [](char c) { return c == ' '; };
+  auto result = split_to_if<std::vector<std::string>>(
+      std::string("hello   world  foo"), is_space, -1, true);
+  EXPECT_EQ(result, (std::vector<std::string>{"hello", "world", "foo"}));
+}
+
+TEST(SplitToIfTest, CompressTokensSingleSpace) {
+  auto is_space = [](char c) { return c == ' '; };
+  auto result = split_to_if<std::vector<std::string>>(
+      std::string("hello world foo"), is_space, -1, true);
+  EXPECT_EQ(result, (std::vector<std::string>{"hello", "world", "foo"}));
+}
+
+TEST(SplitToIfTest, CompressTokensLeadingSpaces) {
+  auto is_space = [](char c) { return c == ' '; };
+  auto result = split_to_if<std::vector<std::string>>(
+      std::string("   hello world"), is_space, -1, true);
+  EXPECT_EQ(result, (std::vector<std::string>{"", "hello", "world"}));
+}
+
+TEST(SplitToIfTest, CompressTokensTrailingSpaces) {
+  // Key behavioral change (bug fix): trailing delimiters with
+  // compress_tokens should NOT produce an empty trailing element.
+  // The new code adds an early return when find_if_not reaches str.end().
+  auto is_space = [](char c) { return c == ' '; };
+  auto result = split_to_if<std::vector<std::string>>(
+      std::string("hello world   "), is_space, -1, true);
+  EXPECT_EQ(result, (std::vector<std::string>{"hello", "world"}));
+}
+
+TEST(SplitToIfTest, CompressTokensOnlySpaces) {
+  // All-delimiter string: the first delimiter is at position 0, producing an
+  // empty token. Then find_if_not reaches end, triggering early return.
+  auto is_space = [](char c) { return c == ' '; };
+  auto result = split_to_if<std::vector<std::string>>(std::string("     "),
+                                                      is_space, -1, true);
+  EXPECT_EQ(result, (std::vector<std::string>{""}));
+}
+
+TEST(SplitToIfTest, CompressTokensEmptyString) {
+  auto is_space = [](char c) { return c == ' '; };
+  auto result = split_to_if<std::vector<std::string>>(std::string(""), is_space,
+                                                      -1, true);
+  EXPECT_EQ(result, (std::vector<std::string>{""}));
+}
+
+TEST(SplitToIfTest, CompressTokensWithSplitCount) {
+  auto is_space = [](char c) { return c == ' '; };
+  // Split at most once: "hello" and the remainder "  world   foo"
+  // (compress_tokens only applies between splits, not to the final chunk)
+  auto result = split_to_if<std::vector<std::string>>(
+      std::string("hello   world   foo"), is_space, 1, true);
+  EXPECT_EQ(result, (std::vector<std::string>{"hello", "world   foo"}));
+}
+
+TEST(SplitToIfTest, CompressTokensTrailingAfterSplitCount) {
+  auto is_space = [](char c) { return c == ' '; };
+  // Split at most once: trailing delimiters after the split point are
+  // preserved in the remainder (no compress_tokens on the final chunk).
+  auto result = split_to_if<std::vector<std::string>>(
+      std::string("hello   world   "), is_space, 1, true);
+  EXPECT_EQ(result, (std::vector<std::string>{"hello", "world   "}));
+}
+
+TEST(SplitToIfTest, CompressTokensWithTabs) {
+  auto is_blank = [](char c) { return c == ' ' || c == '\t'; };
+  auto result = split_to_if<std::vector<std::string>>(
+      std::string("hello\t\tworld  foo"), is_blank, -1, true);
+  EXPECT_EQ(result, (std::vector<std::string>{"hello", "world", "foo"}));
+}
+
+TEST(SplitToIfTest, CompressTokensTrailingMixedWhitespace) {
+  // Trailing mixed whitespace with compress_tokens should produce no empty
+  // trailing element (same bug fix as CompressTokensTrailingSpaces).
+  auto is_blank = [](char c) { return c == ' ' || c == '\t'; };
+  auto result = split_to_if<std::vector<std::string>>(
+      std::string("hello\t world \t "), is_blank, -1, true);
+  EXPECT_EQ(result, (std::vector<std::string>{"hello", "world"}));
+}
+
+// --- split_count=0 with compress_tokens ---
+
+TEST(SplitToIfTest, SplitCountZeroWithCompress) {
+  // split_count=0 means the loop body never executes, so compress_tokens
+  // has no effect and the entire string is returned as a single element.
+  auto is_space = [](char c) { return c == ' '; };
+  auto result = split_to_if<std::vector<std::string>>(
+      std::string("   hello   "), is_space, 0, true);
+  EXPECT_EQ(result, (std::vector<std::string>{"   hello   "}));
+}
+
+TEST(SplitToIfTest, SplitCountZeroWithCompressEmpty) {
+  auto is_space = [](char c) { return c == ' '; };
+  auto result =
+      split_to_if<std::vector<std::string>>(std::string(""), is_space, 0, true);
+  EXPECT_EQ(result, (std::vector<std::string>{""}));
+}
+
+TEST(SplitToIfTest, SplitCountZeroWithCompressOnlyDelims) {
+  auto is_space = [](char c) { return c == ' '; };
+  auto result = split_to_if<std::vector<std::string>>(std::string("     "),
+                                                      is_space, 0, true);
+  EXPECT_EQ(result, (std::vector<std::string>{"     "}));
+}
+
+// --- compress_tokens with a single / only delimiter characters ---
+
+TEST(SplitToIfTest, CompressTokensSingleDelimiter) {
+  // A single delimiter: find_if finds it at position 0, pushes "".
+  // find_if_not then reaches str.end() (no non-delimiter char),
+  // triggering early return.  Result is a single empty token.
+  auto is_comma = [](char c) { return c == ','; };
+  auto result = split_to_if<std::vector<std::string>>(std::string(","),
+                                                      is_comma, -1, true);
+  EXPECT_EQ(result, (std::vector<std::string>{""}));
+}
+
+TEST(SplitToIfTest, CompressTokensTwoDelimiters) {
+  // Two consecutive delimiters: same early-return path as the single-
+  // delimiter case — find_if_not from position 0 reaches end immediately.
+  auto is_comma = [](char c) { return c == ','; };
+  auto result = split_to_if<std::vector<std::string>>(std::string(",,"),
+                                                      is_comma, -1, true);
+  EXPECT_EQ(result, (std::vector<std::string>{""}));
+}
+
+// --- compress_tokens with adjacent delimiters in the middle ---
+
+TEST(SplitToIfTest, CompressTokensAdjacentDelimiters) {
+  // Adjacent delimiters between tokens are skipped by compress_tokens.
+  auto is_comma = [](char c) { return c == ','; };
+  auto result = split_to_if<std::vector<std::string>>(std::string("a,,b"),
+                                                      is_comma, -1, true);
+  EXPECT_EQ(result, (std::vector<std::string>{"a", "b"}));
+}
+
+// --- negative split_count values other than -1 ---
+
+TEST(SplitToIfTest, SplitCountNegativeVarious) {
+  auto is_comma = [](char c) { return c == ','; };
+  // Any negative value means "unlimited splits".
+  EXPECT_EQ(
+      split_to_if<std::vector<std::string>>(std::string("a,b,c"), is_comma, -2),
+      (std::vector<std::string>{"a", "b", "c"}));
+  EXPECT_EQ(split_to_if<std::vector<std::string>>(std::string("a,b,c"),
+                                                  is_comma, -100),
+            (std::vector<std::string>{"a", "b", "c"}));
+}
+
+// --- compress_tokens with split_count > 1 ---
+
+TEST(SplitToIfTest, CompressTokensWithSplitCountTwo) {
+  auto is_space = [](char c) { return c == ' '; };
+  auto result = split_to_if<std::vector<std::string>>(
+      std::string("hello   world   foo"), is_space, 2, true);
+  EXPECT_EQ(result, (std::vector<std::string>{"hello", "world", "foo"}));
+}
+
+TEST(SplitToIfTest, CompressTokensWithSplitCountThree) {
+  auto is_space = [](char c) { return c == ' '; };
+  auto result = split_to_if<std::vector<std::string>>(
+      std::string("a  b  c  d  e"), is_space, 3, true);
+  EXPECT_EQ(result, (std::vector<std::string>{"a", "b", "c", "d  e"}));
+}
+
+// --- compress_tokens with split_count and leading delimiters ---
+
+TEST(SplitToIfTest, CompressTokensSplitCountLeadingDelims) {
+  auto is_comma = [](char c) { return c == ','; };
+  // Leading delimiters produce an empty first token; compress skips
+  // consecutive commas, then split_count=1 stops further splitting.
+  auto result = split_to_if<std::vector<std::string>>(std::string(",,a,b,c"),
+                                                      is_comma, 1, true);
+  EXPECT_EQ(result, (std::vector<std::string>{"", "a,b,c"}));
+}
+
+// --- compress_tokens with a predicate that never matches ---
+
+TEST(SplitToIfTest, CompressTokensNeverMatch) {
+  auto never = [](char /*c*/) { return false; };
+  // No delimiter found → loop never enters → whole string returned as-is.
+  auto result = split_to_if<std::vector<std::string>>(std::string("hello"),
+                                                      never, -1, true);
+  EXPECT_EQ(result, (std::vector<std::string>{"hello"}));
+}
+
+// --- Alternate container types (verifies split_to_if is not hardcoded to
+//     std::vector<std::string>) ---
+
+TEST(SplitToIfTest, DequeString) {
+  auto is_comma = [](char c) { return c == ','; };
+  auto result =
+      split_to_if<std::deque<std::string>>(std::string("a,b,c"), is_comma);
+  EXPECT_EQ(result, (std::deque<std::string>{"a", "b", "c"}));
+}
+
+TEST(SplitToIfTest, ListString) {
+  auto is_comma = [](char c) { return c == ','; };
+  auto result =
+      split_to_if<std::list<std::string>>(std::string("a,b,c"), is_comma);
+  EXPECT_EQ(result, (std::list<std::string>{"a", "b", "c"}));
+}
+
+TEST(SplitToIfTest, DequeWithCompressTokens) {
+  auto is_space = [](char c) { return c == ' '; };
+  auto result = split_to_if<std::deque<std::string>>(
+      std::string("hello   world"), is_space, -1, true);
+  EXPECT_EQ(result, (std::deque<std::string>{"hello", "world"}));
+}
+
+TEST(SplitToIfTest, DequeWithSplitCount) {
+  auto is_comma = [](char c) { return c == ','; };
+  auto result =
+      split_to_if<std::deque<std::string>>(std::string("1,2,3,4"), is_comma, 2);
+  EXPECT_EQ(result, (std::deque<std::string>{"1", "2", "3,4"}));
+}
+
+// --- Wide string (std::wstring) tests ---
+
+TEST(SplitToIfTest, WstringBasic) {
+  auto is_comma = [](wchar_t c) { return c == L','; };
+  auto result =
+      split_to_if<std::vector<std::wstring>>(std::wstring(L"a,b,c"), is_comma);
+  EXPECT_EQ(result, (std::vector<std::wstring>{L"a", L"b", L"c"}));
+}
+
+TEST(SplitToIfTest, WstringSingleElement) {
+  auto is_comma = [](wchar_t c) { return c == L','; };
+  auto result =
+      split_to_if<std::vector<std::wstring>>(std::wstring(L"hello"), is_comma);
+  EXPECT_EQ(result, (std::vector<std::wstring>{L"hello"}));
+}
+
+TEST(SplitToIfTest, WstringEmpty) {
+  auto is_comma = [](wchar_t c) { return c == L','; };
+  auto result =
+      split_to_if<std::vector<std::wstring>>(std::wstring(L""), is_comma);
+  EXPECT_EQ(result, (std::vector<std::wstring>{L""}));
+}
+
+TEST(SplitToIfTest, WstringTrailingDelimiter) {
+  auto is_comma = [](wchar_t c) { return c == L','; };
+  auto result =
+      split_to_if<std::vector<std::wstring>>(std::wstring(L"a,b,"), is_comma);
+  EXPECT_EQ(result, (std::vector<std::wstring>{L"a", L"b", L""}));
+}
+
+TEST(SplitToIfTest, WstringWithSplitCount) {
+  auto is_comma = [](wchar_t c) { return c == L','; };
+  auto result = split_to_if<std::vector<std::wstring>>(std::wstring(L"1,2,3,4"),
+                                                       is_comma, 2);
+  EXPECT_EQ(result, (std::vector<std::wstring>{L"1", L"2", L"3,4"}));
+}
+
+TEST(SplitToIfTest, WstringCompressTokens) {
+  auto is_space = [](wchar_t c) { return c == L' '; };
+  auto result = split_to_if<std::vector<std::wstring>>(
+      std::wstring(L"hello   world  foo"), is_space, -1, true);
+  EXPECT_EQ(result, (std::vector<std::wstring>{L"hello", L"world", L"foo"}));
+}
+
+TEST(SplitToIfTest, WstringCompressTokensTrailing) {
+  auto is_space = [](wchar_t c) { return c == L' '; };
+  auto result = split_to_if<std::vector<std::wstring>>(
+      std::wstring(L"hello world   "), is_space, -1, true);
+  EXPECT_EQ(result, (std::vector<std::wstring>{L"hello", L"world"}));
+}
+
+TEST(SplitToIfTest, WstringDeque) {
+  auto is_comma = [](wchar_t c) { return c == L','; };
+  auto result =
+      split_to_if<std::deque<std::wstring>>(std::wstring(L"x,y,z"), is_comma);
+  EXPECT_EQ(result, (std::deque<std::wstring>{L"x", L"y", L"z"}));
+}
+
+TEST(SplitToIfTest, WstringCompressTokensWithSplitCount) {
+  auto is_space = [](wchar_t c) { return c == L' '; };
+  auto result = split_to_if<std::vector<std::wstring>>(
+      std::wstring(L"hello   world   foo"), is_space, 1, true);
+  EXPECT_EQ(result, (std::vector<std::wstring>{L"hello", L"world   foo"}));
 }
 
 TEST(ParseFromStringTest, Sizeable) {

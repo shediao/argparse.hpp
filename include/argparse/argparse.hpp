@@ -542,105 +542,41 @@ std::string join(const std::vector<std::string>& v, const T& delim) {
   return result.str();
 }
 
-template <typename T, typename = std::void_t<>>
-struct has_push_back : public std::false_type {};
-template <typename C>
-struct has_push_back<C, std::void_t<decltype(std::declval<C>().push_back(
-                            std::declval<typename C::value_type>()))>>
-    : public std::true_type {};
-template <typename T>
-constexpr bool has_push_back_v = has_push_back<T>::value;
-
-template <typename T, typename = std::void_t<>>
-struct has_emplace_back : public std::false_type {};
-template <typename C>
-struct has_emplace_back<C, std::void_t<decltype(std::declval<C>().emplace_back(
-                               std::declval<typename C::value_type>()))>>
-    : public std::true_type {};
-template <typename T>
-constexpr bool has_emplace_back_v = has_emplace_back<T>::value;
-
-template <typename T, typename = std::void_t<>>
-struct has_insert : public std::false_type {};
-template <typename C>
-struct has_insert<C, std::void_t<decltype(std::declval<C>().insert(
-                         std::declval<typename C::value_type>()))>>
-    : public std::true_type {};
-template <typename T>
-constexpr bool has_insert_v = has_insert<T>::value;
-
-template <typename T, typename = std::void_t<>>
-struct has_emplace : public std::false_type {};
-template <typename C>
-struct has_emplace<C, std::void_t<decltype(std::declval<C>().emplace(
-                          std::declval<typename C::value_type>()))>>
-    : public std::true_type {};
-template <typename T>
-constexpr bool has_emplace_v = has_emplace<T>::value;
-
-template <typename T, typename = std::void_t<>>
-struct has_push : public std::false_type {};
-template <typename C>
-struct has_push<C, std::void_t<decltype(std::declval<C>().push(
-                       std::declval<typename C::value_type>()))>>
-    : public std::true_type {};
-template <typename T>
-constexpr bool has_push_v = has_push<T>::value;
-
-template <typename T, typename = std::void_t<>>
-struct has_push_front : public std::false_type {};
-template <typename C>
-struct has_push_front<C, std::void_t<decltype(std::declval<C>().push_front(
-                             std::declval<typename C::value_type>()))>>
-    : public std::true_type {};
-template <typename T>
-constexpr bool has_push_front_v = has_push_front<T>::value;
-template <typename CharT, typename F, typename C>
-  requires std::is_same_v<bool,
-                          decltype(std::declval<F>()(std::declval<CharT>()))>
-C& split_to_if(C& to, const std::basic_string<CharT>& str, F f,
-               int split_count = -1, bool compress_tokens = false) {
+template <typename C, typename CharT, typename F>
+  requires requires(F f, CharT c) {
+    { f(c) } -> std::convertible_to<bool>;
+  } &&
+           std::is_constructible_v<
+               C, typename std::vector<typename C::value_type>::iterator,
+               typename std::vector<typename C::value_type>::iterator>
+C split_to_if(const std::basic_string<CharT>& str, F f, int split_count = -1,
+              bool compress_tokens = false) {
   auto begin = str.begin();
   auto delimiter = begin;
   int count = 0;
 
+  std::vector<typename C::value_type> to;
   while ((split_count < 0 || count++ < split_count) &&
          (delimiter = std::find_if(begin, str.end(), f)) != str.end()) {
-    to.insert(to.end(), {begin, delimiter});
+    to.emplace_back(begin, delimiter);
     if (compress_tokens) {
       begin = std::find_if_not(delimiter, str.end(), f);
+      if (begin == str.end()) {
+        return C{to.begin(), to.end()};
+      }
     } else {
       begin = std::next(delimiter);
     }
   }
 
-  if constexpr (has_emplace_back_v<C>) {
-    to.emplace_back(begin, str.end());
-  } else if constexpr (has_emplace_v<C>) {
-    to.emplace(begin, str.end());
-  } else if constexpr (has_push_back_v<C>) {
-    to.push_back({begin, str.end()});
-  } else if constexpr (has_insert_v<C>) {
-    to.insert({begin, str.end()});
-  } else if constexpr (has_push_v<C>) {
-    to.push({begin, str.end()});
-  } else if constexpr (has_push_front_v<C>) {
-    to.push_front({begin, str.end()});
-  } else {
-    static_assert(
-        !std::is_same_v<C, C>,
-        "The container does not support adding elements via a known method.");
-  }
-
-  return to;
+  to.emplace_back(begin, str.end());
+  return C{to.begin(), to.end()};
 }
 
 inline std::vector<std::string> split(std::string const& s, char delim,
                                       int split_count) {
-  std::vector<std::string> result;
-  split_to_if(
-      result, s, [delim](char c) { return c == delim; }, split_count, false);
-  return result;
+  return split_to_if<std::vector<std::string>>(
+      s, [delim](char c) { return c == delim; }, split_count, false);
 }
 
 template <typename T>
