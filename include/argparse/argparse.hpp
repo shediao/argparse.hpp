@@ -190,13 +190,10 @@ inline void report_invalid_argument(std::string const& msg) {
 template <typename T>
 T from_string(std::string const& s);
 template <typename T>
+T from_string(std::string const& s, char);
+template <typename T>
 T from_wstring(std::wstring const& s);
 
-template <typename T>
-  requires std::is_constructible_v<T, std::string>
-T from_string(std::string const& s) {
-  return T{s};
-}
 template <typename T>
   requires std::is_constructible_v<T, std::wstring>
 T from_wstring(std::wstring const& s) {
@@ -204,10 +201,10 @@ T from_wstring(std::wstring const& s) {
 }
 
 template <typename T>
-  requires((std::is_integral_v<T> || std::is_floating_point_v<T>) &&
-           !std::is_same_v<char, T> && !std::is_same_v<wchar_t, T> &&
-           !std::is_same_v<bool, T> && !std::is_same_v<char16_t, T> &&
-           !std::is_same_v<char32_t, T> && !std::is_same_v<char8_t, T>)
+  requires((std::is_integral_v<T> || std::is_floating_point_v<T> ||
+            std::is_constructible_v<T, std::string>) &&
+           !std::is_same_v<unsigned char, T> && !std::is_same_v<wchar_t, T> &&
+           !std::is_same_v<char16_t, T> && !std::is_same_v<char32_t, T>)
 T from_string(std::string const& s) {
   try {
     size_t pos = 0;
@@ -286,6 +283,23 @@ T from_string(std::string const& s) {
         detail::report_invalid_argument("Overflow: " + s);
       }
       return static_cast<T>(result);
+    } else if constexpr (std::is_same_v<T, char> ||
+                         std::is_same_v<T, char8_t>) {
+      if (s.size() != 1) {
+        detail::report_invalid_argument("Invalid character: " + s);
+      }
+      return s[0];
+    } else if constexpr (std::is_same_v<T, bool>) {
+      if (s == "true" || s == "on" || s == "yes" || s == "1") {
+        return true;
+      }
+      if (s == "false" || s == "off" || s == "no" || s == "0") {
+        return false;
+      }
+      detail::report_invalid_argument("Invalid boolean value: " + s);
+      return false;
+    } else if constexpr (std::is_constructible_v<T, std::string>) {
+      return T{s};
     } else {
       detail::report_invalid_argument("Unsupported type for parse_from_string");
       return T{};
