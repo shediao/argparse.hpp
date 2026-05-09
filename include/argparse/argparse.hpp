@@ -138,22 +138,61 @@ inline size_t& option_name_width_impl() {
   static size_t width = 24;
   return width;
 }
-}  // namespace detail
-
-/// Get the current option name width (default: 24).
-inline size_t option_name_width() { return detail::option_name_width_impl(); }
-
-/// Set the option name width globally for help/usage formatting.
-inline void set_option_name_width(size_t width) {
-  detail::option_name_width_impl() = width;
+template <typename T>
+std::string join(const std::vector<std::string>& v, const T& delim) {
+  std::stringstream result;
+  auto it = v.begin();
+  if (it != v.end()) {
+    result << *it;
+    ++it;
+  }
+  for (; it != v.end(); ++it) {
+    result << delim << *it;
+  }
+  return result.str();
 }
 
-namespace detail {
-inline std::string to_string(std::string const& s) { return s; }
-inline std::wstring to_wstring(std::wstring const& s) { return s; }
+template <typename C, typename CharT, typename F>
+  requires requires(F f, CharT c) {
+    { f(c) } -> std::convertible_to<bool>;
+  } &&
+           std::is_constructible_v<
+               C, typename std::vector<typename C::value_type>::iterator,
+               typename std::vector<typename C::value_type>::iterator>
+C split_to_if(const std::basic_string<CharT>& str, F f, int split_count = -1,
+              bool compress_tokens = false) {
+  auto begin = str.begin();
+  auto delimiter = begin;
+  int count = 0;
+
+  std::vector<typename C::value_type> to;
+  while ((split_count < 0 || count++ < split_count) &&
+         (delimiter = std::find_if(begin, str.end(), f)) != str.end()) {
+    to.emplace_back(begin, delimiter);
+    if (compress_tokens) {
+      begin = std::find_if_not(delimiter, str.end(), f);
+      if (begin == str.end()) {
+        return C{to.begin(), to.end()};
+      }
+    } else {
+      begin = std::next(delimiter);
+    }
+  }
+
+  to.emplace_back(begin, str.end());
+  return C{to.begin(), to.end()};
+}
+
+inline std::vector<std::string> split(std::string const& s, char delim,
+                                      int split_count) {
+  return split_to_if<std::vector<std::string>>(
+      s, [delim](char c) { return c == delim; }, split_count, false);
+}
 
 using std::to_string;
 using std::to_wstring;
+inline std::string to_string(std::string const& s) { return s; }
+inline std::wstring to_wstring(std::wstring const& s) { return s; }
 
 inline void die(std::string const& msg) {
 #if ARGPARSE_HAS_EXCEPTIONS
@@ -187,25 +226,64 @@ inline void report_invalid_argument(std::string const& msg) {
 #endif
 }
 
-template <typename T>
-T from_string(std::string const& s);
-template <typename T>
-T from_string(std::string const& s, char);
-template <typename T>
-T from_wstring(std::wstring const& s);
+}  // namespace detail
 
-template <typename T>
-  requires std::is_constructible_v<T, std::wstring>
-T from_wstring(std::wstring const& s) {
-  return T{s};
+/// Get the current option name width (default: 24).
+inline size_t option_name_width() { return detail::option_name_width_impl(); }
+
+/// Set the option name width globally for help/usage formatting.
+inline void set_option_name_width(size_t width) {
+  detail::option_name_width_impl() = width;
 }
 
+namespace detail {
+
+template <typename...>
+using void_t = void;
+
 template <typename T>
-  requires((std::is_integral_v<T> || std::is_floating_point_v<T> ||
-            std::is_constructible_v<T, std::string>) &&
-           !std::is_same_v<unsigned char, T> && !std::is_same_v<wchar_t, T> &&
-           !std::is_same_v<char16_t, T> && !std::is_same_v<char32_t, T>)
+struct is_optional : std::false_type {};
+
+template <typename T>
+struct is_optional<std::optional<T>> : std::true_type {};
+
+template <typename T>
+constexpr bool is_optional_v = is_optional<T>::value;
+
+// TODO: remove
+template <typename T>
+constexpr bool is_integral_v =
+    std::is_integral_v<T> && !std::is_same_v<bool, T>;
+
+template <typename T>
+struct is_string : std::false_type {};
+
+template <class _CharT, class _Traits, class _Allocator>
+struct is_string<std::basic_string<_CharT, _Traits, _Allocator>>
+    : std::true_type {};
+
+template <typename T>
+constexpr bool is_string_v = is_string<T>::value;
+
+template <typename T>
+  requires(!is_optional_v<T> &&
+           ((std::is_integral_v<T> && !std::is_enum_v<T> &&
+             !std::is_same_v<T, wchar_t> && !std::is_same_v<T, char16_t> &&
+             !std::is_same_v<T, char32_t> &&
+             !std::is_same_v<T, unsigned char>) ||
+            std::is_floating_point_v<T> ||
+            std::is_constructible_v<T, std::string>))
 T from_string(std::string const& s) {
+  // Explicitly excluded character types — use char or char8_t instead.
+  static_assert(!std::is_same_v<T, unsigned char>,
+                "from_string does not support unsigned char");
+  static_assert(!std::is_same_v<T, wchar_t>,
+                "from_string does not support wchar_t");
+  static_assert(!std::is_same_v<T, char16_t>,
+                "from_string does not support char16_t");
+  static_assert(!std::is_same_v<T, char32_t>,
+                "from_string does not support char32_t");
+
   try {
     size_t pos = 0;
     if constexpr (std::is_same_v<T, int>) {
@@ -312,36 +390,85 @@ T from_string(std::string const& s) {
   return T{};
 }
 
-template <typename...>
-using void_t = void;
+template <typename T>
+concept can_from_string_without_delim =
+    requires { from_string<T>(std::declval<std::string>()); };
 
 template <typename T>
-struct is_optional : std::false_type {};
+concept can_from_string_all_tuple_like_items = requires {
+  typename std::tuple_size<T>::type;
+  requires std::tuple_size<T>::value > 0;
+} && []<std::size_t... I>(std::integer_sequence<std::size_t, I...>) constexpr {
+  return (can_from_string_without_delim<std::tuple_element_t<I, T>> && ...);
+}(std::make_index_sequence<std::tuple_size_v<T>>());
 
 template <typename T>
-struct is_optional<std::optional<T>> : std::true_type {};
+  requires can_from_string_all_tuple_like_items<T>
+T from_string(const std::string& s, char delim) {
+  auto values = split(s, delim, std::tuple_size_v<T> - 1);
+  if (values.size() != std::tuple_size_v<T>) {
+    detail::report_invalid_argument(
+        "Invalid tuple value: " + s + " expected " +
+        std::to_string(std::tuple_size_v<T>) + " " +
+        (std::tuple_size_v<T> == 1 ? "value" : "values") + ".");
+  }
+  return []<size_t... I>(std::vector<std::string> const& values,
+                         std::integer_sequence<std::size_t, I...>) {
+    return T{
+        from_string<std::decay_t<std::tuple_element_t<I, T>>>(values[I])...};
+  }(values, std::make_index_sequence<std::tuple_size_v<std::decay_t<T>>>());
+}
 
 template <typename T>
-constexpr bool is_optional_v = is_optional<T>::value;
-
-template <typename T>
-constexpr bool is_integral_v =
-    std::is_integral_v<T> && !std::is_same_v<bool, T>;
-
-template <typename T>
-struct is_string : std::false_type {};
-
-template <typename charT>
-struct is_string<std::basic_string<charT>> : std::true_type {};
-
-template <typename T>
-constexpr bool is_string_v = is_string<T>::value;
-
-template <typename T>
-concept IsContainer = requires(T t) {
-  requires(!is_string_v<T>);
-  t.insert(t.end(), std::declval<typename T::value_type>());
+concept can_from_string_with_delim = requires {
+  from_string<T>(std::declval<std::string>(), std::declval<char>());
 };
+
+template <typename T>
+concept can_from_string =
+    can_from_string_without_delim<T> || can_from_string_with_delim<T>;
+template <typename T>
+concept is_container = requires(T t) {
+  typename T::value_type;
+  std::is_constructible_v<
+      T, typename std::vector<typename T::value_type>::iterator,
+      typename std::vector<typename T::value_type>::iterator>;
+} && (
+    requires(T t){ t.insert(t.end(), std::declval<typename T::value_type>()); }
+    ||
+    requires(T t){ t.push_back(std::declval<typename T::value_type>()); }
+    ||
+    requires(T t){ t.push_front(std::declval<typename T::value_type>()); }
+    ||
+    requires(T t){ t.push(std::declval<typename T::value_type>()); }
+    );
+
+template <typename T>
+concept is_non_string_container = is_container<T> && !is_string_v<T>;
+
+template <typename T>
+concept from_string_container =
+    is_non_string_container<T> &&
+    (can_from_string_without_delim<typename T::value_type> ||
+     can_from_string_with_delim<typename T::value_type>);
+
+template <typename T>
+concept bindable_without_delim =
+    (is_optional_v<T> &&
+     can_from_string_without_delim<typename T::value_type>) ||
+    (!is_optional_v<T> && can_from_string_without_delim<T>) ||
+    (is_non_string_container<T> &&
+     can_from_string_without_delim<typename T::value_type>);
+
+template <typename T>
+concept bindable_with_delim =
+    (is_optional_v<T> && can_from_string_with_delim<typename T::value_type>) ||
+    (!is_optional_v<T> && can_from_string_with_delim<T>) ||
+    (is_non_string_container<T> &&
+     can_from_string_with_delim<typename T::value_type>);
+
+template <typename T>
+concept bindable = bindable_without_delim<T> || bindable_with_delim<T>;
 
 template <typename T>
 struct has_to_string : std::false_type {};
@@ -428,61 +555,6 @@ template <typename T>
 constexpr bool has_c_str_memfunc_v = has_c_str_memfunc<T>::value;
 
 template <typename T>
-concept ParseFromStringBasicType =
-    is_string_v<std::remove_cv_t<T>> ||
-    std::same_as<std::remove_cv_t<T>, bool> ||
-    std::same_as<std::remove_cv_t<T>, char> ||
-    std::same_as<std::remove_cv_t<T>, unsigned int> ||
-    std::same_as<std::remove_cv_t<T>, int> ||
-    std::same_as<std::remove_cv_t<T>, long> ||
-    std::same_as<std::remove_cv_t<T>, unsigned long> ||
-    std::same_as<std::remove_cv_t<T>, long long> ||
-    std::same_as<std::remove_cv_t<T>, unsigned long long> ||
-    std::same_as<std::remove_cv_t<T>, float> ||
-    std::same_as<std::remove_cv_t<T>, double> ||
-    std::same_as<std::remove_cv_t<T>, long double>;
-
-template <typename T>
-concept ParseFromStringCustomType =
-    (std::is_constructible_v<std::remove_cv_t<T>, std::string> ||
-     std::convertible_to<std::string, std::remove_cv_t<T>>) &&
-    (!ParseFromStringBasicType<std::remove_cv_t<T>>);
-
-template <typename T>
-concept ParseFromStringSingleType =
-    ParseFromStringBasicType<T> || ParseFromStringCustomType<T>;
-
-template <typename T>
-concept ParseFromStringTupleLikeType = requires {
-  std::get<0>(std::declval<T&>());
-  requires std::tuple_size_v<T> > 0;
-  typename std::tuple_element<0, T>::type;
-} && []<std::size_t... I>(std::integer_sequence<std::size_t, I...>) constexpr {
-  return (ParseFromStringSingleType<std::tuple_element_t<I, T>> && ...);
-}(std::make_index_sequence<std::tuple_size_v<T>>());
-
-template <typename T>
-concept ParseFromStringOptionalSingleType =
-    detail::is_optional_v<T> &&
-    ParseFromStringSingleType<typename T::value_type>;
-
-template <typename T>
-concept ParseFromStringOptionalTupleLikeType =
-    detail::is_optional_v<T> &&
-    ParseFromStringTupleLikeType<typename T::value_type>;
-
-template <typename T>
-concept ParseFromStringType =
-    ParseFromStringSingleType<T> || ParseFromStringTupleLikeType<T> ||
-    ParseFromStringOptionalSingleType<T> ||
-    ParseFromStringOptionalTupleLikeType<T>;
-
-template <typename T>
-concept ParseFromStringContainerType =
-    IsContainer<T> && (ParseFromStringSingleType<typename T::value_type> ||
-                       ParseFromStringTupleLikeType<typename T::value_type>);
-
-template <typename T>
 struct extract_value_type {
   using type = T;
 };
@@ -492,169 +564,13 @@ struct extract_value_type<std::optional<T>> {
   using type = T;
 };
 
-template <ParseFromStringContainerType T>
+template <from_string_container T>
 struct extract_value_type<T> {
   using type = typename T::value_type;
 };
 
 template <typename T>
 using extract_value_type_t = typename extract_value_type<T>::type;
-
-template <typename T>
-concept BindableType =
-    ParseFromStringContainerType<T> || ParseFromStringSingleType<T> ||
-    ParseFromStringTupleLikeType<T> || ParseFromStringOptionalSingleType<T> ||
-    ParseFromStringOptionalTupleLikeType<T>;
-
-template <typename T>
-concept BindableWithoutDelimiterType =
-    ParseFromStringSingleType<T> || ParseFromStringOptionalSingleType<T> ||
-    (ParseFromStringContainerType<T> &&
-     ParseFromStringSingleType<typename T::value_type>);
-
-template <typename T>
-concept BindableWithDelimiterType =
-    ParseFromStringTupleLikeType<T> ||
-    ParseFromStringOptionalTupleLikeType<T> ||
-    (ParseFromStringContainerType<T> &&
-     ParseFromStringTupleLikeType<typename T::value_type>);
-
-template <typename T>
-concept IsParseFromStringBasicType =
-    std::same_as<T, std::string> || std::same_as<T, bool> ||
-    std::same_as<T, int> || std::same_as<T, long> ||
-    std::same_as<T, unsigned long> || std::same_as<T, long long> ||
-    std::same_as<T, unsigned long long> || std::same_as<T, float> ||
-    std::same_as<T, double> || std::same_as<T, long double> ||
-    requires(std::string const& s) { T(s); };
-
-template <typename T>
-std::string join(const std::vector<std::string>& v, const T& delim) {
-  std::stringstream result;
-  auto it = v.begin();
-  if (it != v.end()) {
-    result << *it;
-    ++it;
-  }
-  for (; it != v.end(); ++it) {
-    result << delim << *it;
-  }
-  return result.str();
-}
-
-template <typename C, typename CharT, typename F>
-  requires requires(F f, CharT c) {
-    { f(c) } -> std::convertible_to<bool>;
-  } &&
-           std::is_constructible_v<
-               C, typename std::vector<typename C::value_type>::iterator,
-               typename std::vector<typename C::value_type>::iterator>
-C split_to_if(const std::basic_string<CharT>& str, F f, int split_count = -1,
-              bool compress_tokens = false) {
-  auto begin = str.begin();
-  auto delimiter = begin;
-  int count = 0;
-
-  std::vector<typename C::value_type> to;
-  while ((split_count < 0 || count++ < split_count) &&
-         (delimiter = std::find_if(begin, str.end(), f)) != str.end()) {
-    to.emplace_back(begin, delimiter);
-    if (compress_tokens) {
-      begin = std::find_if_not(delimiter, str.end(), f);
-      if (begin == str.end()) {
-        return C{to.begin(), to.end()};
-      }
-    } else {
-      begin = std::next(delimiter);
-    }
-  }
-
-  to.emplace_back(begin, str.end());
-  return C{to.begin(), to.end()};
-}
-
-inline std::vector<std::string> split(std::string const& s, char delim,
-                                      int split_count) {
-  return split_to_if<std::vector<std::string>>(
-      s, [delim](char c) { return c == delim; }, split_count, false);
-}
-
-template <typename T>
-  requires(
-      requires {
-        typename std::tuple_size<T>::type;
-        requires std::tuple_size<T>::value > 0;
-      } &&
-      requires {
-        []<typename U, std::size_t... I>(
-            U, std::integer_sequence<std::size_t, I...>) {
-          return U{from_string<std::tuple_element_t<I, U>>(std::string{})...};
-        }(T{}, std::make_index_sequence<std::tuple_size_v<T>>());
-      })
-T from_string(const std::string& s, char delim) {
-  auto values = split(s, delim, std::tuple_size_v<T> - 1);
-  if (values.size() != std::tuple_size_v<T>) {
-    detail::report_invalid_argument(
-        "Invalid tuple value: " + s + " expected " +
-        std::to_string(std::tuple_size_v<T>) + " " +
-        (std::tuple_size_v<T> == 1 ? "value" : "values") + ".");
-  }
-  return []<size_t... I>(std::vector<std::string> const& values,
-                         std::integer_sequence<std::size_t, I...>) {
-    return T{
-        from_string<std::decay_t<std::tuple_element_t<I, T>>>(values[I])...};
-  }(values, std::make_index_sequence<std::tuple_size_v<std::decay_t<T>>>());
-}
-
-template <typename T>
-  requires(
-      requires(T t) {
-        t.size();
-        t.begin();
-        t.end();
-      } && !requires { typename std::tuple_size<T>::type; } &&
-      requires {
-        from_string<typename T::value_type>(std::declval<std::string>());
-      } &&
-      std::is_constructible_v<
-          T, typename std::vector<typename T::value_type>::iterator,
-          typename std::vector<typename T::value_type>::iterator>)
-T from_string(const std::string& s, char delim) {
-  auto values = split(s, delim, -1);
-  std::vector<typename T::value_type> tmp;
-  std::transform(values.begin(), values.end(), std::back_inserter(tmp),
-                 [](std::string const& s) {
-                   return from_string<typename T::value_type>(s);
-                 });
-  return T{tmp.begin(), tmp.end()};
-}
-
-template <typename T>
-  requires(
-      requires(T t) {
-        t.size();
-        t.begin();
-        t.end();
-      } && !requires { typename std::tuple_size<T>::type; } &&
-      requires {
-        typename std::tuple_size<typename T::value_type>::type;
-        requires std::tuple_size<typename T::value_type>::value > 0;
-      } &&
-      requires {
-        from_string<typename T::value_type>(std::declval<std::string>(), ',');
-      } &&
-      std::is_constructible_v<
-          T, typename std::vector<typename T::value_type>::iterator,
-          typename std::vector<typename T::value_type>::iterator>)
-T from_string(const std::string& s, char delim1, char delim2) {
-  auto values = split(s, delim1, -1);
-  std::vector<typename T::value_type> tmp;
-  std::transform(values.begin(), values.end(), std::back_inserter(tmp),
-                 [delim2](std::string const& s) {
-                   return from_string<typename T::value_type>(s, delim2);
-                 });
-  return T{tmp.begin(), tmp.end()};
-}
 
 // Word-wrap a single segment of text (no embedded \n) to fit within
 // the given width.  Break on spaces when possible; force-break only
@@ -857,6 +773,7 @@ inline std::wstring to_wstring(T const& value)
 
 using argparse::detail::to_string;
 using argparse::detail::to_wstring;
+using detail::from_string;
 
 inline void store_true(bool& value) { value = true; }
 
@@ -1327,7 +1244,7 @@ class OptionBaseCRTP : public OptionBase {
   }
 };
 
-template <detail::BindableType T>
+template <detail::bindable T>
 class Option final : public OptionBaseCRTP<Option<T>> {
   friend class Command;
   friend class ArgParser;
@@ -1339,32 +1256,37 @@ class Option final : public OptionBaseCRTP<Option<T>> {
 
  public:
   Option(const std::string& name, const std::string& description, T& bind_value)
-    requires detail::BindableWithoutDelimiterType<T>
+    requires requires {
+      from_string<parsed_value_type>(std::declval<std::string>());
+    }
       : OptionBaseCRTP<Option<T>>(name, description),
         bind_value_(std::ref(bind_value)),
         parse_function_([](std::string const& opt_value) {
-          return detail::from_string<parsed_value_type>(opt_value);
+          return from_string<parsed_value_type>(opt_value);
         }) {
     OptionBase::set_value_placeholder_for_type<T>();
   }
   Option(const std::string& name, const std::string& description, T& bind_value,
          char delim)
-    requires detail::BindableWithDelimiterType<T>
+    requires requires {
+      from_string<parsed_value_type>(std::declval<std::string>(),
+                                     std::declval<char>());
+    }
       : OptionBaseCRTP<Option<T>>(name, description),
         bind_value_(std::ref(bind_value)),
         parse_function_([delim](std::string const& opt_value) {
-          return detail::from_string<parsed_value_type>(opt_value, delim);
+          return from_string<parsed_value_type>(opt_value, delim);
         }) {
     OptionBase::set_value_placeholder_for_type<T>();
   }
   Option<T>& default_value(const std::string& default_value)
-    requires(!detail::ParseFromStringContainerType<T>)
+    requires(!detail::from_string_container<T>)
   {
     this->default_value_ = default_value;
     return *this;
   }
   Option<T>& default_value(std::initializer_list<std::string> default_value)
-    requires detail::ParseFromStringContainerType<T>
+    requires detail::from_string_container<T>
   {
     this->default_value_ = default_value;
     return *this;
@@ -1465,7 +1387,7 @@ class Option final : public OptionBaseCRTP<Option<T>> {
         detail::report_invalid_argument(msg);
       }
     }
-    if constexpr (detail::ParseFromStringContainerType<T>) {
+    if constexpr (detail::from_string_container<T>) {
       bind_value_.get().insert(bind_value_.get().end(),
                                std::move(parsed_value));
     } else {
@@ -1480,7 +1402,7 @@ class Option final : public OptionBaseCRTP<Option<T>> {
     }
   }
   bool is_multiple() const override {
-    if constexpr (detail::ParseFromStringContainerType<T>) {
+    if constexpr (detail::from_string_container<T>) {
       return true;
     } else {
       return false;
@@ -1490,7 +1412,7 @@ class Option final : public OptionBaseCRTP<Option<T>> {
     if (ArgBase::count() != 0) {
       return;
     }
-    if constexpr (detail::ParseFromStringContainerType<T>) {
+    if constexpr (detail::from_string_container<T>) {
       if (default_value_.has_value()) {
         for (const auto& value : default_value_.value()) {
           parse(value);
@@ -1504,7 +1426,7 @@ class Option final : public OptionBaseCRTP<Option<T>> {
     ArgBase::count_ = 0;
   }
   std::optional<std::string> get_default_value() const override {
-    if constexpr (detail::ParseFromStringContainerType<T>) {
+    if constexpr (detail::from_string_container<T>) {
       if (default_value_.has_value()) {
         return "{" + detail::join(default_value_.value(), ',') + "}";
       }
@@ -1519,7 +1441,7 @@ class Option final : public OptionBaseCRTP<Option<T>> {
  private:
   std::reference_wrapper<T> bind_value_;
   std::function<parsed_value_type(std::string const&)> parse_function_;
-  std::conditional_t<detail::ParseFromStringContainerType<T>,
+  std::conditional_t<detail::from_string_container<T>,
                      std::optional<std::vector<std::string>>,
                      std::optional<std::string>>
       default_value_;
@@ -1556,7 +1478,7 @@ class OptionAlias : public FlagBase {
   std::string opt_value_{};
 };
 
-template <detail::BindableType T>
+template <detail::bindable T>
 class Positional final : public OptionBaseCRTP<Positional<T>> {
   friend class Command;
   friend class ArgParser;
@@ -1569,52 +1491,57 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
  public:
   Positional(const std::string& name, const std::string& description,
              T& bind_value)
-    requires detail::BindableWithoutDelimiterType<T>
+    requires requires {
+      from_string<parsed_value_type>(std::declval<std::string>());
+    }
       : OptionBaseCRTP<Positional<T>>(name, description),
         bind_value_(std::ref(bind_value)) {
-    if constexpr (detail::ParseFromStringContainerType<T>) {
+    if constexpr (detail::from_string_container<T>) {
       parse_function_ = [](std::string const& opt_value) {
-        return detail::from_string<parsed_value_type>(opt_value);
+        return from_string<parsed_value_type>(opt_value);
       };
     } else if constexpr (detail::is_optional_v<T>) {
       parse_function_ = [](std::string const& opt_value) {
-        return detail::from_string<parsed_value_type>(opt_value);
+        return from_string<parsed_value_type>(opt_value);
       };
     } else {
       parse_function_ = [](std::string const& opt_value) {
-        return detail::from_string<T>(opt_value);
+        return from_string<T>(opt_value);
       };
     }
     (void)OptionBaseCRTP<Positional<T>>::value_placeholder(name);
   }
   Positional(const std::string& name, const std::string& description,
              T& bind_value, char delim)
-    requires detail::BindableWithDelimiterType<T>
+    requires requires {
+      from_string<parsed_value_type>(std::declval<std::string>(),
+                                     std::declval<char>());
+    }
       : OptionBaseCRTP<Positional<T>>(name, description),
         bind_value_(std::ref(bind_value)) {
-    if constexpr (detail::ParseFromStringContainerType<T>) {
+    if constexpr (detail::from_string_container<T>) {
       parse_function_ = [delim](std::string const& opt_value) {
-        return detail::from_string<parsed_value_type>(opt_value, delim);
+        return from_string<parsed_value_type>(opt_value, delim);
       };
     } else if constexpr (detail::is_optional_v<T>) {
       parse_function_ = [delim](std::string const& opt_value) {
-        return detail::from_string<parsed_value_type>(opt_value, delim);
+        return from_string<parsed_value_type>(opt_value, delim);
       };
     } else {
       parse_function_ = [delim](std::string const& opt_value) {
-        return detail::from_string<T>(opt_value, delim);
+        return from_string<T>(opt_value, delim);
       };
     }
     (void)OptionBaseCRTP<Positional<T>>::value_placeholder(name);
   }
   Positional<T>& default_value(const std::string& default_value)
-    requires(!detail::ParseFromStringContainerType<T>)
+    requires(!detail::from_string_container<T>)
   {
     this->default_value_ = default_value;
     return *this;
   }
   Positional<T>& default_value(std::initializer_list<std::string> default_value)
-    requires detail::ParseFromStringContainerType<T>
+    requires detail::from_string_container<T>
   {
     this->default_value_ = default_value;
     return *this;
@@ -1716,7 +1643,7 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
         detail::report_invalid_argument(msg);
       }
     }
-    if constexpr (detail::ParseFromStringContainerType<T>) {
+    if constexpr (detail::from_string_container<T>) {
       bind_value_.get().insert(bind_value_.get().end(),
                                std::move(parsed_value));
     } else {
@@ -1731,7 +1658,7 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
     }
   }
   bool is_multiple() const override {
-    if constexpr (detail::ParseFromStringContainerType<T>) {
+    if constexpr (detail::from_string_container<T>) {
       return true;
     } else {
       return false;
@@ -1741,7 +1668,7 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
     if (ArgBase::count() != 0) {
       return;
     }
-    if constexpr (detail::ParseFromStringContainerType<T>) {
+    if constexpr (detail::from_string_container<T>) {
       if (default_value_.has_value()) {
         for (const auto& value : default_value_.value()) {
           parse(value);
@@ -1755,7 +1682,7 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
     ArgBase::count_ = 0;
   }
   std::optional<std::string> get_default_value() const override {
-    if constexpr (detail::ParseFromStringContainerType<T>) {
+    if constexpr (detail::from_string_container<T>) {
       if (default_value_.has_value()) {
         return "{" + detail::join(default_value_.value(), ',') + "}";
       }
@@ -1770,7 +1697,7 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
  private:
   std::reference_wrapper<T> bind_value_;
   std::function<parsed_value_type(std::string const&)> parse_function_;
-  std::conditional_t<detail::ParseFromStringContainerType<T>,
+  std::conditional_t<detail::from_string_container<T>,
                      std::optional<std::vector<std::string>>,
                      std::optional<std::string>>
       default_value_;
@@ -1893,7 +1820,7 @@ class Command {
     return ret;
   }
 
-  template <detail::BindableWithoutDelimiterType T>
+  template <detail::bindable_without_delim T>
   Option<T>& add_option(const std::string& name, const std::string& description,
                         T& bind_value) {
     auto option = std::make_unique<Option<T>>(name, description, bind_value);
@@ -1905,7 +1832,7 @@ class Command {
     return ret;
   }
 
-  template <detail::BindableWithDelimiterType T>
+  template <detail::bindable_with_delim T>
   Option<T>& add_option(const std::string& name, const std::string& description,
                         T& bind_value, char delim) {
     auto option =
@@ -1918,7 +1845,7 @@ class Command {
     return ret;
   }
 
-  template <detail::BindableWithoutDelimiterType T>
+  template <detail::bindable_without_delim T>
   Positional<T>& add_positional(const std::string& name,
                                 const std::string& description, T& bind_value) {
     if (!subcommands_.empty()) {
@@ -1942,7 +1869,7 @@ class Command {
     return ret;
   }
 
-  template <detail::BindableWithDelimiterType T>
+  template <detail::bindable_with_delim T>
   Positional<T>& add_positional(const std::string& name,
                                 const std::string& description, T& bind_value,
                                 char delim) {

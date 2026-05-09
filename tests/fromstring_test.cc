@@ -6,18 +6,15 @@
 
 #include <array>
 #include <deque>
+#include <filesystem>
 #include <limits>
 #include <list>
-#include <map>
-#include <set>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 #include "argparse/argparse.hpp"
 
 using argparse::detail::from_string;
-using argparse::detail::from_wstring;
 using argparse::detail::split;
 using argparse::detail::split_to_if;
 
@@ -487,7 +484,7 @@ TEST(ParseFromStringTest, Container) {
 }
 
 // ============================================================
-// Tests for the new from_string / from_wstring (C++20 concepts)
+// Tests for the new from_string (C++20 concepts)
 // ============================================================
 
 // --- from_string: types constructible from std::string ---
@@ -726,368 +723,55 @@ TEST(FromStringTest, TupleEmptyString) {
   EXPECT_THROW((from_string<std::tuple<int>>("", ',')), std::invalid_argument);
 }
 
-// --- from_string: container types (vector, list, set, deque, etc.) ---
+// --- from_string: char and char8_t ---
 
-TEST(FromStringTest, VectorInt) {
-  auto v = from_string<std::vector<int>>("1,2,3,4,5", ',');
-  EXPECT_EQ(v.size(), 5);
-  EXPECT_EQ(v[0], 1);
-  EXPECT_EQ(v[1], 2);
-  EXPECT_EQ(v[2], 3);
-  EXPECT_EQ(v[3], 4);
-  EXPECT_EQ(v[4], 5);
+TEST(FromStringTest, Char) {
+  EXPECT_EQ(from_string<char>("a"), 'a');
+  EXPECT_EQ(from_string<char>("z"), 'z');
+  EXPECT_EQ(from_string<char>("0"), '0');
+  EXPECT_EQ(from_string<char>(" "), ' ');
+  // Multi-character string should throw
+  EXPECT_THROW(from_string<char>("ab"), std::invalid_argument);
+  EXPECT_THROW(from_string<char>(""), std::invalid_argument);
 }
 
-TEST(FromStringTest, VectorString) {
-  auto v = from_string<std::vector<std::string>>("hello,world,foo,bar", ',');
-  EXPECT_EQ(v.size(), 4);
-  EXPECT_EQ(v[0], "hello");
-  EXPECT_EQ(v[1], "world");
-  EXPECT_EQ(v[2], "foo");
-  EXPECT_EQ(v[3], "bar");
+TEST(FromStringTest, Char8T) {
+  EXPECT_EQ(from_string<char8_t>("a"), u8'a');
+  EXPECT_EQ(from_string<char8_t>("z"), u8'z');
+  EXPECT_EQ(from_string<char8_t>("0"), u8'0');
+  // Multi-character string should throw
+  EXPECT_THROW(from_string<char8_t>("ab"), std::invalid_argument);
+  EXPECT_THROW(from_string<char8_t>(""), std::invalid_argument);
 }
 
-TEST(FromStringTest, VectorDouble) {
-  auto v = from_string<std::vector<double>>("1.1,2.2,3.3", ',');
-  EXPECT_EQ(v.size(), 3);
-  EXPECT_DOUBLE_EQ(v[0], 1.1);
-  EXPECT_DOUBLE_EQ(v[1], 2.2);
-  EXPECT_DOUBLE_EQ(v[2], 3.3);
+// --- from_string: types constructible from std::string ---
+
+TEST(FromStringTest, FilesystemPath) {
+  // std::filesystem::path is constructible from std::string
+  auto p = from_string<std::filesystem::path>("/usr/local/bin");
+  EXPECT_EQ(p, std::filesystem::path("/usr/local/bin"));
+
+  auto p2 = from_string<std::filesystem::path>("relative/path");
+  EXPECT_EQ(p2, std::filesystem::path("relative/path"));
+
+  // Empty path
+  auto p3 = from_string<std::filesystem::path>("");
+  EXPECT_EQ(p3, std::filesystem::path(""));
 }
 
-TEST(FromStringTest, VectorSingleElement) {
-  auto v = from_string<std::vector<int>>("42", ',');
-  EXPECT_EQ(v.size(), 1);
-  EXPECT_EQ(v[0], 42);
+// --- from_string: tuple-like with std::filesystem::path elements ---
+
+TEST(FromStringTest, TupleWithFilesystemPath) {
+  auto t =
+      from_string<std::tuple<std::filesystem::path, std::filesystem::path>>(
+          "/usr/bin,/usr/local/bin", ',');
+  EXPECT_EQ(std::get<0>(t), std::filesystem::path("/usr/bin"));
+  EXPECT_EQ(std::get<1>(t), std::filesystem::path("/usr/local/bin"));
 }
 
-TEST(FromStringTest, VectorEmptyString) {
-  // Empty string: split gives [""], from_string<int>("") throws
-  EXPECT_THROW((from_string<std::vector<int>>("", ',')), std::invalid_argument);
-}
-
-TEST(FromStringTest, VectorTrailingDelimiter) {
-  // "1,2," -> split with -1 gives ["1", "2", ""]
-  // from_string<int>("") throws
-  EXPECT_THROW((from_string<std::vector<int>>("1,2,", ',')),
-               std::invalid_argument);
-}
-
-TEST(FromStringTest, VectorLeadingDelimiter) {
-  // ",1,2" -> split with -1 gives ["", "1", "2"]
-  EXPECT_THROW((from_string<std::vector<int>>(",1,2", ',')),
-               std::invalid_argument);
-}
-
-TEST(FromStringTest, VectorCustomDelimiter) {
-  auto v = from_string<std::vector<int>>("10:20:30:40", ':');
-  EXPECT_EQ(v.size(), 4);
-  EXPECT_EQ(v[0], 10);
-  EXPECT_EQ(v[1], 20);
-  EXPECT_EQ(v[2], 30);
-  EXPECT_EQ(v[3], 40);
-}
-
-TEST(FromStringTest, VectorInvalidElement) {
-  EXPECT_THROW((from_string<std::vector<int>>("1,abc,3", ',')),
-               std::invalid_argument);
-  EXPECT_THROW((from_string<std::vector<double>>("1.0,xyz,3.0", ',')),
-               std::invalid_argument);
-}
-
-TEST(FromStringTest, ListInt) {
-  auto l = from_string<std::list<int>>("10,20,30,40", ',');
-  EXPECT_EQ(l.size(), 4);
-  auto it = l.begin();
-  EXPECT_EQ(*it++, 10);
-  EXPECT_EQ(*it++, 20);
-  EXPECT_EQ(*it++, 30);
-  EXPECT_EQ(*it++, 40);
-  EXPECT_EQ(it, l.end());
-}
-
-TEST(FromStringTest, ListString) {
-  auto l = from_string<std::list<std::string>>("a,b,c", ',');
-  EXPECT_EQ(l.size(), 3);
-  auto it = l.begin();
-  EXPECT_EQ(*it++, "a");
-  EXPECT_EQ(*it++, "b");
-  EXPECT_EQ(*it++, "c");
-}
-
-TEST(FromStringTest, SetInt) {
-  auto s = from_string<std::set<int>>("3,1,2,2,1", ',');
-  // std::set deduplicates and sorts
-  EXPECT_EQ(s.size(), 3);
-  auto it = s.begin();
-  EXPECT_EQ(*it++, 1);
-  EXPECT_EQ(*it++, 2);
-  EXPECT_EQ(*it++, 3);
-}
-
-TEST(FromStringTest, SetString) {
-  auto s = from_string<std::set<std::string>>("c,a,b", ',');
-  EXPECT_EQ(s.size(), 3);
-  auto it = s.begin();
-  EXPECT_EQ(*it++, "a");
-  EXPECT_EQ(*it++, "b");
-  EXPECT_EQ(*it++, "c");
-}
-
-TEST(FromStringTest, DequeInt) {
-  auto d = from_string<std::deque<int>>("1,2,3", ',');
-  EXPECT_EQ(d.size(), 3);
-  EXPECT_EQ(d[0], 1);
-  EXPECT_EQ(d[1], 2);
-  EXPECT_EQ(d[2], 3);
-}
-
-// --- from_string: container of tuple-like types with two delimiters ---
-
-TEST(FromStringTest, VectorOfPairs) {
-  auto v =
-      from_string<std::vector<std::pair<int, int>>>("1,2|3,4|5,6", '|', ',');
-  EXPECT_EQ(v.size(), 3);
-  EXPECT_EQ(v[0], (std::pair<int, int>{1, 2}));
-  EXPECT_EQ(v[1], (std::pair<int, int>{3, 4}));
-  EXPECT_EQ(v[2], (std::pair<int, int>{5, 6}));
-}
-
-TEST(FromStringTest, VectorOfTuples) {
-  auto v = from_string<std::vector<std::tuple<int, double, std::string>>>(
-      "1,3.14,hello|2,2.71,world|3,0.5,foo", '|', ',');
-  EXPECT_EQ(v.size(), 3);
-  EXPECT_EQ(std::get<0>(v[0]), 1);
-  EXPECT_DOUBLE_EQ(std::get<1>(v[0]), 3.14);
-  EXPECT_EQ(std::get<2>(v[0]), "hello");
-  EXPECT_EQ(std::get<0>(v[1]), 2);
-  EXPECT_DOUBLE_EQ(std::get<1>(v[1]), 2.71);
-  EXPECT_EQ(std::get<2>(v[1]), "world");
-  EXPECT_EQ(std::get<0>(v[2]), 3);
-  EXPECT_DOUBLE_EQ(std::get<1>(v[2]), 0.5);
-  EXPECT_EQ(std::get<2>(v[2]), "foo");
-}
-
-TEST(FromStringTest, VectorOfArrays) {
-  auto v = from_string<std::vector<std::array<int, 3>>>("1,2,3|4,5,6|7,8,9",
-                                                        '|', ',');
-  EXPECT_EQ(v.size(), 3);
-  EXPECT_EQ(v[0], (std::array<int, 3>{1, 2, 3}));
-  EXPECT_EQ(v[1], (std::array<int, 3>{4, 5, 6}));
-  EXPECT_EQ(v[2], (std::array<int, 3>{7, 8, 9}));
-}
-
-TEST(FromStringTest, ListOfPairs) {
-  auto l = from_string<std::list<std::pair<int, int>>>("10,20|30,40", '|', ',');
-  EXPECT_EQ(l.size(), 2);
-  auto it = l.begin();
-  EXPECT_EQ(*it++, (std::pair<int, int>{10, 20}));
-  EXPECT_EQ(*it++, (std::pair<int, int>{30, 40}));
-  EXPECT_EQ(it, l.end());
-}
-
-TEST(FromStringTest, DequeOfTuples) {
-  auto d =
-      from_string<std::deque<std::tuple<int, int>>>("1,2|3,4|5,6", '|', ',');
-  EXPECT_EQ(d.size(), 3);
-  EXPECT_EQ(d[0], (std::tuple<int, int>{1, 2}));
-  EXPECT_EQ(d[1], (std::tuple<int, int>{3, 4}));
-  EXPECT_EQ(d[2], (std::tuple<int, int>{5, 6}));
-}
-
-TEST(FromStringTest, TwoDelimiterSingleElement) {
-  auto v = from_string<std::vector<std::pair<int, int>>>("1,2", '|', ',');
-  EXPECT_EQ(v.size(), 1);
-  EXPECT_EQ(v[0], (std::pair<int, int>{1, 2}));
-}
-
-TEST(FromStringTest, TwoDelimiterCustomDelimiters) {
-  auto v =
-      from_string<std::vector<std::tuple<int, int>>>("1:2;3:4;5:6", ';', ':');
-  EXPECT_EQ(v.size(), 3);
-  EXPECT_EQ(v[0], (std::tuple<int, int>{1, 2}));
-  EXPECT_EQ(v[1], (std::tuple<int, int>{3, 4}));
-  EXPECT_EQ(v[2], (std::tuple<int, int>{5, 6}));
-}
-
-TEST(FromStringTest, TwoDelimiterEmptyString) {
-  // Empty string: split gives [""], from_string<pair<int,int>>("") throws
-  EXPECT_THROW((from_string<std::vector<std::pair<int, int>>>("", '|', ',')),
-               std::invalid_argument);
-}
-
-TEST(FromStringTest, TwoDelimiterTrailingDelimiter) {
-  // "1,2|3,4|" -> split with -1 gives ["1,2", "3,4", ""]
-  // from_string<pair<int,int>>("") throws
-  EXPECT_THROW(
-      (from_string<std::vector<std::pair<int, int>>>("1,2|3,4|", '|', ',')),
-      std::invalid_argument);
-}
-
-TEST(FromStringTest, TwoDelimiterLeadingDelimiter) {
-  // "|1,2|3,4" -> split with -1 gives ["", "1,2", "3,4"]
-  // from_string<pair<int,int>>("") throws
-  EXPECT_THROW(
-      (from_string<std::vector<std::pair<int, int>>>("|1,2|3,4", '|', ',')),
-      std::invalid_argument);
-}
-
-TEST(FromStringTest, TwoDelimiterInvalidInnerElement) {
-  // Inner tuple has invalid element "abc"
-  EXPECT_THROW(
-      (from_string<std::vector<std::pair<int, int>>>("1,abc|3,4", '|', ',')),
-      std::invalid_argument);
-}
-
-TEST(FromStringTest, TwoDelimiterTooFewInnerElements) {
-  // Inner pair expects 2 elements but gets "1"
-  EXPECT_THROW(
-      (from_string<std::vector<std::pair<int, int>>>("1|3,4", '|', ',')),
-      std::invalid_argument);
-}
-
-TEST(FromStringTest, TwoDelimiterTooManyInnerElements) {
-  // Inner pair expects 2 elements but gets "1,2,3"
-  EXPECT_THROW(
-      (from_string<std::vector<std::pair<int, int>>>("1,2,3|4,5", '|', ',')),
-      std::invalid_argument);
-}
-
-TEST(FromStringTest, TwoDelimiterInnerPairStringString) {
-  auto v = from_string<std::vector<std::pair<std::string, std::string>>>(
-      "k1=v1|k2=v2|k3=v3", '|', '=');
-  EXPECT_EQ(v.size(), 3);
-  EXPECT_EQ(v[0], (std::pair<std::string, std::string>{"k1", "v1"}));
-  EXPECT_EQ(v[1], (std::pair<std::string, std::string>{"k2", "v2"}));
-  EXPECT_EQ(v[2], (std::pair<std::string, std::string>{"k3", "v3"}));
-}
-
-// --- from_string: map-like types with two delimiters ---
-
-TEST(FromStringTest, MapIntString) {
-  auto m =
-      from_string<std::map<int, std::string>>("1,one|2,two|3,three", '|', ',');
-  EXPECT_EQ(m.size(), 3);
-  EXPECT_EQ(m.at(1), "one");
-  EXPECT_EQ(m.at(2), "two");
-  EXPECT_EQ(m.at(3), "three");
-}
-
-TEST(FromStringTest, MapStringInt) {
-  auto m = from_string<std::map<std::string, int>>("apple,5|banana,3|cherry,8",
-                                                   '|', ',');
-  EXPECT_EQ(m.size(), 3);
-  EXPECT_EQ(m.at("apple"), 5);
-  EXPECT_EQ(m.at("banana"), 3);
-  EXPECT_EQ(m.at("cherry"), 8);
-}
-
-TEST(FromStringTest, MapStringString) {
-  auto m = from_string<std::map<std::string, std::string>>("k1=v1|k2=v2|k3=v3",
-                                                           '|', '=');
-  EXPECT_EQ(m.size(), 3);
-  EXPECT_EQ(m.at("k1"), "v1");
-  EXPECT_EQ(m.at("k2"), "v2");
-  EXPECT_EQ(m.at("k3"), "v3");
-}
-
-TEST(FromStringTest, MapIntDouble) {
-  auto m = from_string<std::map<int, double>>("1,1.5|2,2.5|3,3.75", '|', ',');
-  EXPECT_EQ(m.size(), 3);
-  EXPECT_DOUBLE_EQ(m.at(1), 1.5);
-  EXPECT_DOUBLE_EQ(m.at(2), 2.5);
-  EXPECT_DOUBLE_EQ(m.at(3), 3.75);
-}
-
-TEST(FromStringTest, UnorderedMapIntString) {
-  auto m = from_string<std::unordered_map<int, std::string>>(
-      "1,one|2,two|3,three", '|', ',');
-  EXPECT_EQ(m.size(), 3);
-  EXPECT_EQ(m.at(1), "one");
-  EXPECT_EQ(m.at(2), "two");
-  EXPECT_EQ(m.at(3), "three");
-}
-
-TEST(FromStringTest, UnorderedMapStringInt) {
-  auto m = from_string<std::unordered_map<std::string, int>>("x,10|y,20|z,30",
-                                                             '|', ',');
-  EXPECT_EQ(m.size(), 3);
-  EXPECT_EQ(m.at("x"), 10);
-  EXPECT_EQ(m.at("y"), 20);
-  EXPECT_EQ(m.at("z"), 30);
-}
-
-TEST(FromStringTest, MultimapIntString) {
-  auto m = from_string<std::multimap<int, std::string>>(
-      "1,one|1,uno|2,two|2,dos", '|', ',');
-  EXPECT_EQ(m.size(), 4);
-  auto range = m.equal_range(1);
-  auto it = range.first;
-  EXPECT_EQ(it->second, "one");
-  ++it;
-  EXPECT_EQ(it->second, "uno");
-  range = m.equal_range(2);
-  it = range.first;
-  EXPECT_EQ(it->second, "two");
-  ++it;
-  EXPECT_EQ(it->second, "dos");
-}
-
-TEST(FromStringTest, MapSingleElement) {
-  auto m = from_string<std::map<int, std::string>>("42,answer", '|', ',');
-  EXPECT_EQ(m.size(), 1);
-  EXPECT_EQ(m.at(42), "answer");
-}
-
-TEST(FromStringTest, MapEmptyString) {
-  // Empty string: split gives [""], from_string<pair> on "" throws
-  EXPECT_THROW((from_string<std::map<int, std::string>>("", '|', ',')),
-               std::invalid_argument);
-}
-
-TEST(FromStringTest, MapTrailingDelimiter) {
-  // "1,one|2,two|" -> last split element is ""
-  EXPECT_THROW(
-      (from_string<std::map<int, std::string>>("1,one|2,two|", '|', ',')),
-      std::invalid_argument);
-}
-
-TEST(FromStringTest, MapLeadingDelimiter) {
-  // "|1,one|2,two" -> first split element is ""
-  EXPECT_THROW(
-      (from_string<std::map<int, std::string>>("|1,one|2,two", '|', ',')),
-      std::invalid_argument);
-}
-
-TEST(FromStringTest, MapInvalidKey) {
-  // "abc" cannot be parsed as int key
-  EXPECT_THROW(
-      (from_string<std::map<int, std::string>>("abc,val|2,two", '|', ',')),
-      std::invalid_argument);
-}
-
-TEST(FromStringTest, MapInvalidValue) {
-  // "xyz" cannot be parsed as int value
-  EXPECT_THROW(
-      (from_string<std::map<std::string, int>>("k1,xyz|k2,2", '|', ',')),
-      std::invalid_argument);
-}
-
-TEST(FromStringTest, MapTooFewInnerElements) {
-  // "1" is not a valid key-value pair (missing value)
-  EXPECT_THROW((from_string<std::map<int, std::string>>("1|2,two", '|', ',')),
-               std::invalid_argument);
-}
-
-TEST(FromStringTest, MapTooManyInnerElements) {
-  EXPECT_EQ(
-      (from_string<std::map<int, std::string>>("1,one,extra|2,two", '|', ',')),
-      (std::map<int, std::string>{{1, "one,extra"}, {2, "two"}}));
-}
-
-// --- from_wstring: types constructible from std::wstring ---
-
-TEST(FromWStringTest, ConstructibleFromWString) {
-  auto ws = from_wstring<std::wstring>(std::wstring(L"hello"));
-  EXPECT_EQ(ws, L"hello");
+TEST(FromStringTest, PairWithFilesystemPath) {
+  auto p =
+      from_string<std::pair<std::filesystem::path, int>>("/tmp/test,42", ',');
+  EXPECT_EQ(p.first, std::filesystem::path("/tmp/test"));
+  EXPECT_EQ(p.second, 42);
 }

@@ -5,6 +5,9 @@
 #include <list>
 #include <map>
 #include <optional>
+#include <queue>
+#include <set>
+#include <stack>
 #include <string>
 #include <tuple>
 #include <unordered_map>
@@ -13,159 +16,10 @@
 
 #include "argparse/argparse.hpp"
 
-TEST(ConceptTest, IsIntegral) {
-  ASSERT_FALSE(argparse::detail::is_integral_v<bool>);
-  ASSERT_FALSE(argparse::detail::is_integral_v<std::string>);
-  ASSERT_FALSE(argparse::detail::is_integral_v<char*>);
-  ASSERT_TRUE(argparse::detail::is_integral_v<int>);
-  ASSERT_TRUE(argparse::detail::is_integral_v<short>);
-  ASSERT_TRUE(argparse::detail::is_integral_v<long>);
-  ASSERT_TRUE(argparse::detail::is_integral_v<long long>);
-  ASSERT_TRUE(argparse::detail::is_integral_v<unsigned int>);
-  ASSERT_TRUE(argparse::detail::is_integral_v<unsigned short>);
-  ASSERT_TRUE(argparse::detail::is_integral_v<unsigned long>);
-  ASSERT_TRUE(argparse::detail::is_integral_v<unsigned long long>);
-}
-// 测试 ParseFromStringTupleLikeType concept
-TEST(ConceptTest, IsTupleLike) {
-  ASSERT_TRUE((argparse::detail::ParseFromStringTupleLikeType<
-               std::tuple<int, std::string>>));
-  ASSERT_TRUE(
-      (argparse::detail::ParseFromStringTupleLikeType<std::pair<int, double>>));
-  ASSERT_TRUE(
-      (argparse::detail::ParseFromStringTupleLikeType<std::array<int, 3>>));
-  ASSERT_TRUE(
-      !argparse::detail::ParseFromStringTupleLikeType<std::vector<int>>);
-  ASSERT_TRUE(!argparse::detail::ParseFromStringTupleLikeType<std::string>);
-}
+// ============================================================
+// Helper types used across multiple test categories
+// ============================================================
 
-// 测试 ParseFromStringBasicType concept
-TEST(ConceptTest, CanParseFromStringWithoutSplit) {
-  ASSERT_TRUE(argparse::detail::ParseFromStringBasicType<char>);
-  ASSERT_TRUE(!argparse::detail::ParseFromStringBasicType<wchar_t>);
-  ASSERT_TRUE(!argparse::detail::ParseFromStringBasicType<char16_t>);
-  ASSERT_TRUE(!argparse::detail::ParseFromStringBasicType<char32_t>);
-  ASSERT_TRUE(argparse::detail::ParseFromStringBasicType<bool>);
-  ASSERT_TRUE(argparse::detail::ParseFromStringBasicType<int>);
-  ASSERT_TRUE(argparse::detail::ParseFromStringBasicType<double>);
-  ASSERT_TRUE(argparse::detail::ParseFromStringBasicType<std::string>);
-  ASSERT_TRUE(!argparse::detail::ParseFromStringBasicType<std::vector<int>>);
-}
-
-// 测试 ParseFromStringTupleLikeType concept
-TEST(ConceptTest, CanParseFromStringSplitOnce) {
-  ASSERT_TRUE(
-      (argparse::detail::ParseFromStringTupleLikeType<std::pair<int, int>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringTupleLikeType<
-               std::tuple<int, std::string>>));
-  ASSERT_TRUE(
-      (argparse::detail::ParseFromStringTupleLikeType<std::array<int, 8>>));
-  ASSERT_TRUE(!argparse::detail::ParseFromStringTupleLikeType<int>);
-  ASSERT_TRUE(
-      !argparse::detail::ParseFromStringTupleLikeType<std::vector<int>>);
-}
-
-// 测试 ParseFromStringType concept
-TEST(ConceptTest, CanParseFromString) {
-  ASSERT_TRUE(argparse::detail::ParseFromStringType<int>);
-  ASSERT_TRUE(argparse::detail::ParseFromStringType<std::string>);
-  ASSERT_TRUE((argparse::detail::ParseFromStringType<std::pair<int, double>>));
-  ASSERT_TRUE(argparse::detail::ParseFromStringType<std::optional<int>>);
-  ASSERT_TRUE((argparse::detail::ParseFromStringType<
-               std::optional<std::pair<int, double>>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringType<
-               std::optional<std::tuple<int, double>>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringType<
-               std::optional<std::array<int, 3>>>));
-
-  ASSERT_FALSE(
-      argparse::detail::ParseFromStringType<std::optional<std::vector<int>>>);
-  ASSERT_FALSE(argparse::detail::ParseFromStringType<std::vector<int>>);
-}
-
-// 测试 ParseFromStringContainerType concept
-TEST(ConceptTest, IsContainer) {
-  ASSERT_TRUE(argparse::detail::ParseFromStringContainerType<std::vector<int>>);
-  ASSERT_TRUE(
-      argparse::detail::ParseFromStringContainerType<std::vector<std::string>>);
-  ASSERT_TRUE(
-      (argparse::detail::ParseFromStringContainerType<std::map<int, int>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringContainerType<
-               std::unordered_map<int, int>>));
-  ASSERT_TRUE(
-      argparse::detail::ParseFromStringContainerType<std::unordered_set<int>>);
-  ASSERT_TRUE(argparse::detail::ParseFromStringContainerType<std::set<int>>);
-  ASSERT_TRUE(argparse::detail::ParseFromStringContainerType<std::deque<int>>);
-  ASSERT_TRUE(argparse::detail::ParseFromStringContainerType<std::list<int>>);
-  ASSERT_TRUE(!argparse::detail::ParseFromStringContainerType<int>);
-  ASSERT_TRUE(!argparse::detail::ParseFromStringContainerType<std::string>);
-  ASSERT_TRUE(
-      (!argparse::detail::ParseFromStringContainerType<std::tuple<int, int>>));
-}
-
-// 测试 is_string concept
-TEST(ConceptTest, IsString) {
-  ASSERT_TRUE(argparse::detail::is_string_v<std::string>);
-  ASSERT_TRUE(!argparse::detail::is_string_v<const char*>);
-  ASSERT_TRUE(!argparse::detail::is_string_v<int>);
-  ASSERT_TRUE(!argparse::detail::is_string_v<std::vector<char>>);
-}
-
-// 测试 is_optional concept
-TEST(ConceptTest, IsOptional) {
-  ASSERT_TRUE(argparse::detail::is_optional_v<std::optional<int>>);
-  ASSERT_TRUE(argparse::detail::is_optional_v<std::optional<std::string>>);
-  ASSERT_TRUE(!argparse::detail::is_optional_v<int>);
-  ASSERT_TRUE(!argparse::detail::is_optional_v<std::string>);
-}
-
-// 测试组合场景
-TEST(ConceptTest, CombinedScenarios) {
-  ASSERT_FALSE((argparse::detail::ParseFromStringType<
-                std::tuple<int, std::vector<std::string>>>));
-  ASSERT_FALSE((argparse::detail::ParseFromStringType<
-                std::pair<std::optional<int>, std::string>>));
-  ASSERT_TRUE(
-      !argparse::detail::ParseFromStringType<std::vector<std::optional<int>>>);
-  ASSERT_TRUE(
-      !argparse::detail::ParseFromStringType<std::optional<std::vector<int>>>);
-}
-
-// 测试 ParseFromStringBasicType concept
-TEST(ConceptTest, ParseFromStringBasicType) {
-  // 基本类型测试
-  ASSERT_TRUE(argparse::detail::ParseFromStringBasicType<bool>);
-  ASSERT_TRUE(argparse::detail::ParseFromStringBasicType<char>);
-  ASSERT_TRUE(argparse::detail::ParseFromStringBasicType<int>);
-  ASSERT_TRUE(argparse::detail::ParseFromStringBasicType<long>);
-  ASSERT_TRUE(argparse::detail::ParseFromStringBasicType<unsigned long>);
-  ASSERT_TRUE(argparse::detail::ParseFromStringBasicType<long long>);
-  ASSERT_TRUE(argparse::detail::ParseFromStringBasicType<unsigned long long>);
-  ASSERT_TRUE(argparse::detail::ParseFromStringBasicType<float>);
-  ASSERT_TRUE(argparse::detail::ParseFromStringBasicType<double>);
-  ASSERT_TRUE(argparse::detail::ParseFromStringBasicType<long double>);
-
-  // 字符串类型测试
-  ASSERT_TRUE(argparse::detail::ParseFromStringBasicType<std::string>);
-  ASSERT_TRUE(argparse::detail::ParseFromStringBasicType<std::wstring>);
-  ASSERT_TRUE(argparse::detail::ParseFromStringBasicType<std::u8string>);
-  ASSERT_TRUE(argparse::detail::ParseFromStringBasicType<std::u16string>);
-  ASSERT_TRUE(argparse::detail::ParseFromStringBasicType<std::u32string>);
-
-  // 不支持的类型测试
-  ASSERT_FALSE(argparse::detail::ParseFromStringBasicType<unsigned char>);
-  ASSERT_FALSE(argparse::detail::ParseFromStringBasicType<short>);
-  ASSERT_FALSE(argparse::detail::ParseFromStringBasicType<unsigned short>);
-  ASSERT_FALSE((argparse::detail::ParseFromStringBasicType<std::vector<int>>));
-  ASSERT_FALSE(
-      (argparse::detail::ParseFromStringBasicType<std::pair<int, int>>));
-  ASSERT_FALSE(
-      (argparse::detail::ParseFromStringBasicType<std::tuple<int, int>>));
-  ASSERT_FALSE(
-      (argparse::detail::ParseFromStringBasicType<std::optional<int>>));
-}
-
-// 用于测试的自定义类型
 class StringConstructible {
  public:
   explicit StringConstructible(const std::string&) {}
@@ -181,381 +35,626 @@ class NonStringConstructible {
   explicit NonStringConstructible(int) {}
 };
 
-// 测试 ParseFromStringCustomType concept
-TEST(ConceptTest, ParseFromStringCustomType) {
-  // 可以从字符串显式构造的自定义类型
-  ASSERT_TRUE(argparse::detail::ParseFromStringCustomType<StringConstructible>);
+// ============================================================
+// 1. is_integral_v
+// ============================================================
 
-  // 可以从字符串隐式转换的自定义类型
-  ASSERT_TRUE(argparse::detail::ParseFromStringCustomType<StringConvertible>);
+TEST(ConceptTest, IsIntegral) {
+  // Non-integral types
+  ASSERT_FALSE(argparse::detail::is_integral_v<bool>);
+  ASSERT_FALSE(argparse::detail::is_integral_v<std::string>);
+  ASSERT_FALSE(argparse::detail::is_integral_v<char*>);
 
-  // 基本类型应该返回 false（因为它们被 ParseFromStringBasicType 处理）
-  ASSERT_FALSE(argparse::detail::ParseFromStringCustomType<bool>);
-  ASSERT_FALSE(argparse::detail::ParseFromStringCustomType<int>);
-  ASSERT_FALSE(argparse::detail::ParseFromStringCustomType<double>);
-  ASSERT_FALSE(argparse::detail::ParseFromStringCustomType<std::string>);
-  ASSERT_FALSE(argparse::detail::ParseFromStringCustomType<std::wstring>);
+  // Character types
+  ASSERT_TRUE(argparse::detail::is_integral_v<char>);
+  ASSERT_TRUE(argparse::detail::is_integral_v<signed char>);
+  ASSERT_TRUE(argparse::detail::is_integral_v<unsigned char>);
+  ASSERT_TRUE(argparse::detail::is_integral_v<wchar_t>);
+  ASSERT_TRUE(argparse::detail::is_integral_v<char16_t>);
+  ASSERT_TRUE(argparse::detail::is_integral_v<char32_t>);
 
-  // 不支持的类型
-  ASSERT_FALSE(
-      argparse::detail::ParseFromStringCustomType<NonStringConstructible>);
-  ASSERT_FALSE((argparse::detail::ParseFromStringCustomType<std::vector<int>>));
-  ASSERT_FALSE(
-      (argparse::detail::ParseFromStringCustomType<std::pair<int, int>>));
-  ASSERT_FALSE(
-      (argparse::detail::ParseFromStringCustomType<std::optional<int>>));
+  // Standard integer types
+  ASSERT_TRUE(argparse::detail::is_integral_v<short>);
+  ASSERT_TRUE(argparse::detail::is_integral_v<int>);
+  ASSERT_TRUE(argparse::detail::is_integral_v<long>);
+  ASSERT_TRUE(argparse::detail::is_integral_v<long long>);
+  ASSERT_TRUE(argparse::detail::is_integral_v<unsigned short>);
+  ASSERT_TRUE(argparse::detail::is_integral_v<unsigned int>);
+  ASSERT_TRUE(argparse::detail::is_integral_v<unsigned long>);
+  ASSERT_TRUE(argparse::detail::is_integral_v<unsigned long long>);
+
+  // Enum types are not integral
+  enum UnscopedEnum { A, B, C };
+  enum class ScopedEnum { X, Y, Z };
+  ASSERT_FALSE(argparse::detail::is_integral_v<UnscopedEnum>);
+  ASSERT_FALSE(argparse::detail::is_integral_v<ScopedEnum>);
 }
 
-// 测试 ParseFromStringTupleLikeType concept
-TEST(ConceptTest, ParseFromStringTupleLikeType) {
-  // 基本元组类型测试
+// ============================================================
+// 2. is_string_v
+// ============================================================
+
+TEST(ConceptTest, IsString) {
+  // Standard string types
+  ASSERT_TRUE(argparse::detail::is_string_v<std::string>);
+  ASSERT_TRUE(argparse::detail::is_string_v<std::wstring>);
+  ASSERT_TRUE(argparse::detail::is_string_v<std::u8string>);
+  ASSERT_TRUE(argparse::detail::is_string_v<std::u16string>);
+  ASSERT_TRUE(argparse::detail::is_string_v<std::u32string>);
+
+  // Non-string types
+  ASSERT_FALSE(argparse::detail::is_string_v<const char*>);
+  ASSERT_FALSE(argparse::detail::is_string_v<int>);
+  ASSERT_FALSE(argparse::detail::is_string_v<std::vector<char>>);
+  ASSERT_FALSE(argparse::detail::is_string_v<char[10]>);
+  ASSERT_FALSE(argparse::detail::is_string_v<std::string_view>);
+  ASSERT_FALSE(argparse::detail::is_string_v<std::wstring_view>);
+}
+
+// Custom allocator and traits for testing is_string with non-standard
+// basic_string instantiations
+template <typename T>
+struct CustomAllocator {
+  template <typename U>
+  constexpr CustomAllocator(const CustomAllocator<U>&) noexcept {}
+  [[nodiscard]] T* allocate(std::size_t n) {
+    return static_cast<T*>(::operator new(n * sizeof(T)));
+  }
+  void deallocate(T* p, std::size_t) noexcept { ::operator delete(p); }
+  bool operator==(const CustomAllocator&) const { return true; }
+  bool operator!=(const CustomAllocator&) const { return false; }
+};
+
+struct CustomTraits : std::char_traits<char> {};
+
+TEST(ConceptTest, IsStringEnhanced) {
+  // basic_string with custom allocator
+  ASSERT_TRUE((argparse::detail::is_string_v<std::basic_string<
+                   char, std::char_traits<char>, CustomAllocator<char>>>));
   ASSERT_TRUE(
-      (argparse::detail::ParseFromStringTupleLikeType<std::tuple<int>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringTupleLikeType<
+      (argparse::detail::is_string_v<std::basic_string<
+           wchar_t, std::char_traits<wchar_t>, CustomAllocator<wchar_t>>>));
+
+  // basic_string with custom traits
+  ASSERT_TRUE(
+      (argparse::detail::is_string_v<std::basic_string<char, CustomTraits>>));
+  ASSERT_TRUE((argparse::detail::is_string_v<
+               std::basic_string<char, CustomTraits, CustomAllocator<char>>>));
+}
+
+// ============================================================
+// 3. is_optional_v
+// ============================================================
+
+TEST(ConceptTest, IsOptional) {
+  ASSERT_TRUE(argparse::detail::is_optional_v<std::optional<int>>);
+  ASSERT_TRUE(argparse::detail::is_optional_v<std::optional<std::string>>);
+  ASSERT_FALSE(argparse::detail::is_optional_v<int>);
+  ASSERT_FALSE(argparse::detail::is_optional_v<std::string>);
+}
+
+// ============================================================
+// 4. can_from_string_without_delim
+// ============================================================
+
+TEST(ConceptTest, CanFromStringWithoutDelim) {
+  // Basic types
+  ASSERT_TRUE(argparse::detail::can_from_string_without_delim<bool>);
+  ASSERT_TRUE(argparse::detail::can_from_string_without_delim<char>);
+  ASSERT_TRUE(argparse::detail::can_from_string_without_delim<short>);
+  ASSERT_TRUE(argparse::detail::can_from_string_without_delim<unsigned short>);
+  ASSERT_TRUE(argparse::detail::can_from_string_without_delim<int>);
+  ASSERT_TRUE(argparse::detail::can_from_string_without_delim<long>);
+  ASSERT_TRUE(argparse::detail::can_from_string_without_delim<unsigned long>);
+  ASSERT_TRUE(argparse::detail::can_from_string_without_delim<long long>);
+  ASSERT_TRUE(
+      argparse::detail::can_from_string_without_delim<unsigned long long>);
+  ASSERT_TRUE(argparse::detail::can_from_string_without_delim<float>);
+  ASSERT_TRUE(argparse::detail::can_from_string_without_delim<double>);
+  ASSERT_TRUE(argparse::detail::can_from_string_without_delim<long double>);
+
+  // String types
+  ASSERT_TRUE(argparse::detail::can_from_string_without_delim<std::string>);
+
+  // Wide/unicode character and string types are not supported
+  ASSERT_FALSE(argparse::detail::can_from_string_without_delim<wchar_t>);
+  ASSERT_FALSE(argparse::detail::can_from_string_without_delim<char16_t>);
+  ASSERT_FALSE(argparse::detail::can_from_string_without_delim<char32_t>);
+  ASSERT_FALSE(argparse::detail::can_from_string_without_delim<unsigned char>);
+  ASSERT_FALSE(argparse::detail::can_from_string_without_delim<std::wstring>);
+  ASSERT_FALSE(argparse::detail::can_from_string_without_delim<std::u8string>);
+  ASSERT_FALSE(argparse::detail::can_from_string_without_delim<std::u16string>);
+  ASSERT_FALSE(argparse::detail::can_from_string_without_delim<std::u32string>);
+
+  // Compound types are not supported
+  ASSERT_FALSE(
+      (argparse::detail::can_from_string_without_delim<std::vector<int>>));
+  ASSERT_FALSE(
+      (argparse::detail::can_from_string_without_delim<std::pair<int, int>>));
+  ASSERT_FALSE(
+      (argparse::detail::can_from_string_without_delim<std::tuple<int, int>>));
+  ASSERT_FALSE(
+      (argparse::detail::can_from_string_without_delim<std::optional<int>>));
+}
+
+// ============================================================
+// 5. can_from_string_with_delim
+// ============================================================
+
+TEST(ConceptTest, CanFromStringWithDelim) {
+  // Tuple types
+  ASSERT_TRUE((argparse::detail::can_from_string_with_delim<std::tuple<int>>));
+  ASSERT_TRUE((argparse::detail::can_from_string_with_delim<
                std::tuple<int, std::string>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringTupleLikeType<
+  ASSERT_TRUE((argparse::detail::can_from_string_with_delim<
                std::tuple<bool, int, double>>));
 
-  // pair 类型测试
-  ASSERT_TRUE((argparse::detail::ParseFromStringTupleLikeType<
+  // Pair types
+  ASSERT_TRUE((argparse::detail::can_from_string_with_delim<
                std::pair<int, std::string>>));
-  ASSERT_TRUE((
-      argparse::detail::ParseFromStringTupleLikeType<std::pair<double, bool>>));
-
-  // array 类型测试
   ASSERT_TRUE(
-      (argparse::detail::ParseFromStringTupleLikeType<std::array<int, 1>>));
+      (argparse::detail::can_from_string_with_delim<std::pair<int, double>>));
   ASSERT_TRUE(
-      (argparse::detail::ParseFromStringTupleLikeType<std::array<double, 3>>));
+      (argparse::detail::can_from_string_with_delim<std::pair<double, bool>>));
 
-  // 包含自定义类型的元组测试
-  ASSERT_TRUE((argparse::detail::ParseFromStringTupleLikeType<
+  // Array types
+  ASSERT_TRUE(
+      (argparse::detail::can_from_string_with_delim<std::array<int, 1>>));
+  ASSERT_TRUE(
+      (argparse::detail::can_from_string_with_delim<std::array<int, 3>>));
+  ASSERT_TRUE(
+      (argparse::detail::can_from_string_with_delim<std::array<int, 8>>));
+  ASSERT_TRUE(
+      (argparse::detail::can_from_string_with_delim<std::array<double, 3>>));
+
+  // Custom types
+  ASSERT_TRUE((argparse::detail::can_from_string_with_delim<
                std::tuple<StringConstructible>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringTupleLikeType<
+  ASSERT_TRUE((argparse::detail::can_from_string_with_delim<
                std::tuple<StringConvertible>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringTupleLikeType<
+  ASSERT_TRUE((argparse::detail::can_from_string_with_delim<
                std::pair<StringConstructible, StringConvertible>>));
 
-  // 不支持的类型测试
-  ASSERT_FALSE(argparse::detail::ParseFromStringTupleLikeType<int>);
-  ASSERT_FALSE(argparse::detail::ParseFromStringTupleLikeType<std::string>);
+  // Non-tuple-like types
+  ASSERT_FALSE(argparse::detail::can_from_string_with_delim<int>);
+  ASSERT_FALSE(argparse::detail::can_from_string_with_delim<std::string>);
   ASSERT_FALSE(
-      (argparse::detail::ParseFromStringTupleLikeType<std::vector<int>>));
-  ASSERT_FALSE((argparse::detail::ParseFromStringTupleLikeType<
+      (argparse::detail::can_from_string_with_delim<std::vector<int>>));
+
+  // Tuple-like types with unsupported element types
+  ASSERT_FALSE((argparse::detail::can_from_string_with_delim<
                 std::tuple<NonStringConstructible>>));
-  ASSERT_FALSE((argparse::detail::ParseFromStringTupleLikeType<
+  ASSERT_FALSE((argparse::detail::can_from_string_with_delim<
                 std::tuple<std::vector<int>>>));
-  ASSERT_FALSE((argparse::detail::ParseFromStringTupleLikeType<
+  ASSERT_FALSE((argparse::detail::can_from_string_with_delim<
                 std::pair<int, std::vector<int>>>));
 
-  // 空元组类型（应该返回 false，因为要求至少有一个元素）
-  // ASSERT_FALSE((argparse::detail::ParseFromStringTupleLikeType<std::tuple<>>));
-
-  // 嵌套元组类型测试
-  ASSERT_FALSE((argparse::detail::ParseFromStringTupleLikeType<
+  // Nested tuple-like types are not supported
+  ASSERT_FALSE((argparse::detail::can_from_string_with_delim<
                 std::tuple<std::tuple<int>>>));
-  ASSERT_FALSE((argparse::detail::ParseFromStringTupleLikeType<
+  ASSERT_FALSE((argparse::detail::can_from_string_with_delim<
                 std::pair<std::pair<int, int>, int>>));
 }
 
-// 测试 ParseFromStringContainerType concept
-TEST(ConceptTest, ParseFromStringContainerType) {
-  // 基本类型容器测试
-  ASSERT_TRUE(
-      (argparse::detail::ParseFromStringContainerType<std::vector<int>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringContainerType<
-               std::vector<std::string>>));
-  ASSERT_TRUE(
-      (argparse::detail::ParseFromStringContainerType<std::vector<double>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringContainerType<std::list<int>>));
-  ASSERT_TRUE((
-      argparse::detail::ParseFromStringContainerType<std::deque<std::string>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringContainerType<std::set<int>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringContainerType<
-               std::unordered_set<double>>));
+// ============================================================
+// 6. can_from_string
+// ============================================================
 
-  // 自定义类型容器测试
-  ASSERT_TRUE((argparse::detail::ParseFromStringContainerType<
-               std::vector<StringConstructible>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringContainerType<
-               std::list<StringConvertible>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringContainerType<
-               std::set<StringConstructible>>));
+TEST(ConceptTest, CanFromString) {
+  // Basic types
+  ASSERT_TRUE(argparse::detail::can_from_string<int>);
+  ASSERT_TRUE(argparse::detail::can_from_string<std::string>);
 
-  // 元组类型容器测试
-  ASSERT_TRUE((argparse::detail::ParseFromStringContainerType<
-               std::vector<std::pair<int, int>>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringContainerType<
-               std::vector<std::tuple<int, std::string>>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringContainerType<
-               std::list<std::array<int, 2>>>));
+  // Tuple-like types (via delimiter)
+  ASSERT_TRUE((argparse::detail::can_from_string<std::pair<int, int>>));
+  ASSERT_TRUE((argparse::detail::can_from_string<std::pair<int, double>>));
 
-  // map类型测试（应该返回true，因为map的value_type是pair，且pair是支持的类型）
+  // Custom types constructible from std::string
+  ASSERT_TRUE(argparse::detail::can_from_string<StringConstructible>);
+  ASSERT_TRUE(argparse::detail::can_from_string<StringConvertible>);
+  ASSERT_FALSE(argparse::detail::can_from_string<NonStringConstructible>);
+
+  // Container types are not supported directly
+  ASSERT_FALSE(argparse::detail::can_from_string<std::vector<int>>);
+
+  // std::optional is not supported (use nargs('?') instead)
+  ASSERT_FALSE(argparse::detail::can_from_string<std::optional<int>>);
+  ASSERT_FALSE((argparse::detail::can_from_string<
+                std::optional<std::pair<int, double>>>));
+  ASSERT_FALSE((argparse::detail::can_from_string<
+                std::optional<std::tuple<int, double>>>));
+  ASSERT_FALSE(
+      (argparse::detail::can_from_string<std::optional<std::array<int, 3>>>));
+  ASSERT_FALSE(
+      argparse::detail::can_from_string<std::optional<std::vector<int>>>);
+}
+
+// ============================================================
+// 7. from_string_container
+// ============================================================
+
+TEST(ConceptTest, FromStringContainer) {
+  // Sequence containers
+  ASSERT_TRUE((argparse::detail::from_string_container<std::vector<int>>));
   ASSERT_TRUE(
-      (argparse::detail::ParseFromStringContainerType<std::map<int, int>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringContainerType<
+      (argparse::detail::from_string_container<std::vector<std::string>>));
+  ASSERT_TRUE((argparse::detail::from_string_container<std::vector<double>>));
+  ASSERT_TRUE((argparse::detail::from_string_container<std::list<int>>));
+  ASSERT_TRUE(
+      (argparse::detail::from_string_container<std::deque<std::string>>));
+
+  // Associative containers
+  ASSERT_TRUE((argparse::detail::from_string_container<std::set<int>>));
+  ASSERT_TRUE(
+      (argparse::detail::from_string_container<std::unordered_set<double>>));
+  ASSERT_TRUE((argparse::detail::from_string_container<std::map<int, int>>));
+  ASSERT_TRUE((argparse::detail::from_string_container<
                std::unordered_map<std::string, int>>));
 
-  // 不支持的类型测试
-  ASSERT_FALSE(argparse::detail::ParseFromStringContainerType<int>);
-  ASSERT_FALSE(argparse::detail::ParseFromStringContainerType<std::string>);
-  ASSERT_FALSE(
-      (argparse::detail::ParseFromStringContainerType<std::pair<int, int>>));
-  ASSERT_FALSE(
-      (argparse::detail::ParseFromStringContainerType<std::tuple<int, int>>));
-  ASSERT_FALSE(
-      (argparse::detail::ParseFromStringContainerType<std::array<int, 3>>));
+  // Containers of string-constructible custom types
+  ASSERT_TRUE((argparse::detail::from_string_container<
+               std::vector<StringConstructible>>));
+  ASSERT_TRUE(
+      (argparse::detail::from_string_container<std::list<StringConvertible>>));
+  ASSERT_TRUE(
+      (argparse::detail::from_string_container<std::set<StringConstructible>>));
 
-  // 不支持的元素类型容器测试
-  ASSERT_FALSE((argparse::detail::ParseFromStringContainerType<
+  // Containers of tuple-like types
+  ASSERT_TRUE((argparse::detail::from_string_container<
+               std::vector<std::pair<int, int>>>));
+  ASSERT_TRUE((argparse::detail::from_string_container<
+               std::vector<std::tuple<int, std::string>>>));
+  ASSERT_TRUE(
+      (argparse::detail::from_string_container<std::list<std::array<int, 2>>>));
+
+  // Non-container types
+  ASSERT_FALSE(argparse::detail::from_string_container<int>);
+  ASSERT_FALSE(argparse::detail::from_string_container<std::string>);
+  ASSERT_FALSE((argparse::detail::from_string_container<std::pair<int, int>>));
+  ASSERT_FALSE((argparse::detail::from_string_container<std::tuple<int, int>>));
+  ASSERT_FALSE((argparse::detail::from_string_container<std::array<int, 3>>));
+
+  // Containers with unsupported element types
+  ASSERT_FALSE((argparse::detail::from_string_container<
                 std::vector<NonStringConstructible>>));
-  ASSERT_FALSE((argparse::detail::ParseFromStringContainerType<
-                std::vector<std::vector<int>>>));
-  ASSERT_FALSE((argparse::detail::ParseFromStringContainerType<
+  ASSERT_FALSE(
+      (argparse::detail::from_string_container<std::vector<std::vector<int>>>));
+  ASSERT_FALSE((argparse::detail::from_string_container<
                 std::vector<std::tuple<std::tuple<int>>>>));
 }
 
-// 测试 ParseFromStringOptionalSingleType concept
-TEST(ConceptTest, ParseFromStringOptionalSingleType) {
-  // 基本类型的 optional 测试
-  ASSERT_TRUE((
-      argparse::detail::ParseFromStringOptionalSingleType<std::optional<int>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringOptionalSingleType<
-               std::optional<double>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringOptionalSingleType<
-               std::optional<bool>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringOptionalSingleType<
-               std::optional<std::string>>));
+// ============================================================
+// 8. is_container
+// ============================================================
 
-  // 自定义类型的 optional 测试
-  ASSERT_TRUE((argparse::detail::ParseFromStringOptionalSingleType<
+TEST(ConceptTest, IsContainer) {
+  // Sequence containers
+  ASSERT_TRUE((argparse::detail::is_container<std::vector<int>>));
+  ASSERT_TRUE((argparse::detail::is_container<std::vector<std::string>>));
+  ASSERT_TRUE((argparse::detail::is_container<std::deque<int>>));
+  ASSERT_TRUE((argparse::detail::is_container<std::list<double>>));
+
+  // Associative containers
+  ASSERT_TRUE((argparse::detail::is_container<std::set<int>>));
+  ASSERT_TRUE((argparse::detail::is_container<std::multiset<int>>));
+  ASSERT_TRUE((argparse::detail::is_container<std::unordered_set<int>>));
+
+  // Container adaptors
+  ASSERT_TRUE((argparse::detail::is_container<std::stack<int>>));
+  ASSERT_TRUE((argparse::detail::is_container<std::queue<int>>));
+  ASSERT_TRUE((argparse::detail::is_container<std::priority_queue<int>>));
+
+  // std::string and friends are also containers in the STL sense
+  ASSERT_TRUE((argparse::detail::is_container<std::string>));
+  ASSERT_TRUE((argparse::detail::is_container<std::wstring>));
+  ASSERT_TRUE((argparse::detail::is_container<std::u8string>));
+  ASSERT_TRUE((argparse::detail::is_container<std::u16string>));
+  ASSERT_TRUE((argparse::detail::is_container<std::u32string>));
+
+  // Non-container types
+  ASSERT_FALSE((argparse::detail::is_container<int>));
+  ASSERT_FALSE((argparse::detail::is_container<double>));
+  ASSERT_FALSE((argparse::detail::is_container<bool>));
+  ASSERT_FALSE((argparse::detail::is_container<std::pair<int, int>>));
+  ASSERT_FALSE((argparse::detail::is_container<std::array<int, 3>>));
+  ASSERT_FALSE((argparse::detail::is_container<std::optional<int>>));
+  ASSERT_FALSE((argparse::detail::is_container<int[5]>));
+  ASSERT_FALSE((argparse::detail::is_container<int*>));
+}
+
+// ============================================================
+// 9. is_non_string_container
+// ============================================================
+
+TEST(ConceptTest, IsNonStringContainer) {
+  // Standard containers (non-string)
+  ASSERT_TRUE((argparse::detail::is_non_string_container<std::vector<int>>));
+  ASSERT_TRUE((argparse::detail::is_non_string_container<std::deque<double>>));
+  ASSERT_TRUE((argparse::detail::is_non_string_container<std::list<bool>>));
+  ASSERT_TRUE((argparse::detail::is_non_string_container<std::set<int>>));
+  ASSERT_TRUE(
+      (argparse::detail::is_non_string_container<std::unordered_set<int>>));
+  ASSERT_TRUE((argparse::detail::is_non_string_container<std::map<int, int>>));
+  ASSERT_TRUE((
+      argparse::detail::is_non_string_container<std::unordered_map<int, int>>));
+
+  // vector<string> is a container but not a string type itself
+  ASSERT_TRUE(
+      (argparse::detail::is_non_string_container<std::vector<std::string>>));
+
+  // Container adaptors
+  ASSERT_TRUE((argparse::detail::is_non_string_container<std::stack<int>>));
+  ASSERT_TRUE((argparse::detail::is_non_string_container<std::queue<int>>));
+  ASSERT_TRUE(
+      (argparse::detail::is_non_string_container<std::priority_queue<int>>));
+
+  // std::string family is excluded
+  ASSERT_FALSE((argparse::detail::is_non_string_container<std::string>));
+  ASSERT_FALSE((argparse::detail::is_non_string_container<std::wstring>));
+  ASSERT_FALSE((argparse::detail::is_non_string_container<std::u8string>));
+  ASSERT_FALSE((argparse::detail::is_non_string_container<std::u16string>));
+  ASSERT_FALSE((argparse::detail::is_non_string_container<std::u32string>));
+
+  // Non-container types
+  ASSERT_FALSE((argparse::detail::is_non_string_container<int>));
+  ASSERT_FALSE((argparse::detail::is_non_string_container<double>));
+  ASSERT_FALSE(
+      (argparse::detail::is_non_string_container<std::pair<int, int>>));
+  ASSERT_FALSE(
+      (argparse::detail::is_non_string_container<std::tuple<int, int>>));
+  ASSERT_FALSE((argparse::detail::is_non_string_container<std::array<int, 3>>));
+  ASSERT_FALSE((argparse::detail::is_non_string_container<std::optional<int>>));
+  ASSERT_FALSE((argparse::detail::is_non_string_container<int[5]>));
+  ASSERT_FALSE((argparse::detail::is_non_string_container<int*>));
+}
+
+// ============================================================
+// 10. bindable_without_delim
+// ============================================================
+
+TEST(ConceptTest, BindableWithoutDelim) {
+  // Single-value basic types
+  ASSERT_TRUE(argparse::detail::bindable_without_delim<int>);
+  ASSERT_TRUE(argparse::detail::bindable_without_delim<bool>);
+  ASSERT_TRUE(argparse::detail::bindable_without_delim<double>);
+  ASSERT_TRUE(argparse::detail::bindable_without_delim<std::string>);
+
+  // Custom types constructible from std::string
+  ASSERT_TRUE(argparse::detail::bindable_without_delim<StringConstructible>);
+  ASSERT_TRUE(argparse::detail::bindable_without_delim<StringConvertible>);
+
+  // std::optional of single-value types
+  ASSERT_TRUE((argparse::detail::bindable_without_delim<std::optional<int>>));
+  ASSERT_TRUE(
+      (argparse::detail::bindable_without_delim<std::optional<double>>));
+  ASSERT_TRUE((argparse::detail::bindable_without_delim<std::optional<bool>>));
+  ASSERT_TRUE(
+      (argparse::detail::bindable_without_delim<std::optional<std::string>>));
+  ASSERT_TRUE((argparse::detail::bindable_without_delim<
                std::optional<StringConstructible>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringOptionalSingleType<
+  ASSERT_TRUE((argparse::detail::bindable_without_delim<
                std::optional<StringConvertible>>));
 
-  // 不支持的类型测试
-  ASSERT_FALSE((argparse::detail::ParseFromStringOptionalSingleType<int>));
-  ASSERT_FALSE(
-      (argparse::detail::ParseFromStringOptionalSingleType<std::string>));
-  ASSERT_FALSE((argparse::detail::ParseFromStringOptionalSingleType<
-                std::optional<NonStringConstructible>>));
-
-  // 不支持的复合类型的 optional 测试
-  ASSERT_FALSE((argparse::detail::ParseFromStringOptionalSingleType<
-                std::optional<std::vector<int>>>));
-  ASSERT_FALSE((argparse::detail::ParseFromStringOptionalSingleType<
-                std::optional<std::pair<int, int>>>));
-  ASSERT_FALSE((argparse::detail::ParseFromStringOptionalSingleType<
-                std::optional<std::tuple<int>>>));
-  ASSERT_FALSE((argparse::detail::ParseFromStringOptionalSingleType<
-                std::optional<std::array<int, 1>>>));
-
-  // 嵌套 optional 测试
-  ASSERT_FALSE((argparse::detail::ParseFromStringOptionalSingleType<
-                std::optional<std::optional<int>>>));
-
-  // const 类型测试
-  ASSERT_TRUE((argparse::detail::ParseFromStringOptionalSingleType<
-               std::optional<const int>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringOptionalSingleType<
+  // std::optional with const-qualified types
+  ASSERT_TRUE(
+      (argparse::detail::bindable_without_delim<std::optional<const int>>));
+  ASSERT_TRUE((argparse::detail::bindable_without_delim<
                std::optional<const std::string>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringOptionalSingleType<
+  ASSERT_TRUE((argparse::detail::bindable_without_delim<
                std::optional<const StringConstructible>>));
+
+  // Containers of single-value types
+  ASSERT_TRUE((argparse::detail::bindable_without_delim<std::vector<int>>));
+  ASSERT_TRUE(
+      (argparse::detail::bindable_without_delim<std::vector<std::string>>));
+  ASSERT_TRUE((argparse::detail::bindable_without_delim<std::list<double>>));
+  ASSERT_TRUE(
+      (argparse::detail::bindable_without_delim<std::list<std::string>>));
+  ASSERT_TRUE((argparse::detail::bindable_without_delim<std::set<int>>));
+  ASSERT_TRUE((argparse::detail::bindable_without_delim<std::set<double>>));
+  ASSERT_TRUE((argparse::detail::bindable_without_delim<std::deque<bool>>));
+
+  // Tuple-like types are not bindable without delimiter
+  ASSERT_FALSE((argparse::detail::bindable_without_delim<std::pair<int, int>>));
+  ASSERT_FALSE(
+      (argparse::detail::bindable_without_delim<std::tuple<int, std::string>>));
+  ASSERT_FALSE((argparse::detail::bindable_without_delim<std::array<int, 3>>));
+
+  // Containers of tuple-like types are not bindable without delimiter
+  ASSERT_FALSE((argparse::detail::bindable_without_delim<
+                std::vector<std::pair<int, int>>>));
+
+  // Unsupported types
+  ASSERT_FALSE(
+      argparse::detail::bindable_without_delim<NonStringConstructible>);
+  ASSERT_FALSE((argparse::detail::bindable_without_delim<
+                std::optional<NonStringConstructible>>));
+  ASSERT_FALSE((argparse::detail::bindable_without_delim<
+                std::optional<std::pair<int, int>>>));
+  ASSERT_FALSE((argparse::detail::bindable_without_delim<
+                std::optional<std::tuple<int, std::string>>>));
+  ASSERT_FALSE((argparse::detail::bindable_without_delim<
+                std::optional<std::vector<int>>>));
+  ASSERT_FALSE((argparse::detail::bindable_without_delim<
+                std::optional<std::pair<int, int>>>));
+  ASSERT_FALSE((argparse::detail::bindable_without_delim<
+                std::optional<std::tuple<int>>>));
+  ASSERT_FALSE((argparse::detail::bindable_without_delim<
+                std::optional<std::array<int, 1>>>));
+  ASSERT_FALSE((argparse::detail::bindable_without_delim<
+                std::optional<std::optional<int>>>));
+  ASSERT_FALSE((argparse::detail::bindable_without_delim<
+                std::vector<NonStringConstructible>>));
+  ASSERT_FALSE((
+      argparse::detail::bindable_without_delim<std::vector<std::vector<int>>>));
 }
 
-// 测试 ParseFromStringOptionalTupleLikeType concept
-TEST(ConceptTest, ParseFromStringOptionalTupleLikeType) {
-  // 基本元组类型的 optional 测试
-  ASSERT_TRUE((argparse::detail::ParseFromStringOptionalTupleLikeType<
-               std::optional<std::tuple<int>>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringOptionalTupleLikeType<
+// ============================================================
+// 11. bindable_with_delim
+// ============================================================
+
+TEST(ConceptTest, BindableWithDelim) {
+  // Tuple-like types
+  ASSERT_TRUE((argparse::detail::bindable_with_delim<std::tuple<int>>));
+  ASSERT_TRUE(
+      (argparse::detail::bindable_with_delim<std::tuple<int, std::string>>));
+  ASSERT_TRUE(
+      (argparse::detail::bindable_with_delim<std::tuple<bool, int, double>>));
+  ASSERT_TRUE((argparse::detail::bindable_with_delim<std::pair<int, int>>));
+  ASSERT_TRUE(
+      (argparse::detail::bindable_with_delim<std::pair<int, std::string>>));
+  ASSERT_TRUE((argparse::detail::bindable_with_delim<std::pair<double, bool>>));
+  ASSERT_TRUE((argparse::detail::bindable_with_delim<std::array<int, 1>>));
+  ASSERT_TRUE((argparse::detail::bindable_with_delim<std::array<int, 3>>));
+  ASSERT_TRUE((argparse::detail::bindable_with_delim<std::array<double, 3>>));
+
+  // Tuple-like types with custom string-constructible elements
+  ASSERT_TRUE(
+      (argparse::detail::bindable_with_delim<std::tuple<StringConstructible>>));
+  ASSERT_TRUE(
+      (argparse::detail::bindable_with_delim<std::tuple<StringConvertible>>));
+  ASSERT_TRUE((argparse::detail::bindable_with_delim<
+               std::pair<StringConstructible, StringConvertible>>));
+  ASSERT_TRUE((argparse::detail::bindable_with_delim<
+               std::tuple<StringConstructible, int>>));
+
+  // std::optional of tuple-like types
+  ASSERT_TRUE(
+      (argparse::detail::bindable_with_delim<std::optional<std::tuple<int>>>));
+  ASSERT_TRUE((argparse::detail::bindable_with_delim<
                std::optional<std::tuple<int, std::string>>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringOptionalTupleLikeType<
+  ASSERT_TRUE((argparse::detail::bindable_with_delim<
                std::optional<std::tuple<bool, int, double>>>));
-
-  // pair 类型的 optional 测试
-  ASSERT_TRUE((argparse::detail::ParseFromStringOptionalTupleLikeType<
+  ASSERT_TRUE((argparse::detail::bindable_with_delim<
                std::optional<std::pair<int, std::string>>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringOptionalTupleLikeType<
+  ASSERT_TRUE((argparse::detail::bindable_with_delim<
                std::optional<std::pair<double, bool>>>));
-
-  // array 类型的 optional 测试
-  ASSERT_TRUE((argparse::detail::ParseFromStringOptionalTupleLikeType<
+  ASSERT_TRUE((argparse::detail::bindable_with_delim<
                std::optional<std::array<int, 1>>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringOptionalTupleLikeType<
+  ASSERT_TRUE((argparse::detail::bindable_with_delim<
                std::optional<std::array<double, 3>>>));
-
-  // 包含自定义类型的元组的 optional 测试
-  ASSERT_TRUE((argparse::detail::ParseFromStringOptionalTupleLikeType<
+  ASSERT_TRUE((argparse::detail::bindable_with_delim<
                std::optional<std::tuple<StringConstructible>>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringOptionalTupleLikeType<
+  ASSERT_TRUE((argparse::detail::bindable_with_delim<
                std::optional<std::tuple<StringConvertible>>>));
   ASSERT_TRUE(
-      (argparse::detail::ParseFromStringOptionalTupleLikeType<
+      (argparse::detail::bindable_with_delim<
           std::optional<std::pair<StringConstructible, StringConvertible>>>));
 
-  // 不支持的类型测试
-  ASSERT_FALSE((argparse::detail::ParseFromStringOptionalTupleLikeType<int>));
-  ASSERT_FALSE((argparse::detail::ParseFromStringOptionalTupleLikeType<
-                std::optional<int>>));
-  ASSERT_FALSE((
-      argparse::detail::ParseFromStringOptionalTupleLikeType<std::tuple<int>>));
-  ASSERT_FALSE((argparse::detail::ParseFromStringOptionalTupleLikeType<
-                std::optional<std::string>>));
-  ASSERT_FALSE((argparse::detail::ParseFromStringOptionalTupleLikeType<
-                std::optional<std::vector<int>>>));
-
-  // 不支持的元素类型测试
-  ASSERT_FALSE((argparse::detail::ParseFromStringOptionalTupleLikeType<
-                std::optional<std::tuple<NonStringConstructible>>>));
-  ASSERT_FALSE((argparse::detail::ParseFromStringOptionalTupleLikeType<
-                std::optional<std::tuple<std::vector<int>>>>));
-
-  // 嵌套类型测试
-  ASSERT_FALSE((argparse::detail::ParseFromStringOptionalTupleLikeType<
-                std::optional<std::tuple<std::tuple<int>>>>));
-  ASSERT_FALSE((argparse::detail::ParseFromStringOptionalTupleLikeType<
-                std::optional<std::pair<std::pair<int, int>, int>>>));
-  ASSERT_FALSE((argparse::detail::ParseFromStringOptionalTupleLikeType<
-                std::optional<std::optional<std::tuple<int>>>>));
-
-  // const 类型测试
-  ASSERT_TRUE((argparse::detail::ParseFromStringOptionalTupleLikeType<
+  // std::optional with const-qualified types
+  ASSERT_TRUE((argparse::detail::bindable_with_delim<
                std::optional<const std::tuple<int>>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringOptionalTupleLikeType<
+  ASSERT_TRUE((argparse::detail::bindable_with_delim<
                std::optional<std::tuple<const int>>>));
-  ASSERT_TRUE((argparse::detail::ParseFromStringOptionalTupleLikeType<
+  ASSERT_TRUE((argparse::detail::bindable_with_delim<
                std::optional<const std::pair<const int, const std::string>>>));
-}
 
-// 测试 BindableType concept
-TEST(ConceptTest, BindableType) {
-  // 基本类型测试
-  ASSERT_TRUE(argparse::detail::BindableType<int>);
-  ASSERT_TRUE(argparse::detail::BindableType<std::string>);
-  ASSERT_TRUE(argparse::detail::BindableType<bool>);
-  ASSERT_TRUE(argparse::detail::BindableType<double>);
-
-  // 自定义类型测试
-  ASSERT_TRUE(argparse::detail::BindableType<StringConstructible>);
-  ASSERT_TRUE(argparse::detail::BindableType<StringConvertible>);
-
-  // optional类型测试
-  ASSERT_TRUE((argparse::detail::BindableType<std::optional<int>>));
-  ASSERT_TRUE((argparse::detail::BindableType<std::optional<std::string>>));
-  ASSERT_TRUE(
-      (argparse::detail::BindableType<std::optional<StringConstructible>>));
-
-  // 元组类型测试
-  ASSERT_TRUE((argparse::detail::BindableType<std::pair<int, int>>));
-  ASSERT_TRUE((argparse::detail::BindableType<std::tuple<int, std::string>>));
-  ASSERT_TRUE((argparse::detail::BindableType<std::array<int, 3>>));
-
-  // 容器类型测试
-  ASSERT_TRUE((argparse::detail::BindableType<std::vector<int>>));
-  ASSERT_TRUE((argparse::detail::BindableType<std::list<std::string>>));
-  ASSERT_TRUE((argparse::detail::BindableType<std::set<double>>));
-  ASSERT_TRUE(
-      (argparse::detail::BindableType<std::vector<std::pair<int, int>>>));
-
-  // 不支持的类型测试
-  ASSERT_FALSE(argparse::detail::BindableType<NonStringConstructible>);
-  ASSERT_FALSE(
-      (argparse::detail::BindableType<std::vector<NonStringConstructible>>));
-  ASSERT_FALSE((argparse::detail::BindableType<std::vector<std::vector<int>>>));
-}
-
-// 测试 BindableWithoutDelimiterType concept
-TEST(ConceptTest, BindableWithoutDelimiterType) {
-  // 基本类型测试
-  ASSERT_TRUE(argparse::detail::BindableWithoutDelimiterType<int>);
-  ASSERT_TRUE(argparse::detail::BindableWithoutDelimiterType<std::string>);
-  ASSERT_TRUE(argparse::detail::BindableWithoutDelimiterType<bool>);
-  ASSERT_TRUE(argparse::detail::BindableWithoutDelimiterType<double>);
-
-  // 自定义类型测试
-  ASSERT_TRUE(
-      argparse::detail::BindableWithoutDelimiterType<StringConstructible>);
-  ASSERT_TRUE(
-      argparse::detail::BindableWithoutDelimiterType<StringConvertible>);
-
-  // optional基本类型测试
-  ASSERT_TRUE(
-      (argparse::detail::BindableWithoutDelimiterType<std::optional<int>>));
-  ASSERT_TRUE((argparse::detail::BindableWithoutDelimiterType<
-               std::optional<std::string>>));
-  ASSERT_TRUE((argparse::detail::BindableWithoutDelimiterType<
-               std::optional<StringConstructible>>));
-
-  // 基本类型的容器测试
-  ASSERT_TRUE(
-      (argparse::detail::BindableWithoutDelimiterType<std::vector<int>>));
-  ASSERT_TRUE(
-      (argparse::detail::BindableWithoutDelimiterType<std::list<std::string>>));
-  ASSERT_TRUE(
-      (argparse::detail::BindableWithoutDelimiterType<std::set<double>>));
-
-  // 不支持的类型测试
-  ASSERT_FALSE(
-      (argparse::detail::BindableWithoutDelimiterType<std::pair<int, int>>));
-  ASSERT_FALSE((argparse::detail::BindableWithoutDelimiterType<
-                std::tuple<int, std::string>>));
-  ASSERT_FALSE(
-      (argparse::detail::BindableWithoutDelimiterType<std::array<int, 3>>));
-  ASSERT_FALSE((argparse::detail::BindableWithoutDelimiterType<
-                std::vector<std::pair<int, int>>>));
-  ASSERT_FALSE(
-      argparse::detail::BindableWithoutDelimiterType<NonStringConstructible>);
-  ASSERT_FALSE((argparse::detail::BindableWithoutDelimiterType<
-                std::optional<std::pair<int, int>>>));
-}
-
-// 测试 BindableWithDelimiterType concept
-TEST(ConceptTest, BindableWithDelimiterType) {
-  // 元组类型测试
-  ASSERT_TRUE(
-      (argparse::detail::BindableWithDelimiterType<std::pair<int, int>>));
-  ASSERT_TRUE((argparse::detail::BindableWithDelimiterType<
-               std::tuple<int, std::string>>));
-  ASSERT_TRUE(
-      (argparse::detail::BindableWithDelimiterType<std::array<int, 3>>));
-
-  // optional元组类型测试
-  ASSERT_TRUE((argparse::detail::BindableWithDelimiterType<
-               std::optional<std::pair<int, int>>>));
-  ASSERT_TRUE((argparse::detail::BindableWithDelimiterType<
-               std::optional<std::tuple<int, std::string>>>));
-  ASSERT_TRUE((argparse::detail::BindableWithDelimiterType<
-               std::optional<std::array<int, 3>>>));
-
-  // 元组容器类型测试
-  ASSERT_TRUE((argparse::detail::BindableWithDelimiterType<
-               std::vector<std::pair<int, int>>>));
-  ASSERT_TRUE((argparse::detail::BindableWithDelimiterType<
+  // Containers of tuple-like types
+  ASSERT_TRUE((
+      argparse::detail::bindable_with_delim<std::vector<std::pair<int, int>>>));
+  ASSERT_TRUE((argparse::detail::bindable_with_delim<
                std::list<std::tuple<int, std::string>>>));
-  ASSERT_TRUE((argparse::detail::BindableWithDelimiterType<
-               std::vector<std::array<int, 2>>>));
+  ASSERT_TRUE(
+      (argparse::detail::bindable_with_delim<std::vector<std::array<int, 2>>>));
 
-  // 不支持的类型测试
-  ASSERT_FALSE(argparse::detail::BindableWithDelimiterType<int>);
-  ASSERT_FALSE(argparse::detail::BindableWithDelimiterType<std::string>);
-  ASSERT_FALSE((argparse::detail::BindableWithDelimiterType<std::vector<int>>));
+  // Non-tuple-like types are not bindable with delimiter
+  ASSERT_FALSE(argparse::detail::bindable_with_delim<int>);
+  ASSERT_FALSE(argparse::detail::bindable_with_delim<std::string>);
+  ASSERT_FALSE(argparse::detail::bindable_with_delim<StringConstructible>);
+  ASSERT_FALSE((argparse::detail::bindable_with_delim<std::optional<int>>));
   ASSERT_FALSE(
-      (argparse::detail::BindableWithDelimiterType<std::optional<int>>));
+      (argparse::detail::bindable_with_delim<std::optional<std::string>>));
+  ASSERT_FALSE((argparse::detail::bindable_with_delim<std::vector<int>>));
   ASSERT_FALSE(
-      argparse::detail::BindableWithDelimiterType<StringConstructible>);
-  ASSERT_FALSE((argparse::detail::BindableWithDelimiterType<
-                std::vector<std::vector<int>>>));
-  ASSERT_FALSE((argparse::detail::BindableWithDelimiterType<
-                std::tuple<std::tuple<int>>>));
+      (argparse::detail::bindable_with_delim<std::vector<std::vector<int>>>));
+
+  // Tuple-like types with unsupported element types
+  ASSERT_FALSE((argparse::detail::bindable_with_delim<
+                std::optional<std::tuple<NonStringConstructible>>>));
+  ASSERT_FALSE((argparse::detail::bindable_with_delim<
+                std::optional<std::tuple<std::vector<int>>>>));
+  ASSERT_FALSE((argparse::detail::bindable_with_delim<
+                std::vector<std::tuple<NonStringConstructible>>>));
+
+  // Nested tuple-like types
+  ASSERT_FALSE((argparse::detail::bindable_with_delim<
+                std::tuple<std::tuple<int, int>, int>>));
+  ASSERT_FALSE((argparse::detail::bindable_with_delim<
+                std::pair<std::pair<int, int>, int>>));
+  ASSERT_FALSE((argparse::detail::bindable_with_delim<
+                std::optional<std::tuple<std::tuple<int>>>>));
+  ASSERT_FALSE((argparse::detail::bindable_with_delim<
+                std::optional<std::pair<std::pair<int, int>, int>>>));
+  ASSERT_FALSE((argparse::detail::bindable_with_delim<
+                std::optional<std::optional<std::tuple<int>>>>));
 }
 
 // ============================================================
-// Tests for has_to_string / has_to_wstring traits
+// 12. bindable
 // ============================================================
 
-// Custom type with a free to_string in its own namespace (ADL)
+TEST(ConceptTest, Bindable) {
+  // Basic types
+  ASSERT_TRUE(argparse::detail::bindable<int>);
+  ASSERT_TRUE(argparse::detail::bindable<std::string>);
+  ASSERT_TRUE(argparse::detail::bindable<bool>);
+  ASSERT_TRUE(argparse::detail::bindable<double>);
+
+  // Custom types
+  ASSERT_TRUE(argparse::detail::bindable<StringConstructible>);
+  ASSERT_TRUE(argparse::detail::bindable<StringConvertible>);
+
+  // std::optional types
+  ASSERT_TRUE((argparse::detail::bindable<std::optional<int>>));
+  ASSERT_TRUE((argparse::detail::bindable<std::optional<std::string>>));
+  ASSERT_TRUE((argparse::detail::bindable<std::optional<StringConstructible>>));
+
+  // Tuple-like types
+  ASSERT_TRUE((argparse::detail::bindable<std::pair<int, int>>));
+  ASSERT_TRUE((argparse::detail::bindable<std::tuple<int, std::string>>));
+  ASSERT_TRUE((argparse::detail::bindable<std::array<int, 3>>));
+
+  // Container types
+  ASSERT_TRUE((argparse::detail::bindable<std::vector<int>>));
+  ASSERT_TRUE((argparse::detail::bindable<std::list<std::string>>));
+  ASSERT_TRUE((argparse::detail::bindable<std::set<double>>));
+  ASSERT_TRUE((argparse::detail::bindable<std::vector<std::pair<int, int>>>));
+
+  // Unsupported types
+  ASSERT_FALSE(argparse::detail::bindable<NonStringConstructible>);
+  ASSERT_FALSE(
+      (argparse::detail::bindable<std::vector<NonStringConstructible>>));
+  ASSERT_FALSE((argparse::detail::bindable<std::vector<std::vector<int>>>));
+}
+
+// ============================================================
+// 13. Combined scenarios
+// ============================================================
+
+TEST(ConceptTest, CombinedScenarios) {
+  // Tuple containing container elements
+  ASSERT_FALSE((argparse::detail::can_from_string<
+                std::tuple<int, std::vector<std::string>>>));
+
+  // Pair containing optional
+  ASSERT_FALSE((argparse::detail::can_from_string<
+                std::pair<std::optional<int>, std::string>>));
+
+  // Container of optional
+  ASSERT_TRUE(
+      !argparse::detail::can_from_string<std::vector<std::optional<int>>>);
+
+  // Optional of container
+  ASSERT_TRUE(
+      !argparse::detail::can_from_string<std::optional<std::vector<int>>>);
+}
+
+// ============================================================
+// 14. has_to_string / has_to_wstring
+// ============================================================
+
 namespace custom_ns {
+
 struct WithToString {};
 inline std::string to_string(WithToString const&) { return "custom"; }
 
@@ -566,17 +665,16 @@ struct WithBoth {};
 inline std::string to_string(WithBoth const&) { return "both"; }
 inline std::wstring to_wstring(WithBoth const&) { return L"both"; }
 
-// A type with to_string that returns something not convertible to std::string
 struct BadToString {};
 inline int to_string(BadToString const&) { return 42; }
 
 struct BadToWstring {};
 inline int to_wstring(BadToWstring const&) { return 42; }
+
 }  // namespace custom_ns
 
-// 测试 has_to_string trait
 TEST(ConceptTest, HasToString) {
-  // std::to_string 支持的标准类型
+  // Types supported by std::to_string
   ASSERT_TRUE(argparse::detail::has_to_string_v<int>);
   ASSERT_TRUE(argparse::detail::has_to_string_v<long>);
   ASSERT_TRUE(argparse::detail::has_to_string_v<long long>);
@@ -587,43 +685,38 @@ TEST(ConceptTest, HasToString) {
   ASSERT_TRUE(argparse::detail::has_to_string_v<double>);
   ASSERT_TRUE(argparse::detail::has_to_string_v<long double>);
 
-  // std::string（通过 argparse 中的 identity 重载）
-  ASSERT_TRUE(argparse::detail::has_to_string_v<std::string>);
-
-  // 通过 ADL 找到的自定义类型
-  ASSERT_TRUE(argparse::detail::has_to_string_v<custom_ns::WithToString>);
-  ASSERT_TRUE(argparse::detail::has_to_string_v<custom_ns::WithBoth>);
-
-  // bool / char / short 等可通过整型提升隐式转换为 int
+  // Types that promote to integral types supported by std::to_string
   ASSERT_TRUE(argparse::detail::has_to_string_v<bool>);
   ASSERT_TRUE(argparse::detail::has_to_string_v<char>);
   ASSERT_TRUE(argparse::detail::has_to_string_v<short>);
   ASSERT_TRUE(argparse::detail::has_to_string_v<unsigned short>);
   ASSERT_TRUE(argparse::detail::has_to_string_v<unsigned char>);
 
-  // wchar_t / char16_t / char32_t 的整型提升结果因平台而异，
-  // 但通常也能落到 std::to_string 的某个重载上
-  // （此处仅验证 trait 行为一致，结果可为 true 或 false）
+  // std::string (via identity overload in argparse)
+  ASSERT_TRUE(argparse::detail::has_to_string_v<std::string>);
 
-  // std::to_string 不支持的类型
+  // const char* is implicitly convertible to std::string
+  ASSERT_TRUE(argparse::detail::has_to_string_v<const char*>);
+
+  // Custom types with ADL to_string
+  ASSERT_TRUE(argparse::detail::has_to_string_v<custom_ns::WithToString>);
+  ASSERT_TRUE(argparse::detail::has_to_string_v<custom_ns::WithBoth>);
+
+  // Types without to_string support
   ASSERT_FALSE(argparse::detail::has_to_string_v<std::wstring>);
   ASSERT_FALSE(argparse::detail::has_to_string_v<std::vector<int>>);
   ASSERT_FALSE((argparse::detail::has_to_string_v<std::pair<int, int>>));
   ASSERT_FALSE(argparse::detail::has_to_string_v<custom_ns::WithToWstring>);
 
-  // 返回类型不匹配（返回 int 而非 std::string）
+  // to_string exists but returns wrong type
   ASSERT_FALSE(argparse::detail::has_to_string_v<custom_ns::BadToString>);
 
-  // const char* 可隐式构造 std::string，匹配 identity 重载
-  ASSERT_TRUE(argparse::detail::has_to_string_v<const char*>);
-
-  // 不相关指针类型
+  // Unrelated pointer types
   ASSERT_FALSE(argparse::detail::has_to_string_v<int*>);
 }
 
-// 测试 has_to_wstring trait
 TEST(ConceptTest, HasToWstring) {
-  // std::to_wstring 支持的标准类型
+  // Types supported by std::to_wstring
   ASSERT_TRUE(argparse::detail::has_to_wstring_v<int>);
   ASSERT_TRUE(argparse::detail::has_to_wstring_v<long>);
   ASSERT_TRUE(argparse::detail::has_to_wstring_v<long long>);
@@ -634,38 +727,38 @@ TEST(ConceptTest, HasToWstring) {
   ASSERT_TRUE(argparse::detail::has_to_wstring_v<double>);
   ASSERT_TRUE(argparse::detail::has_to_wstring_v<long double>);
 
-  // std::wstring（通过 argparse 中的 identity 重载）
-  ASSERT_TRUE(argparse::detail::has_to_wstring_v<std::wstring>);
-
-  // 通过 ADL 找到的自定义类型
-  ASSERT_TRUE(argparse::detail::has_to_wstring_v<custom_ns::WithToWstring>);
-  ASSERT_TRUE(argparse::detail::has_to_wstring_v<custom_ns::WithBoth>);
-
-  // bool / char / short 等可通过整型提升隐式转换为 int
+  // Types that promote to integral types supported by std::to_wstring
   ASSERT_TRUE(argparse::detail::has_to_wstring_v<bool>);
   ASSERT_TRUE(argparse::detail::has_to_wstring_v<char>);
   ASSERT_TRUE(argparse::detail::has_to_wstring_v<short>);
   ASSERT_TRUE(argparse::detail::has_to_wstring_v<unsigned short>);
   ASSERT_TRUE(argparse::detail::has_to_wstring_v<unsigned char>);
 
-  // std::to_wstring 不支持的类型
+  // std::wstring (via identity overload in argparse)
+  ASSERT_TRUE(argparse::detail::has_to_wstring_v<std::wstring>);
+
+  // const wchar_t* is implicitly convertible to std::wstring
+  ASSERT_TRUE(argparse::detail::has_to_wstring_v<const wchar_t*>);
+
+  // Custom types with ADL to_wstring
+  ASSERT_TRUE(argparse::detail::has_to_wstring_v<custom_ns::WithToWstring>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring_v<custom_ns::WithBoth>);
+
+  // Types without to_wstring support
   ASSERT_FALSE(argparse::detail::has_to_wstring_v<std::string>);
   ASSERT_FALSE(argparse::detail::has_to_wstring_v<std::vector<int>>);
   ASSERT_FALSE((argparse::detail::has_to_wstring_v<std::pair<int, int>>));
   ASSERT_FALSE(argparse::detail::has_to_wstring_v<custom_ns::WithToString>);
 
-  // 返回类型不匹配（返回 int 而非 std::wstring）
+  // to_wstring exists but returns wrong type
   ASSERT_FALSE(argparse::detail::has_to_wstring_v<custom_ns::BadToWstring>);
 
-  // const wchar_t* 可隐式构造 std::wstring，匹配 identity 重载
-  ASSERT_TRUE(argparse::detail::has_to_wstring_v<const wchar_t*>);
-
-  // 不相关指针类型
+  // Unrelated pointer types
   ASSERT_FALSE(argparse::detail::has_to_wstring_v<int*>);
 }
 
-// 测试 has_to_string 与 const/volatile 修饰符
 TEST(ConceptTest, HasToStringConstVolatile) {
+  // Const-qualified types should still work
   ASSERT_TRUE(argparse::detail::has_to_string_v<const int>);
   ASSERT_TRUE(argparse::detail::has_to_string_v<const double>);
   ASSERT_TRUE(argparse::detail::has_to_string_v<const std::string>);
@@ -675,26 +768,23 @@ TEST(ConceptTest, HasToStringConstVolatile) {
   ASSERT_TRUE(argparse::detail::has_to_wstring_v<const std::wstring>);
 }
 
-// 测试 has_to_string 与枚举类型（std::to_string 不直接支持枚举）
 TEST(ConceptTest, HasToStringEnum) {
-  enum Color { Red, Green, Blue };
-  enum class Fruit { Apple, Banana };
+  enum UnscopedColor { Red, Green, Blue };
+  enum class ScopedFruit { Apple, Banana };
 
-  // 无作用域枚举可隐式转换为 int，因此 std::to_string 可用
-  ASSERT_TRUE(argparse::detail::has_to_string_v<Color>);
-  ASSERT_TRUE(argparse::detail::has_to_wstring_v<Color>);
+  // Unscoped enums implicitly convert to int, so std::to_string works
+  ASSERT_TRUE(argparse::detail::has_to_string_v<UnscopedColor>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring_v<UnscopedColor>);
 
-  // 有作用域枚举不可隐式转换，std::to_string 不可用
-  ASSERT_FALSE(argparse::detail::has_to_string_v<Fruit>);
-  ASSERT_FALSE(argparse::detail::has_to_wstring_v<Fruit>);
+  // Scoped enums do not implicitly convert, so std::to_string is unavailable
+  ASSERT_FALSE(argparse::detail::has_to_string_v<ScopedFruit>);
+  ASSERT_FALSE(argparse::detail::has_to_wstring_v<ScopedFruit>);
 }
 
 // ============================================================
-// Tests for has_to_string_memfunc / has_string_memfunc /
-// has_to_wstring_memfunc / has_wstring_memfunc / has_c_str_memfunc traits
+// 15. has_*_memfunc traits
 // ============================================================
 
-// Custom types with member functions for testing the new memfunc traits
 namespace memfunc_ns {
 
 struct WithToStringMemfunc {
@@ -717,7 +807,6 @@ struct WithCStrMemfunc {
   std::string c_str() const { return "via c_str()"; }
 };
 
-// A type with all five member functions
 struct WithAll {
   std::string to_string() const { return "all"; }
   std::string string() const { return "all"; }
@@ -747,7 +836,7 @@ struct BadCStrMemfunc {
   int c_str() const { return 42; }
 };
 
-// Types with wrong return types (returning different string types)
+// Types with wrong string return types
 struct WrongStringReturn {
   std::wstring to_string() const { return L"wrong"; }
 };
@@ -777,21 +866,20 @@ struct NonConstCStr {
   std::string c_str() { return "non-const"; }
 };
 
-// Empty type with no member functions
 struct Empty {};
 
 }  // namespace memfunc_ns
 
-// ============================================================
-// has_to_string_memfunc
-// ============================================================
 TEST(ConceptTest, HasToStringMemfunc) {
   using namespace memfunc_ns;
 
   // Types with correct to_string() -> std::string
   ASSERT_TRUE(argparse::detail::has_to_string_memfunc_v<WithToStringMemfunc>);
-  // Non-const member function also accepted (T&)
+
+  // Non-const member function also accepted (tested via T&)
   ASSERT_TRUE(argparse::detail::has_to_string_memfunc_v<NonConstToString>);
+
+  // Types without to_string() member function
   ASSERT_FALSE(argparse::detail::has_to_string_memfunc_v<std::string>);
   ASSERT_FALSE(argparse::detail::has_to_string_memfunc_v<WithStringMemfunc>);
   ASSERT_FALSE(argparse::detail::has_to_string_memfunc_v<Empty>);
@@ -800,18 +888,15 @@ TEST(ConceptTest, HasToStringMemfunc) {
   ASSERT_FALSE(argparse::detail::has_to_string_memfunc_v<BadToStringMemfunc>);
   ASSERT_FALSE(argparse::detail::has_to_string_memfunc_v<WrongStringReturn>);
 
-  // const qualification works (matches requires(const T&))
+  // Const qualification
   ASSERT_TRUE(
       argparse::detail::has_to_string_memfunc_v<const WithToStringMemfunc>);
 
-  // volatile qualification does not (traits check const T&, not volatile T&)
+  // Volatile qualification is not accepted
   ASSERT_FALSE((
       argparse::detail::has_to_string_memfunc_v<volatile WithToStringMemfunc>));
 }
 
-// ============================================================
-// has_string_memfunc
-// ============================================================
 TEST(ConceptTest, HasStringMemfunc) {
   using namespace memfunc_ns;
 
@@ -819,7 +904,7 @@ TEST(ConceptTest, HasStringMemfunc) {
   ASSERT_TRUE(argparse::detail::has_string_memfunc_v<WithStringMemfunc>);
   ASSERT_TRUE(argparse::detail::has_string_memfunc_v<WithAll>);
 
-  // Non-const member function also accepted (T&)
+  // Non-const member function also accepted
   ASSERT_TRUE(argparse::detail::has_string_memfunc_v<NonConstString>);
 
   // Types without string() member function
@@ -831,13 +916,10 @@ TEST(ConceptTest, HasStringMemfunc) {
   // Wrong return type
   ASSERT_FALSE(argparse::detail::has_string_memfunc_v<BadStringMemfunc>);
 
-  // const/volatile qualifications
+  // Const qualification
   ASSERT_TRUE(argparse::detail::has_string_memfunc_v<const WithStringMemfunc>);
 }
 
-// ============================================================
-// has_to_wstring_memfunc
-// ============================================================
 TEST(ConceptTest, HasToWstringMemfunc) {
   using namespace memfunc_ns;
 
@@ -845,7 +927,7 @@ TEST(ConceptTest, HasToWstringMemfunc) {
   ASSERT_TRUE(argparse::detail::has_to_wstring_memfunc_v<WithToWstringMemfunc>);
   ASSERT_TRUE(argparse::detail::has_to_wstring_memfunc_v<WithAll>);
 
-  // Non-const member function also accepted (T&)
+  // Non-const member function also accepted
   ASSERT_TRUE(argparse::detail::has_to_wstring_memfunc_v<NonConstToWstring>);
 
   // Types without to_wstring() member function
@@ -858,14 +940,11 @@ TEST(ConceptTest, HasToWstringMemfunc) {
   ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc_v<BadToWstringMemfunc>);
   ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc_v<WrongWstringReturn>);
 
-  // const/volatile qualifications
+  // Const qualification
   ASSERT_TRUE(
       argparse::detail::has_to_wstring_memfunc_v<const WithToWstringMemfunc>);
 }
 
-// ============================================================
-// has_wstring_memfunc
-// ============================================================
 TEST(ConceptTest, HasWstringMemfunc) {
   using namespace memfunc_ns;
 
@@ -873,7 +952,7 @@ TEST(ConceptTest, HasWstringMemfunc) {
   ASSERT_TRUE(argparse::detail::has_wstring_memfunc_v<WithWstringMemfunc>);
   ASSERT_TRUE(argparse::detail::has_wstring_memfunc_v<WithAll>);
 
-  // Non-const member function also accepted (T&)
+  // Non-const member function also accepted
   ASSERT_TRUE(argparse::detail::has_wstring_memfunc_v<NonConstWstring>);
 
   // Types without wstring() member function
@@ -885,14 +964,11 @@ TEST(ConceptTest, HasWstringMemfunc) {
   // Wrong return type
   ASSERT_FALSE(argparse::detail::has_wstring_memfunc_v<BadWstringMemfunc>);
 
-  // const/volatile qualifications
+  // Const qualification
   ASSERT_TRUE(
       argparse::detail::has_wstring_memfunc_v<const WithWstringMemfunc>);
 }
 
-// ============================================================
-// has_c_str_memfunc
-// ============================================================
 TEST(ConceptTest, HasCStrMemfunc) {
   using namespace memfunc_ns;
 
@@ -900,25 +976,24 @@ TEST(ConceptTest, HasCStrMemfunc) {
   ASSERT_TRUE(argparse::detail::has_c_str_memfunc_v<WithCStrMemfunc>);
   ASSERT_TRUE(argparse::detail::has_c_str_memfunc_v<WithAll>);
 
-  // Non-const member function also accepted (T&)
+  // Non-const member function also accepted
   ASSERT_TRUE(argparse::detail::has_c_str_memfunc_v<NonConstCStr>);
+
+  // std::string has c_str() returning const char* (convertible to std::string)
+  ASSERT_TRUE(argparse::detail::has_c_str_memfunc_v<std::string>);
 
   // Types without c_str() member function
   ASSERT_FALSE(argparse::detail::has_c_str_memfunc_v<int>);
-  ASSERT_TRUE(argparse::detail::has_c_str_memfunc_v<std::string>);
   ASSERT_FALSE(argparse::detail::has_c_str_memfunc_v<WithToStringMemfunc>);
   ASSERT_FALSE(argparse::detail::has_c_str_memfunc_v<Empty>);
 
   // Wrong return type
   ASSERT_FALSE(argparse::detail::has_c_str_memfunc_v<BadCStrMemfunc>);
 
-  // const/volatile qualifications
+  // Const qualification
   ASSERT_TRUE(argparse::detail::has_c_str_memfunc_v<const WithCStrMemfunc>);
 }
 
-// ============================================================
-// Combined / cross-type tests
-// ============================================================
 TEST(ConceptTest, MemfuncTraitsCombined) {
   using namespace memfunc_ns;
 
@@ -942,16 +1017,14 @@ TEST(ConceptTest, MemfuncTraitsCombined) {
   ASSERT_FALSE(argparse::detail::has_to_string_memfunc_v<WithCStrMemfunc>);
   ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc_v<WithCStrMemfunc>);
 
-  // Standard library types: most should not have these member functions
-  // Note: std::string has c_str() returning const char*, which is convertible
-  // to std::string, so has_c_str_memfunc detects it.
+  // std::string: only has c_str()
   ASSERT_FALSE(argparse::detail::has_to_string_memfunc_v<std::string>);
   ASSERT_FALSE(argparse::detail::has_string_memfunc_v<std::string>);
   ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc_v<std::string>);
   ASSERT_FALSE(argparse::detail::has_wstring_memfunc_v<std::string>);
   ASSERT_TRUE(argparse::detail::has_c_str_memfunc_v<std::string>);
 
-  // Same for std::wstring
+  // std::wstring: none of the member functions
   ASSERT_FALSE(argparse::detail::has_to_string_memfunc_v<std::wstring>);
   ASSERT_FALSE(argparse::detail::has_string_memfunc_v<std::wstring>);
   ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc_v<std::wstring>);
@@ -967,73 +1040,397 @@ TEST(ConceptTest, MemfuncTraitsCombined) {
 }
 
 // ============================================================
-// Tests for detail::to_string / detail::to_wstring with member
-// function dispatch (the new overloads added for cross-platform
-// support, previously guarded by #if defined(_WIN32))
+// 16. to_string / to_wstring runtime dispatch
 // ============================================================
 
 TEST(ConceptTest, ToStringViaMemberFunctions) {
   using namespace memfunc_ns;
 
-  // to_string via to_string() member function
   WithToStringMemfunc obj1;
-  EXPECT_EQ(argparse::detail::to_string(obj1), "via to_string()");
+  ASSERT_EQ(argparse::detail::to_string(obj1), "via to_string()");
 
-  // to_string via string() member function
   WithStringMemfunc obj2;
-  EXPECT_EQ(argparse::detail::to_string(obj2), "via string()");
+  ASSERT_EQ(argparse::detail::to_string(obj2), "via string()");
 
-  // to_string via c_str() member function
   WithCStrMemfunc obj3;
-  EXPECT_EQ(argparse::detail::to_string(obj3), "via c_str()");
+  ASSERT_EQ(argparse::detail::to_string(obj3), "via c_str()");
 
-  // std::string: has c_str() returning const char* (convertible to
-  // std::string), and has_string_memfunc_v is false, so it matches
-  // the c_str() overload
   std::string s = "hello";
-  EXPECT_EQ(argparse::detail::to_string(s), "hello");
+  ASSERT_EQ(argparse::detail::to_string(s), "hello");
 }
 
 TEST(ConceptTest, ToWstringViaMemberFunctions) {
   using namespace memfunc_ns;
 
-  // to_wstring via to_wstring() member function
   WithToWstringMemfunc obj1;
-  EXPECT_EQ(argparse::detail::to_wstring(obj1), L"via to_wstring()");
+  ASSERT_EQ(argparse::detail::to_wstring(obj1), L"via to_wstring()");
 
-  // to_wstring via wstring() member function
   WithWstringMemfunc obj2;
-  EXPECT_EQ(argparse::detail::to_wstring(obj2), L"via wstring()");
+  ASSERT_EQ(argparse::detail::to_wstring(obj2), L"via wstring()");
 }
 
 TEST(ConceptTest, ToStringCStrWorksForStdString) {
-  // std::string has c_str() returning const char* (convertible to
-  // std::string), and has_string_memfunc_v<std::string> is false,
-  // so it matches the c_str() overload exclusively.
   std::string s = "test";
-  EXPECT_EQ(argparse::detail::to_string(s), "test");
+  ASSERT_EQ(argparse::detail::to_string(s), "test");
 
-  // Verify the c_str overload also works with a temporary
-  EXPECT_EQ(argparse::detail::to_string(std::string("temp")), "temp");
+  ASSERT_EQ(argparse::detail::to_string(std::string("temp")), "temp");
 }
 
 TEST(ConceptTest, ToStringAndToWstringNoMatch) {
-  // Types without any matching member function should not match
-  // detail::to_string / detail::to_wstring (compile-time constraint).
-  // We verify that standard types without matching members are
-  // correctly excluded by the traits.
+  // Verify that types without matching member functions are correctly
+  // excluded by the traits (the actual to_string/to_wstring calls are
+  // constrained at compile time).
 
-  // int has none of the member functions
   ASSERT_FALSE(argparse::detail::has_to_string_memfunc_v<int>);
   ASSERT_FALSE(argparse::detail::has_string_memfunc_v<int>);
   ASSERT_FALSE(argparse::detail::has_c_str_memfunc_v<int>);
   ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc_v<int>);
   ASSERT_FALSE(argparse::detail::has_wstring_memfunc_v<int>);
 
-  // std::wstring also has none of the member functions
   ASSERT_FALSE(argparse::detail::has_to_string_memfunc_v<std::wstring>);
   ASSERT_FALSE(argparse::detail::has_string_memfunc_v<std::wstring>);
   ASSERT_FALSE(argparse::detail::has_c_str_memfunc_v<std::wstring>);
   ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc_v<std::wstring>);
   ASSERT_FALSE(argparse::detail::has_wstring_memfunc_v<std::wstring>);
+}
+
+// ============================================================
+// 17. Constructor constraints (compile-time verification)
+// ============================================================
+
+namespace constructor_test {
+
+struct FromStringType {
+  std::string value;
+  FromStringType() = default;
+  explicit FromStringType(const std::string& s) : value(s) {}
+};
+
+using IntPair = std::pair<int, int>;
+using StringIntTuple = std::tuple<std::string, int>;
+
+}  // namespace constructor_test
+
+TEST(ConceptTest, OptionConstructorConstraints) {
+  using namespace constructor_test;
+
+  argparse::ArgParser parser("test", "Test parser");
+
+  // Single-value option
+  {
+    FromStringType bind_val{""};
+    auto& opt =
+        parser.add_option("s,single", "A single value option", bind_val);
+    (void)opt;
+  }
+
+  // Basic type option
+  {
+    int bind_val = 0;
+    auto& opt = parser.add_option("i,int", "An int option", bind_val);
+    (void)opt;
+  }
+
+  // std::string option
+  {
+    std::string bind_val;
+    auto& opt = parser.add_option("str", "A string option", bind_val);
+    (void)opt;
+  }
+
+  // Pair option (with delimiter)
+  {
+    IntPair bind_val{};
+    auto& opt = parser.add_option("pair", "A pair option", bind_val, ',');
+    (void)opt;
+  }
+
+  // Tuple option (with delimiter)
+  {
+    StringIntTuple bind_val{};
+    auto& opt = parser.add_option("tuple", "A tuple option", bind_val, ',');
+    (void)opt;
+  }
+
+  // Container of tuple-like types (with delimiter)
+  {
+    std::vector<IntPair> bind_val;
+    auto& opt =
+        parser.add_option("vecpair", "A vector of pairs", bind_val, ';');
+    (void)opt;
+  }
+}
+
+TEST(ConceptTest, PositionalConstructorConstraints) {
+  using namespace constructor_test;
+
+  argparse::ArgParser parser("test", "Test parser");
+
+  // Single-value positional
+  {
+    FromStringType bind_val{""};
+    auto& pos =
+        parser.add_positional("single", "A single value positional", bind_val);
+    (void)pos;
+  }
+
+  // Pair positional (with delimiter)
+  {
+    IntPair bind_val{};
+    auto& pos =
+        parser.add_positional("pair", "A pair positional", bind_val, ',');
+    (void)pos;
+  }
+
+  // Container positional (without delimiter)
+  {
+    std::vector<std::string> bind_val;
+    auto& pos = parser.add_positional("items", "A vector of strings", bind_val);
+    (void)pos;
+  }
+
+  // Container of tuple-like types (with delimiter)
+  {
+    std::vector<StringIntTuple> bind_val;
+    auto& pos =
+        parser.add_positional("vec_tuple", "A vector of tuples", bind_val, ';');
+    (void)pos;
+  }
+}
+
+TEST(ConceptTest, OptionPositionalMultipleContainer) {
+  argparse::ArgParser parser("test", "Test parser");
+
+  // Container option with delimiter
+  {
+    std::vector<std::pair<int, int>> bind_val;
+    auto& opt = parser.add_option("points", "A list of points", bind_val, ';');
+    (void)opt;
+  }
+
+  // Container option without delimiter
+  {
+    std::vector<std::string> bind_val;
+    auto& opt = parser.add_option("files", "A list of files", bind_val);
+    (void)opt;
+  }
+
+  // Container positional without delimiter
+  argparse::ArgParser parser2("test2", "Test parser 2");
+  {
+    std::vector<int> bind_val;
+    auto& pos = parser2.add_positional("numbers", "List of numbers", bind_val);
+    (void)pos;
+  }
+}
+
+// ============================================================
+// 18. extract_value_type / extract_value_type_t
+// ============================================================
+
+TEST(ConceptTest, ExtractValueType) {
+  // Primary template: T → T for plain types
+  static_assert(
+      std::is_same_v<argparse::detail::extract_value_type_t<int>, int>);
+  static_assert(
+      std::is_same_v<argparse::detail::extract_value_type_t<bool>, bool>);
+  static_assert(
+      std::is_same_v<argparse::detail::extract_value_type_t<double>, double>);
+  static_assert(
+      std::is_same_v<argparse::detail::extract_value_type_t<std::string>,
+                     std::string>);
+  static_assert(std::is_same_v<
+                argparse::detail::extract_value_type_t<StringConstructible>,
+                StringConstructible>);
+  static_assert(std::is_same_v<
+                argparse::detail::extract_value_type_t<NonStringConstructible>,
+                NonStringConstructible>);
+
+  // std::optional<T> → T (unwraps the optional)
+  static_assert(
+      std::is_same_v<argparse::detail::extract_value_type_t<std::optional<int>>,
+                     int>);
+  static_assert(
+      std::is_same_v<
+          argparse::detail::extract_value_type_t<std::optional<bool>>, bool>);
+  static_assert(std::is_same_v<
+                argparse::detail::extract_value_type_t<std::optional<double>>,
+                double>);
+  static_assert(
+      std::is_same_v<
+          argparse::detail::extract_value_type_t<std::optional<std::string>>,
+          std::string>);
+  static_assert(std::is_same_v<argparse::detail::extract_value_type_t<
+                                   std::optional<StringConstructible>>,
+                               StringConstructible>);
+
+  // from_string_container<T> → T::value_type (extracts element type)
+  static_assert(
+      std::is_same_v<argparse::detail::extract_value_type_t<std::vector<int>>,
+                     int>);
+  static_assert(
+      std::is_same_v<
+          argparse::detail::extract_value_type_t<std::vector<std::string>>,
+          std::string>);
+  static_assert(
+      std::is_same_v<argparse::detail::extract_value_type_t<std::list<double>>,
+                     double>);
+  static_assert(
+      std::is_same_v<argparse::detail::extract_value_type_t<std::deque<bool>>,
+                     bool>);
+  static_assert(
+      std::is_same_v<argparse::detail::extract_value_type_t<std::set<int>>,
+                     int>);
+  static_assert(
+      std::is_same_v<
+          argparse::detail::extract_value_type_t<std::unordered_set<float>>,
+          float>);
+
+  // Containers of tuple-like types — extracts the tuple-like element type
+  static_assert(std::is_same_v<argparse::detail::extract_value_type_t<
+                                   std::vector<std::pair<int, int>>>,
+                               std::pair<int, int>>);
+  static_assert(std::is_same_v<argparse::detail::extract_value_type_t<
+                                   std::vector<std::tuple<int, std::string>>>,
+                               std::tuple<int, std::string>>);
+  static_assert(
+      std::is_same_v<
+          argparse::detail::extract_value_type_t<std::list<std::array<int, 3>>>,
+          std::array<int, 3>>);
+
+  // Containers of string-constructible custom types
+  static_assert(std::is_same_v<argparse::detail::extract_value_type_t<
+                                   std::vector<StringConstructible>>,
+                               StringConstructible>);
+  static_assert(
+      std::is_same_v<
+          argparse::detail::extract_value_type_t<std::set<StringConvertible>>,
+          StringConvertible>);
+
+  // std::optional<std::vector<T>> — the std::optional<T> specialization
+  // matches first, yielding std::vector<T> (the container type itself,
+  // not its value_type)
+  static_assert(std::is_same_v<argparse::detail::extract_value_type_t<
+                                   std::optional<std::vector<int>>>,
+                               std::vector<int>>);
+  static_assert(std::is_same_v<argparse::detail::extract_value_type_t<
+                                   std::optional<std::vector<std::string>>>,
+                               std::vector<std::string>>);
+  static_assert(std::is_same_v<argparse::detail::extract_value_type_t<
+                                   std::optional<std::list<double>>>,
+                               std::list<double>>);
+
+  // Edge case: container of std::optional.
+  // std::optional<T> is never can_from_string_without_delim (the from_string
+  // function is constrained by !is_optional_v<T>).  Therefore a container
+  // whose value_type is std::optional<U> is never a from_string_container,
+  // and the primary template yields the container itself.
+  static_assert(std::is_same_v<argparse::detail::extract_value_type_t<
+                                   std::vector<std::optional<int>>>,
+                               std::vector<std::optional<int>>>);
+  static_assert(std::is_same_v<argparse::detail::extract_value_type_t<
+                                   std::deque<std::optional<std::string>>>,
+                               std::deque<std::optional<std::string>>>);
+
+  // Tuple-like types are NOT from_string_container, so they hit the
+  // primary template and yield themselves.
+  static_assert(std::is_same_v<
+                argparse::detail::extract_value_type_t<std::pair<int, int>>,
+                std::pair<int, int>>);
+  static_assert(
+      std::is_same_v<
+          argparse::detail::extract_value_type_t<std::tuple<int, std::string>>,
+          std::tuple<int, std::string>>);
+  static_assert(
+      std::is_same_v<argparse::detail::extract_value_type_t<std::array<int, 3>>,
+                     std::array<int, 3>>);
+
+  // std::string is excluded from from_string_container by
+  // is_non_string_container, so it hits the primary template and stays as
+  // std::string.
+  static_assert(
+      std::is_same_v<argparse::detail::extract_value_type_t<std::string>,
+                     std::string>);
+  static_assert(
+      std::is_same_v<argparse::detail::extract_value_type_t<std::wstring>,
+                     std::wstring>);
+
+  // Non-container, non-optional types that happen to have a ::value_type
+  // typedef but are not actually containers (like std::optional itself)
+  // — the primary template handles them, yielding the type as-is.
+  // std::reference_wrapper, std::function, etc. are not containers.
+  static_assert(
+      std::is_same_v<
+          argparse::detail::extract_value_type_t<std::reference_wrapper<int>>,
+          std::reference_wrapper<int>>);
+}
+
+TEST(ConceptTest, ExtractValueTypeGtest) {
+  // Same checks as static_assert above, but via ASSERT_TRUE for gtest
+  // reporting.
+
+  // Plain types → themselves
+  ASSERT_TRUE(
+      (std::is_same_v<argparse::detail::extract_value_type_t<int>, int>));
+  ASSERT_TRUE(
+      (std::is_same_v<argparse::detail::extract_value_type_t<double>, double>));
+
+  // std::optional unwrapping
+  ASSERT_TRUE((
+      std::is_same_v<argparse::detail::extract_value_type_t<std::optional<int>>,
+                     int>));
+  ASSERT_TRUE(
+      (std::is_same_v<
+          argparse::detail::extract_value_type_t<std::optional<std::string>>,
+          std::string>));
+
+  // Container element extraction
+  ASSERT_TRUE(
+      (std::is_same_v<argparse::detail::extract_value_type_t<std::vector<int>>,
+                      int>));
+  ASSERT_TRUE((std::is_same_v<
+               argparse::detail::extract_value_type_t<std::vector<std::string>>,
+               std::string>));
+  ASSERT_TRUE(
+      (std::is_same_v<argparse::detail::extract_value_type_t<std::set<double>>,
+                      double>));
+
+  // Container of tuple-like
+  ASSERT_TRUE((std::is_same_v<argparse::detail::extract_value_type_t<
+                                  std::vector<std::pair<int, int>>>,
+                              std::pair<int, int>>));
+  ASSERT_TRUE((std::is_same_v<argparse::detail::extract_value_type_t<
+                                  std::list<std::tuple<int, std::string>>>,
+                              std::tuple<int, std::string>>));
+
+  // std::optional of container → container itself (not unwrapped further)
+  ASSERT_TRUE((std::is_same_v<argparse::detail::extract_value_type_t<
+                                  std::optional<std::vector<int>>>,
+                              std::vector<int>>));
+
+  // Container of std::optional:
+  // std::optional<T> is never can_from_string_without_delim, so the
+  // container itself is yielded by the primary template.
+  ASSERT_TRUE((std::is_same_v<argparse::detail::extract_value_type_t<
+                                  std::vector<std::optional<int>>>,
+                              std::vector<std::optional<int>>>));
+  ASSERT_TRUE((std::is_same_v<argparse::detail::extract_value_type_t<
+                                  std::deque<std::optional<std::string>>>,
+                              std::deque<std::optional<std::string>>>));
+
+  // Tuple-like types → themselves
+  ASSERT_TRUE((std::is_same_v<
+               argparse::detail::extract_value_type_t<std::pair<int, int>>,
+               std::pair<int, int>>));
+  ASSERT_TRUE(
+      (std::is_same_v<argparse::detail::extract_value_type_t<std::tuple<int>>,
+                      std::tuple<int>>));
+  ASSERT_TRUE((
+      std::is_same_v<argparse::detail::extract_value_type_t<std::array<int, 3>>,
+                     std::array<int, 3>>));
+
+  // std::string excluded from container → itself
+  ASSERT_TRUE(
+      (std::is_same_v<argparse::detail::extract_value_type_t<std::string>,
+                      std::string>));
 }
