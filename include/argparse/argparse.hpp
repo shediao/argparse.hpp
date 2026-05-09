@@ -301,7 +301,7 @@ T from_string(std::string const& s) {
     } else if constexpr (std::is_constructible_v<T, std::string>) {
       return T{s};
     } else {
-      detail::report_invalid_argument("Unsupported type for parse_from_string");
+      detail::report_invalid_argument("Unsupported type for from_string");
       return T{};
     }
   } catch (const std::out_of_range&) {
@@ -528,93 +528,6 @@ concept IsParseFromStringBasicType =
     std::same_as<T, double> || std::same_as<T, long double> ||
     requires(std::string const& s) { T(s); };
 
-template <ParseFromStringBasicType T>
-T parse_from_string(std::string const& s) {
-  size_t pos = 0;
-  if constexpr (std::is_same_v<T, int>) {
-    auto result = std::stoi(s, &pos);
-    if (pos != s.size()) {
-      detail::report_invalid_argument("Invalid integer: " + s);
-    }
-    return result;
-  } else if constexpr (std::is_same_v<T, long>) {
-    auto result = std::stol(s, &pos);
-    if (pos != s.size()) {
-      detail::report_invalid_argument("Invalid long integer: " + s);
-    }
-    return result;
-  } else if constexpr (std::is_same_v<T, unsigned long>) {
-    auto result = std::stoul(s, &pos);
-    if (pos != s.size()) {
-      detail::report_invalid_argument("Invalid unsigned long integer: " + s);
-    }
-    return result;
-  } else if constexpr (std::is_same_v<T, long long>) {
-    auto result = std::stoll(s, &pos);
-    if (pos != s.size()) {
-      detail::report_invalid_argument("Invalid long long integer: " + s);
-    }
-    return result;
-  } else if constexpr (std::is_same_v<T, unsigned long long>) {
-    auto result = std::stoull(s, &pos);
-    if (pos != s.size()) {
-      detail::report_invalid_argument("Invalid unsigned long long integer: " +
-                                      s);
-    }
-    return result;
-  } else if constexpr (std::is_same_v<T, float>) {
-    auto result = std::stof(s, &pos);
-    if (pos != s.size()) {
-      detail::report_invalid_argument("Invalid floating-point number: " + s);
-    }
-    return result;
-  } else if constexpr (std::is_same_v<T, double>) {
-    auto result = std::stod(s, &pos);
-    if (pos != s.size()) {
-      detail::report_invalid_argument("Invalid double-precision number: " + s);
-    }
-    return result;
-  } else if constexpr (std::is_same_v<T, long double>) {
-    auto result = std::stold(s, &pos);
-    if (pos != s.size()) {
-      detail::report_invalid_argument("Invalid long double number: " + s);
-    }
-    return result;
-  } else if constexpr (std::is_same_v<T, bool>) {
-    return parse_from_string<bool>(s);
-  } else if constexpr (std::is_same_v<T, std::string>) {
-    return s;
-  } else {
-    detail::report_invalid_argument("Unsupported type for parse_from_string");
-    return T{};
-  }
-}
-
-template <ParseFromStringCustomType T>
-T parse_from_string(std::string const& s) {
-  return T(s);
-}
-
-template <>
-inline bool parse_from_string<bool>(std::string const& s) {
-  if (s == "true" || s == "on" || s == "1") {
-    return true;
-  }
-  if (s == "false" || s == "off" || s == "0") {
-    return false;
-  }
-  detail::report_invalid_argument("Invalid boolean value: " + s);
-  return false;
-}
-template <>
-inline char parse_from_string<char>(std::string const& s) {
-  if (s.length() == 1) {
-    return s[0];
-  }
-  detail::report_invalid_argument("Invalid character: " + s);
-  return '\0';
-}
-
 template <typename T>
 std::string join(const std::vector<std::string>& v, const T& delim) {
   std::stringstream result;
@@ -686,12 +599,12 @@ template <typename CharT, typename F, typename C>
   requires std::is_same_v<bool,
                           decltype(std::declval<F>()(std::declval<CharT>()))>
 C& split_to_if(C& to, const std::basic_string<CharT>& str, F f,
-               int max_count = -1, bool compress_tokens = false) {
+               int split_count = -1, bool compress_tokens = false) {
   auto begin = str.begin();
   auto delimiter = begin;
   int count = 0;
 
-  while ((max_count < 0 || count++ < max_count) &&
+  while ((split_count < 0 || count++ < split_count) &&
          (delimiter = std::find_if(begin, str.end(), f)) != str.end()) {
     to.insert(to.end(), {begin, delimiter});
     if (compress_tokens) {
@@ -723,9 +636,10 @@ C& split_to_if(C& to, const std::basic_string<CharT>& str, F f,
 }
 
 inline std::vector<std::string> split(std::string const& s, char delim,
-                                      int max) {
+                                      int split_count) {
   std::vector<std::string> result;
-  split_to_if(result, s, [delim](char c) { return c == delim; }, max, false);
+  split_to_if(
+      result, s, [delim](char c) { return c == delim; }, split_count, false);
   return result;
 }
 
@@ -742,7 +656,7 @@ template <typename T>
         }(T{}, std::make_index_sequence<std::tuple_size_v<T>>());
       })
 T from_string(const std::string& s, char delim) {
-  auto values = split(s, delim, -1);
+  auto values = split(s, delim, std::tuple_size_v<T> - 1);
   if (values.size() != std::tuple_size_v<T>) {
     detail::report_invalid_argument(
         "Invalid tuple value: " + s + " expected " +
@@ -804,32 +718,6 @@ T from_string(const std::string& s, char delim1, char delim2) {
                    return from_string<typename T::value_type>(s, delim2);
                  });
   return T{tmp.begin(), tmp.end()};
-}
-
-template <typename T, std::size_t... I>
-T make_tuple_from_container_impl(std::vector<std::string> const& v,
-                                 std::integer_sequence<std::size_t, I...>) {
-  return T{
-      parse_from_string<std::decay_t<std::tuple_element_t<I, T>>>(v[I])...};
-}
-
-template <ParseFromStringTupleLikeType T>
-T make_tuple_from_container(std::vector<std::string> const& v) {
-  return make_tuple_from_container_impl<T>(
-      v, std::make_index_sequence<std::tuple_size_v<std::decay_t<T>>>());
-}
-
-// For tuple-like types
-template <ParseFromStringTupleLikeType T>
-T parse_from_string(std::string const& s, const char delim) {
-  auto v = split(s, delim, std::tuple_size_v<std::decay_t<T>> - 1);
-  if (v.size() != std::tuple_size_v<std::decay_t<T>>) {
-    detail::report_invalid_argument(
-        "Invalid delimited string: expected " +
-        argparse::to_string(std::tuple_size_v<std::decay_t<T>>) +
-        " elements, got: " + s);
-  }
-  return make_tuple_from_container<T>(v);
 }
 
 // Word-wrap a single segment of text (no embedded \n) to fit within
@@ -1518,7 +1406,9 @@ class Option final : public OptionBaseCRTP<Option<T>> {
     requires detail::BindableWithoutDelimiterType<T>
       : OptionBaseCRTP<Option<T>>(name, description),
         bind_value_(std::ref(bind_value)),
-        parse_function_(detail::parse_from_string<parsed_value_type>) {
+        parse_function_([](std::string const& opt_value) {
+          return detail::from_string<parsed_value_type>(opt_value);
+        }) {
     OptionBase::set_value_placeholder_for_type<T>();
   }
   Option(const std::string& name, const std::string& description, T& bind_value,
@@ -1527,7 +1417,7 @@ class Option final : public OptionBaseCRTP<Option<T>> {
       : OptionBaseCRTP<Option<T>>(name, description),
         bind_value_(std::ref(bind_value)),
         parse_function_([delim](std::string const& opt_value) {
-          return detail::parse_from_string<parsed_value_type>(opt_value, delim);
+          return detail::from_string<parsed_value_type>(opt_value, delim);
         }) {
     OptionBase::set_value_placeholder_for_type<T>();
   }
@@ -1748,15 +1638,15 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
         bind_value_(std::ref(bind_value)) {
     if constexpr (detail::ParseFromStringContainerType<T>) {
       parse_function_ = [](std::string const& opt_value) {
-        return detail::parse_from_string<parsed_value_type>(opt_value);
+        return detail::from_string<parsed_value_type>(opt_value);
       };
     } else if constexpr (detail::is_optional_v<T>) {
       parse_function_ = [](std::string const& opt_value) {
-        return detail::parse_from_string<parsed_value_type>(opt_value);
+        return detail::from_string<parsed_value_type>(opt_value);
       };
     } else {
       parse_function_ = [](std::string const& opt_value) {
-        return detail::parse_from_string<T>(opt_value);
+        return detail::from_string<T>(opt_value);
       };
     }
     (void)OptionBaseCRTP<Positional<T>>::value_placeholder(name);
@@ -1768,15 +1658,15 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
         bind_value_(std::ref(bind_value)) {
     if constexpr (detail::ParseFromStringContainerType<T>) {
       parse_function_ = [delim](std::string const& opt_value) {
-        return detail::parse_from_string<parsed_value_type>(opt_value, delim);
+        return detail::from_string<parsed_value_type>(opt_value, delim);
       };
     } else if constexpr (detail::is_optional_v<T>) {
       parse_function_ = [delim](std::string const& opt_value) {
-        return detail::parse_from_string<parsed_value_type>(opt_value, delim);
+        return detail::from_string<parsed_value_type>(opt_value, delim);
       };
     } else {
       parse_function_ = [delim](std::string const& opt_value) {
-        return detail::parse_from_string<T>(opt_value, delim);
+        return detail::from_string<T>(opt_value, delim);
       };
     }
     (void)OptionBaseCRTP<Positional<T>>::value_placeholder(name);
