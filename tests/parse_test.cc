@@ -985,7 +985,7 @@ TEST_F(ArgParserTest, SubCmdTest5) {
 }
 
 TEST_F(ArgParserTest, SubCmdTest6) {
-  auto args = make_args("prog", {"cmd", "-h"});
+  auto args = make_args("prog", {"-h", "cmd"});
   ArgParser parser("prog", "test prog command");
   bool show_help{false};
 

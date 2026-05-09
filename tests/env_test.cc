@@ -28,7 +28,7 @@ bool setEnvVariable(const std::string& name, const std::string& value,
 #endif
 }
 
-TEST(ArgParserTest, EnvTest) {
+TEST(EnvTest, EnvTest) {
   std::vector<const char*> args{"prog"};
   argparse::ArgParser parser("prog", "the prog description");
 
@@ -47,7 +47,7 @@ TEST(ArgParserTest, EnvTest) {
   ASSERT_EQ(level, 999);
 }
 
-TEST(ArgParserTest, EnvTest2) {
+TEST(EnvTest, EnvTest2) {
   argparse::ArgParser parser("prog", "the prog description");
 
   std::string key;
@@ -66,7 +66,7 @@ TEST(ArgParserTest, EnvTest2) {
   ASSERT_EQ(level, 123);
 }
 
-TEST(ArgParserTest, EnvTest3) {
+TEST(EnvTest, EnvTest3) {
   argparse::ArgParser parser("prog", "the prog description");
 
   std::string key;
