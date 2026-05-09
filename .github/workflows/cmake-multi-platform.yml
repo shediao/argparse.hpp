@@ -126,7 +126,13 @@ jobs:
           usesh: true
           mem: 4096
           prepare: |
-            pkg_add cmake git zip bash
+            set -e
+            # Retry up to 5 times to handle transient mirror outages
+            for i in $(seq 1 5); do
+              pkg_add -U cmake git zip bash && break
+              echo "pkg_add attempt $i failed, retrying in 10s..."
+              sleep 10
+            done
 
           run: |
             set -e
@@ -153,7 +159,13 @@ jobs:
           usesh: true
           mem: 4096
           prepare: |
-            pkg_add cmake git zip bash
+            set -e
+            # Retry up to 5 times to handle transient CDN outages
+            for i in $(seq 1 5); do
+              pkg_add -U cmake git zip bash && break
+              echo "pkg_add attempt $i failed, retrying in 10s..."
+              sleep 10
+            done
 
           run: |
             set -e
