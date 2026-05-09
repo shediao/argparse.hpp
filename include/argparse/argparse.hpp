@@ -54,6 +54,7 @@
 #include <ranges>
 #include <sstream>
 #include <string>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -716,8 +717,10 @@ inline std::vector<std::string> split(std::string const& s, char delim,
 
 template <typename T>
   requires(
-      requires { std::get<0>(std::declval<T&>()); } &&
-      requires { std::tuple_size_v<T> > 0; } &&
+      requires {
+        typename std::tuple_size<T>::type;
+        requires std::tuple_size<T>::value > 0;
+      } &&
       requires {
         []<typename U, std::size_t... I>(
             U, std::integer_sequence<std::size_t, I...>) {
@@ -740,14 +743,18 @@ T from_string(const std::string& s, char delim) {
 }
 
 template <typename T>
-  requires(requires {
-    std::declval<T>().size();
-    std::declval<T>().begin();
-    std::declval<T>().end();
-    T{std::declval<std::vector<typename T::value_type>>().begin(),
-      std::declval<std::vector<typename T::value_type>>().end()};
-    from_string<typename T::value_type>(std::declval<std::string>());
-  })
+  requires(
+      requires(T t) {
+        t.size();
+        t.begin();
+        t.end();
+      } && !requires { typename std::tuple_size<T>::type; } &&
+      requires {
+        from_string<typename T::value_type>(std::declval<std::string>());
+      } &&
+      std::is_constructible_v<
+          T, typename std::vector<typename T::value_type>::iterator,
+          typename std::vector<typename T::value_type>::iterator>)
 T from_string(const std::string& s, char delim) {
   auto values = split(s, delim, -1);
   std::vector<typename T::value_type> tmp;
@@ -759,15 +766,22 @@ T from_string(const std::string& s, char delim) {
 }
 
 template <typename T>
-  requires(requires {
-    std::declval<T>().size();
-    std::declval<T>().begin();
-    std::declval<T>().end();
-    std::tuple_size<typename T::value_type>::value > 0;
-    T{std::declval<std::vector<typename T::value_type>>().begin(),
-      std::declval<std::vector<typename T::value_type>>().end()};
-    from_string<typename T::value_type>(std::declval<std::string>(), ',');
-  })
+  requires(
+      requires(T t) {
+        t.size();
+        t.begin();
+        t.end();
+      } && !requires { typename std::tuple_size<T>::type; } &&
+      requires {
+        typename std::tuple_size<typename T::value_type>::type;
+        requires std::tuple_size<typename T::value_type>::value > 0;
+      } &&
+      requires {
+        from_string<typename T::value_type>(std::declval<std::string>(), ',');
+      } &&
+      std::is_constructible_v<
+          T, typename std::vector<typename T::value_type>::iterator,
+          typename std::vector<typename T::value_type>::iterator>)
 T from_string(const std::string& s, char delim1, char delim2) {
   auto values = split(s, delim1, -1);
   std::vector<typename T::value_type> tmp;
