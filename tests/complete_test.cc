@@ -2297,6 +2297,7 @@ TEST_F(SpecialCharsCompletionTest, BashSingleQuoteInChoiceKeysEscaped) {
 // scripts through bash/zsh/fish -n to check for syntax errors.
 // =========================================================================
 
+#if !defined(_WIN32)
 #include <subprocess/subprocess.hpp>
 
 using namespace subprocess::named_arguments;
@@ -2428,3 +2429,4 @@ TEST_F(SpecialCharsCompletionTest, FishSyntaxCheckPositionalWithSpecialChars) {
   auto [ec, err] = checkShellSyntax("fish", os.str());
   EXPECT_EQ(ec, 0) << "Fish syntax error:\n" << err;
 }
+#endif
