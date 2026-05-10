@@ -21,6 +21,9 @@
 | Required options      | ✅           | ✅                                              | ✅                                         | ✅                                                                           | ✅                                         |
 | Option groups         | ❌           | ✅                                              | ✅                                         | ✅                                                                           | ❌                                         |
 | Validation            | ✅           | ✅                                              | ✅                                         | ✅                                                                           | ❌                                         |
+| Bash completion       | ✅           | ❌                                              | ❌                                         | ❌                                                                           | ❌                                         |
+| Zsh completion        | ✅           | ❌                                              | ❌                                         | ❌                                                                           | ❌                                         |
+| Fish completion       | ✅           | ❌                                              | ❌                                         | ❌                                                                           | ❌                                         |
 
 ## Key Differentiator: Direct Variable Binding
 
@@ -125,7 +128,7 @@ int main(int argc, const char* argv[]) {
       .default_value("https://api.openai.com/v1/chat/completions");
 
   parser.add_positional("prompt", "Prompt", args.prompt)
-      .checker([](const std::string& val) {
+      .validator([](const std::string& val) {
         return std::pair{!val.empty(), "prompt must not be empty"};
       });
 
@@ -177,7 +180,7 @@ The `add_flag` method is used to define a boolean flag. When the flag is present
 - **Syntax**: `parser.add_flag(names, description, variable_to_bind);`
 - **`names`**: A string containing comma-separated short and long names (e.g., `"h,help"`, `"verbose"`). A single name is also valid (e.g., `"debug"`).
 - **`description`**: A string describing the flag's purpose, used in generated help messages.
-- **`variable_to_bind`**: A reference to a `bool`, `std::optional<bool>`, integral type (e.g., `int`, `size_t`), or `std::optional<integral type>`. Boolean-like variables are typically set to `true` (or `false` if negated). Integral types are typically incremented (or decremented if negated).
+- **`variable_to_bind`**: A reference to a `bool`, `std::optional<bool>`, `int`, or `std::optional<int>`. Boolean-like variables are typically set to `true` (or `false` if negated). Integral types are typically incremented (or decremented if negated).
 
 **Example:**
 
@@ -203,7 +206,7 @@ parser.add_flag("enable-feature", "Enable a specific feature", args.enable_featu
 **Modifiers for Flags:**
 
 - `.negatable()`: (Covered below) Allows a flag like `--feature` to have a `--no-feature` counterpart.
-- `.callback(callback_function)`: Defines a custom callback function (`std::function<void(const FlagValueType&)>`) executed with the flag's effective value (e.g., `bool` or `int`, even if bound to `std::optional`) when the flag is parsed.
+- `.callback(callback_function)`: Defines a custom callback function (`std::function<void(FlagValueType)>`) executed with the flag's effective value (e.g., `bool` or `int`, even if bound to `std::optional`) when the flag is parsed.
   ```cpp
   bool processed = false;
   parser.add_flag("p,process", "Process data", args.process_flag)
@@ -286,10 +289,10 @@ argparse::ArgParser parser("my_app");
 // To make an option effectively required, bind to a non-optional type
 // and do not provide a default_value. Parsing will expect it or an error may occur
 // if your program logic depends on it being set.
-// Or, use .checker() to ensure a value is provided and valid.
+// Or, use .validator() to ensure a value is provided and valid.
 parser.add_option("o,output", "Specify output file", settings.output_file);
 // If "o,output" is critical, consider checking settings.output_file after parse,
-// or use .checker() if specific validation (like non-empty) is needed.
+// or use .validator() if specific validation (like non-empty) is needed.
 
 parser.add_option("r,retries", "Number of retries for an operation", settings.retries);
 // If -r 5 is given, settings.retries will contain 5.
@@ -339,9 +342,9 @@ These methods are chained after `add_option` or `add_positional`:
         .range(0, 100);
   ```
 - `.callback(callback_function)`: Defines a custom callback function (`std::function<void(const ValueType&)>`) to be executed with the parsed value when the option/argument is parsed. `ValueType` is the type of the bound variable (or its `value_type` for `std::optional` or containers, i.e., the unwrapped type).
-- `.checker(validation_function)`: Provides custom validation logic. The validation function takes a value and returns a `std::pair<bool, std::string>`. If the `bool` is `false`, parsing fails, and the `std::string` is used as the error message.
-  - `checker(std::function<std::pair<bool, std::string>(const std::string&)>)`: Operates on the raw string value before parsing.
-  - `checker(std::function<std::pair<bool, std::string>(const ValueType&)>)`: Operates on the parsed value (`ValueType` is the unwrapped type, e.g., `int` for `std::optional<int>`).
+- `.validator(validation_function)`: Provides custom validation logic. The validation function takes a value and returns a `std::pair<bool, std::string>`. If the `bool` is `false`, parsing fails, and the `std::string` is used as the error message.
+  - `validator(std::function<std::pair<bool, std::string>(const std::string&)>)`: Operates on the raw string value before parsing.
+  - `validator(std::function<std::pair<bool, std::string>(const ValueType&)>)`: Operates on the parsed value (`ValueType` is the unwrapped type, e.g., `int` for `std::optional<int>`).
 - `.env(environment_variable_name)`: Allows the option or positional argument to be populated from the specified environment variable if not provided on the command line.
   ```cpp
   std::string apiKey;
@@ -353,15 +356,15 @@ These methods are chained after `add_option` or `add_positional`:
   parser.add_option("internal-setting", "Internal use only", settings.internal)
         .hidden();
   ```
-- `.value_help(placeholder_string)`: Customizes the placeholder string (e.g., `<FILE>`, `<NUMBER>`) for the argument's value in the help message.
+- `.value_placeholder(placeholder_string)`: Customizes the placeholder string (e.g., `<FILE>`, `<NUMBER>`) for the argument's value in the help message.
   ```cpp
   parser.add_option("f,file", "Input file", settings.inputFile)
-        .value_help("FILENAME");
+        .value_placeholder("FILENAME");
   ```
   ```cpp
   std::string filename;
   parser.add_option("f,file", "Input file", filename)
-        .checker([](const std::string& fname) {
+        .validator([](const std::string& fname) {
           bool is_valid = !fname.empty() && fname.length() > 3;
           return std::pair{is_valid, "Filename must not be empty and longer than 3 chars."};
         });
@@ -394,7 +397,7 @@ FileCopyArgs fc_args;
 argparse::ArgParser parser("copy_tool");
 
 // For required positional arguments, bind to a non-optional type and do not provide a default.
-// The parser will expect them in order. Use .checker() for further validation if needed.
+// The parser will expect them in order. Use .validator() for further validation if needed.
 parser.add_positional("source", "Source file to copy", fc_args.source_file);
 parser.add_positional("destination", "Destination path", fc_args.destination_file);
 
@@ -421,7 +424,7 @@ parser.add_positional("log-level", "Optional logging level (integer)", fc_args.l
   - There can be at most one variadic positional argument, and it must be defined as the _last_ positional argument.
 
 **Modifiers:**
-Positional arguments can use the same "Common Modifiers for Options (and Positionals)" described earlier (e.g., `.default_value()`, `.choices()`, `.checker()`, `.env()`, `.hidden()`, `.value_help()`, `.callback()`).
+Positional arguments can use the same "Common Modifiers for Options (and Positionals)" described earlier (e.g., `.default_value()`, `.choices()`, `.validator()`, `.env()`, `.hidden()`, `.value_placeholder()`, `.callback()`).
 
 ### Subcommands
 
@@ -561,13 +564,13 @@ parser.add_alias("fast", "mode", "fast_mode"); // Adds --fast (or -f if "f,fast"
 
 You can adjust the width used for formatting help messages, particularly the space allocated for option names before their descriptions.
 
-- **Syntax**: `parser.set_option_width(width_in_characters);`
+- **Syntax**: `argparse::set_option_name_width(width_in_characters);`
 
 **Example:**
 
 ```cpp
 argparse::ArgParser parser("my_app", "My Application");
-parser.set_option_width(40); // Allocate 40 characters for option names column
+argparse::set_option_name_width(40); // Allocate 40 characters for option names column
 // ... add arguments ...
 ```
 
