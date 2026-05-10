@@ -2297,8 +2297,8 @@ TEST_F(SpecialCharsCompletionTest, BashSingleQuoteInChoiceKeysEscaped) {
 // scripts through bash/zsh/fish -n to check for syntax errors.
 // =========================================================================
 
-#if !defined(_WIN32) && (defined(_MSVC_LANG) && _MSVC_LANG >= 202002L) || \
-    (!defined(_MSVC_LANG) && __cplusplus >= 202002L)
+#if !defined(_WIN32) && ((defined(_MSVC_LANG) && _MSVC_LANG >= 202002L) || \
+                         (!defined(_MSVC_LANG) && __cplusplus >= 202002L))
 #include <subprocess/subprocess.hpp>
 
 using namespace subprocess::named_arguments;
