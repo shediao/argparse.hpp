@@ -710,7 +710,7 @@ TEST(FromStringTest, TupleEmptyString) {
   EXPECT_THROW((from_string<std::tuple<int>>("", ',')), std::invalid_argument);
 }
 
-// --- from_string: char and char8_t ---
+// --- from_string: char ---
 
 TEST(FromStringTest, Char) {
   EXPECT_EQ(from_string<char>("a"), 'a');
@@ -720,15 +720,6 @@ TEST(FromStringTest, Char) {
   // Multi-character string should throw
   EXPECT_THROW(from_string<char>("ab"), std::invalid_argument);
   EXPECT_THROW(from_string<char>(""), std::invalid_argument);
-}
-
-TEST(FromStringTest, Char8T) {
-  EXPECT_EQ(from_string<char8_t>("a"), u8'a');
-  EXPECT_EQ(from_string<char8_t>("z"), u8'z');
-  EXPECT_EQ(from_string<char8_t>("0"), u8'0');
-  // Multi-character string should throw
-  EXPECT_THROW(from_string<char8_t>("ab"), std::invalid_argument);
-  EXPECT_THROW(from_string<char8_t>(""), std::invalid_argument);
 }
 
 // --- from_string: types constructible from std::string ---

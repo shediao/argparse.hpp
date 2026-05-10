@@ -272,107 +272,17 @@ constexpr bool is_string_view_v = is_string_view<T>::value;
 
 template <typename T>
   requires(!is_optional_v<T> && !is_string_view_v<T> &&
-           ((std::is_integral_v<T> && !std::is_same_v<T, wchar_t> &&
-             !std::is_same_v<T, char16_t> && !std::is_same_v<T, char32_t> &&
-             !std::is_same_v<T, signed char> &&
-             !std::is_same_v<T, unsigned char>) ||
+           ((std::is_integral_v<T> && (sizeof(T) > sizeof(char)) &&
+             (sizeof(T) <= sizeof(long long int)) &&
+             !std::is_same_v<T, wchar_t> && !std::is_same_v<T, char16_t> &&
+             !std::is_same_v<T, char32_t>) ||
+            std::is_same_v<bool, T> || std::is_same_v<char, T> ||
             std::is_floating_point_v<T> ||
             std::is_constructible_v<T, std::string>))
 T from_string(std::string const& s) {
-  // Explicitly excluded character types — use char or char8_t instead.
-  static_assert(!std::is_same_v<T, unsigned char>,
-                "from_string does not support unsigned char");
-  static_assert(!std::is_same_v<T, wchar_t>,
-                "from_string does not support wchar_t");
-  static_assert(!std::is_same_v<T, char16_t>,
-                "from_string does not support char16_t");
-  static_assert(!std::is_same_v<T, char32_t>,
-                "from_string does not support char32_t");
-
   try {
     size_t pos = 0;
-    if constexpr (std::is_same_v<T, int>) {
-      auto result = std::stoi(s, &pos);
-      if (pos != s.size()) {
-        detail::report_invalid_argument("Invalid integer: " + s);
-      }
-      return result;
-    } else if constexpr (std::is_same_v<T, long>) {
-      auto result = std::stol(s, &pos);
-      if (pos != s.size()) {
-        detail::report_invalid_argument("Invalid long integer: " + s);
-      }
-      return result;
-    } else if constexpr (std::is_same_v<T, unsigned long>) {
-      auto result = std::stoul(s, &pos);
-      if (pos != s.size()) {
-        detail::report_invalid_argument("Invalid unsigned long integer: " + s);
-      }
-      return result;
-    } else if constexpr (std::is_same_v<T, long long>) {
-      auto result = std::stoll(s, &pos);
-      if (pos != s.size()) {
-        detail::report_invalid_argument("Invalid long long integer: " + s);
-      }
-      return result;
-    } else if constexpr (std::is_same_v<T, unsigned long long>) {
-      auto result = std::stoull(s, &pos);
-      if (pos != s.size()) {
-        detail::report_invalid_argument("Invalid unsigned long long integer: " +
-                                        s);
-      }
-      return result;
-    } else if constexpr (std::is_same_v<T, float>) {
-      auto result = std::stof(s, &pos);
-      if (pos != s.size()) {
-        detail::report_invalid_argument("Invalid floating-point number: " + s);
-      }
-      return result;
-    } else if constexpr (std::is_same_v<T, double>) {
-      auto result = std::stod(s, &pos);
-      if (pos != s.size()) {
-        detail::report_invalid_argument("Invalid double-precision number: " +
-                                        s);
-      }
-      return result;
-    } else if constexpr (std::is_same_v<T, long double>) {
-      auto result = std::stold(s, &pos);
-      if (pos != s.size()) {
-        detail::report_invalid_argument("Invalid long double number: " + s);
-      }
-      return result;
-    } else if constexpr (std::is_same_v<T, unsigned int> ||
-                         std::is_same_v<T, unsigned short>) {
-      auto result = std::stoul(s, &pos);
-      if (pos != s.size()) {
-        if constexpr (std::is_same_v<T, unsigned int>) {
-          detail::report_invalid_argument("Invalid unsigned integer: " + s);
-        }
-        if constexpr (std::is_same_v<T, unsigned short>) {
-          detail::report_invalid_argument("Invalid unsigned short: " + s);
-        }
-      }
-      if (result > (std::numeric_limits<T>::max)()) {
-        detail::report_invalid_argument("Overflow: " + s);
-      }
-      return static_cast<T>(result);
-    } else if constexpr (std::is_same_v<T, short>) {
-      auto result = std::stoi(s, &pos);
-      if (pos != s.size()) {
-        detail::report_invalid_argument("Invalid short: " + s);
-      }
-      if (result > (std::numeric_limits<T>::max)() ||
-          result < (std::numeric_limits<T>::min)()) {
-        detail::report_invalid_argument("Overflow: " + s);
-      }
-      return static_cast<T>(result);
-    } else if constexpr (std::is_same_v<T, char> ||
-                         std::is_same_v<T, char8_t>) {
-      if (s.size() != 1) {
-        detail::report_invalid_argument("Invalid character: " + s);
-      }
-      return s[0];
-    } else if constexpr (std::is_same_v<T, bool>) {
+    if constexpr (std::is_same_v<T, bool>) {
       if (s == "true" || s == "on" || s == "yes" || s == "1") {
         return true;
       }
@@ -381,17 +291,55 @@ T from_string(std::string const& s) {
       }
       detail::report_invalid_argument("Invalid boolean value: " + s);
       return false;
+    } else if constexpr (std::is_same_v<T, char>) {
+      if (s.size() != 1) {
+        detail::report_invalid_argument("Invalid character: " + s);
+      }
+      return s[0];
+    } else if constexpr (std::is_floating_point_v<T>) {
+      auto result = std::stold(s, &pos);
+      if (pos != s.size()) {
+        detail::report_invalid_argument("Invalid floating-point number: " + s);
+      }
+      if (result > (std::numeric_limits<T>::max)() ||
+          result < (std::numeric_limits<T>::lowest)()) {
+        detail::report_invalid_argument("Overflow: " + s);
+      }
+      return static_cast<T>(result);
+    } else if constexpr (std::is_unsigned_v<T> && std::is_integral_v<T>) {
+      auto result = std::stoull(s, &pos);
+      if (pos != s.size()) {
+        detail::report_invalid_argument("Invalid unsigned integral: " + s);
+      }
+      if (result == (std::numeric_limits<unsigned long long>::max)()) {
+        return (std::numeric_limits<T>::max)();
+      }
+      if (result > (std::numeric_limits<T>::max)()) {
+        detail::report_invalid_argument("Overflow: " + s);
+      }
+      return static_cast<T>(result);
+    } else if constexpr (std::is_signed_v<T> && std::is_integral_v<T>) {
+      auto result = std::stoll(s, &pos);
+      if (pos != s.size()) {
+        detail::report_invalid_argument("Invalid signed integral: " + s);
+      }
+      if (result > (std::numeric_limits<T>::max)() ||
+          result < (std::numeric_limits<T>::min)()) {
+        detail::report_invalid_argument("Overflow: " + s);
+      }
+      return static_cast<T>(result);
     } else if constexpr (std::is_constructible_v<T, std::string>) {
       return T{s};
     } else {
       detail::report_invalid_argument("Unsupported type for from_string");
       return T{};
     }
-  } catch (const std::out_of_range&) {
-    detail::report_invalid_argument("Out of range: " + s);
-  } catch (const std::invalid_argument&) {
-    detail::report_invalid_argument("Invalid number: " + s);
+  } catch (const std::out_of_range& e) {
+    detail::report_invalid_argument("Out of range: " + s + ", " + e.what());
+  } catch (const std::invalid_argument& e) {
+    detail::report_invalid_argument("Invalid number: " + s + ", " + e.what());
   }
+  detail::report_invalid_argument("Unsupported type for from_string");
   return T{};
 }
 
