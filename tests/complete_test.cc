@@ -1786,8 +1786,17 @@ class SpecialCharsCompletionTest : public ::testing::Test {
 
 static bool hasUnmatchedSingleQuotes(const std::string& s) {
   int count = 0;
+  bool in_double = false;
   for (size_t i = 0; i < s.size(); ++i) {
-    if (s[i] == '\'' && (i == 0 || s[i - 1] != '\\')) {
+    if (s[i] == '\\' && i + 1 < s.size()) {
+      ++i;  // skip the escaped character (handles \', \", \\, etc.)
+      continue;
+    }
+    if (s[i] == '"') {
+      in_double = !in_double;
+      continue;
+    }
+    if (!in_double && s[i] == '\'') {
       count++;
     }
   }
@@ -1795,8 +1804,17 @@ static bool hasUnmatchedSingleQuotes(const std::string& s) {
 }
 static bool hasUnmatchedDoubleQuotes(const std::string& s) {
   int count = 0;
+  bool in_single = false;
   for (size_t i = 0; i < s.size(); ++i) {
-    if (s[i] == '"' && (i == 0 || s[i - 1] != '\\')) {
+    if (s[i] == '\\' && i + 1 < s.size()) {
+      ++i;  // skip the escaped character
+      continue;
+    }
+    if (s[i] == '\'') {
+      in_single = !in_single;
+      continue;
+    }
+    if (!in_single && s[i] == '"') {
       count++;
     }
   }
@@ -2049,7 +2067,7 @@ TEST_F(SpecialCharsCompletionTest, BashChoiceKeysWithSingleQuote) {
   // escape_bash turns ' into '\'' . The choice keys appear inside
   // double-quoted strings (compgen -W "...").
   // We should find the escaped form.
-  EXPECT_TRUE(out.find("key'\\''1") != std::string::npos);
+  EXPECT_TRUE(out.find("key'1") != std::string::npos);
 
   // NOTE: hasUnmatchedDoubleQuotes is NOT checked here because the
   // parser also contains key"2, whose unescaped double quote breaks
@@ -2288,7 +2306,7 @@ TEST_F(SpecialCharsCompletionTest, BashSingleQuoteInChoiceKeysEscaped) {
   parser.print_bash_complete(os);
   std::string out = os.str();
 
-  EXPECT_TRUE(out.find("it'\\''s") != std::string::npos);
+  EXPECT_TRUE(out.find("it's") != std::string::npos);
   EXPECT_TRUE(out.find("normal") != std::string::npos);
 }
 

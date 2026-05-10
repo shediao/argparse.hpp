@@ -2365,19 +2365,29 @@ class ArgParser : public Command {
     return name;
   }
 
-  /// Escape a string for double-quoted Bash contexts.
-  /// Escapes ", $, `, \, !, and ' to prevent premature string
+  /// Escape a string for double-quoted/single-quote Bash contexts.
+  /// Double-Quote Escapes \", $, `, \, ! to prevent premature string
+  /// Single-Quote Escapes ' to '\''
   /// termination, variable/command expansion, and history expansion.
-  static std::string escape_bash(std::string const& s) {
+  static std::string escape_bash(std::string const& s,
+                                 bool is_double_quote_string = true) {
     std::string result;
-    for (char c : s) {
-      if (c == '"' || c == '$' || c == '`' || c == '\\' || c == '!') {
-        result += '\\';
-        result += c;
-      } else if (c == '\'') {
-        result += "'\\''";
-      } else {
-        result += c;
+    if (is_double_quote_string) {
+      for (char c : s) {
+        if (c == '"' || c == '$' || c == '`' || c == '\\' || c == '!') {
+          result += '\\';
+          result += c;
+        } else {
+          result += c;
+        }
+      }
+    } else {
+      for (char c : s) {
+        if (c == '\'') {
+          result += "'\\''";
+        } else {
+          result += c;
+        }
       }
     }
     return result;
@@ -2435,6 +2445,7 @@ class ArgParser : public Command {
       for (auto const& [k, _] : opt->choices_) {
         choice_keys.push_back(k);
       }
+      os << "            # shellcheck disable=SC2207\n";
       os << "            COMPREPLY=($(compgen -W \""
          << escape_bash(detail::join(choice_keys, ' ')) << "\" -- \"$cur\"))\n";
       os << "            return 0\n";
@@ -2467,6 +2478,7 @@ class ArgParser : public Command {
         patterns.push_back("--" + l);
       }
       os << "        " << detail::join(patterns, '|') << ")\n";
+      os << "            # shellcheck disable=SC2207\n";
       os << "            COMPREPLY=($(compgen -f -- \"$cur\"))\n";
       os << "            return 0\n";
       os << "            ;;\n";
@@ -2503,6 +2515,7 @@ class ArgParser : public Command {
         for (auto const& [k, _] : opt->choices_) {
           choice_keys.push_back(k);
         }
+        os << "                # shellcheck disable=SC2207\n";
         os << "                COMPREPLY=($(compgen -W \""
            << escape_bash(detail::join(choice_keys, ' '))
            << "\" -- \"$val\"))\n";
@@ -2544,6 +2557,7 @@ class ArgParser : public Command {
         }
       }
       os << escape_bash(detail::join(opt_names, ' ')) << "\"\n";
+      os << "        # shellcheck disable=SC2207\n";
       os << "        COMPREPLY=($(compgen -W \"$opts\" -- \"$cur\"))\n";
       os << "        return 0\n";
       os << "    fi\n";
@@ -2561,6 +2575,7 @@ class ArgParser : public Command {
         cmd_names.push_back(sc->command());
       }
       os << escape_bash(detail::join(cmd_names, ' ')) << "\"\n";
+      os << "    # shellcheck disable=SC2207\n";
       os << "    COMPREPLY=($(compgen -W \"$cmds\" -- \"$cur\"))\n";
     }
 
@@ -2636,10 +2651,12 @@ class ArgParser : public Command {
             for (auto const& [k, _] : positionals[idx]->choices_) {
               choice_keys.push_back(k);
             }
+            os << "            # shellcheck disable=SC2207\n";
             os << "            COMPREPLY=($(compgen -W \""
                << escape_bash(detail::join(choice_keys, ' '))
                << "\" -- \"$cur\"))\n";
           } else {
+            os << "            # shellcheck disable=SC2207\n";
             os << "            COMPREPLY=($(compgen -f -- \"$cur\"))\n";
           }
           os << "            ;;\n";
@@ -2772,6 +2789,9 @@ class ArgParser : public Command {
 
           os << func_name << "() {\n";
           os << "    local -a options\n";
+          if (!cmd->subcommands_.empty()) {
+            os << "    local line state\n";
+          }
           os << "    options=(\n";
 
           for (auto const& arg : cmd->args_) {
@@ -2874,7 +2894,7 @@ class ArgParser : public Command {
             }
             os << "\n            ;;\n";
             os << "        args)\n";
-            os << "            case $words[1] in\n";
+            os << "            case $line[1] in\n";
             for (auto const& sc : cmd->subcommands_) {
               if (sc->is_hidden()) {
                 continue;
@@ -2907,10 +2927,15 @@ class ArgParser : public Command {
             if (!positionals.empty()) {
               os << "    _arguments -s $options";
               for (size_t idx = 0; idx < positionals.size(); ++idx) {
-                os << " \\\n        '" << (idx + 1) << ":"
+                bool is_last = (idx + 1 == positionals.size());
+                bool is_multi = positionals[idx]->is_multiple();
+                os << " \\\n        '"
+                   << (is_last && is_multi ? "*" : argparse::to_string(idx + 1))
+                   << ":"
                    << (positionals[idx]->value_placeholder_.empty()
                            ? "arg" + argparse::to_string(idx + 1)
-                           : escape_zsh_spec(positionals[idx]->value_placeholder_));
+                           : escape_zsh_spec(
+                                 positionals[idx]->value_placeholder_));
                 if (!positionals[idx]->choices_.empty()) {
                   os << ":(";
                   std::vector<std::string> choice_keys;
