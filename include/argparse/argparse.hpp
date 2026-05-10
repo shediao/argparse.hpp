@@ -250,11 +250,6 @@ struct is_optional<std::optional<T>> : std::true_type {};
 template <typename T>
 constexpr bool is_optional_v = is_optional<T>::value;
 
-// TODO: remove
-template <typename T>
-constexpr bool is_integral_v =
-    std::is_integral_v<T> && !std::is_same_v<bool, T>;
-
 template <typename T>
 struct is_string : std::false_type {};
 
@@ -985,11 +980,18 @@ class FlagBase : public ArgBase {
   }
 };
 
-template <typename T = bool>
-  requires detail::is_integral_v<T> || std::is_same_v<T, bool> ||
-           (detail::is_optional_v<T> &&
-            (detail::is_integral_v<typename T::value_type> ||
-             std::is_same_v<typename T::value_type, bool>))
+template <typename T>
+concept bindable_flag =
+    std::is_same_v<T, bool> || std::is_same_v<T, std::optional<bool>> ||
+    std::is_same_v<T, int> || std::is_same_v<T, std::optional<int>>;
+template <typename T>
+concept bindable_int_flag =
+    std::is_same_v<T, int> || std::is_same_v<T, std::optional<int>>;
+template <typename T>
+concept bindable_bool_flag =
+    std::is_same_v<T, bool> || std::is_same_v<T, std::optional<bool>>;
+
+template <bindable_flag T = bool>
 class Flag final : public FlagBase {
   friend class Command;
   friend class ArgParser;
@@ -1776,10 +1778,7 @@ class Command {
     args_.push_back(std::move(flag));
     return ret;
   }
-  template <typename T>
-    requires detail::is_integral_v<T> ||
-             (detail::is_optional_v<T> &&
-              detail::is_integral_v<typename T::value_type>)
+  template <bindable_int_flag T>
   Flag<T>& add_flag_int(
       const std::string& name, const std::string& description, T& bind_value,
       std::function<void(detail::extract_value_type_t<T>&)> action =
@@ -1801,8 +1800,7 @@ class Command {
   Command(std::string cmd, std::string description)
       : command_{std::move(cmd)}, description_(std::move(description)) {}
   virtual ~Command() {}
-  template <typename T>
-    requires std::same_as<T, bool> || std::same_as<std::optional<bool>, T>
+  template <bindable_bool_flag T>
   Flag<T>& add_flag(const std::string& name, const std::string& description,
                     T& bind_value) {
     std::function<void(detail::extract_value_type_t<T>&)> action = store_true;
@@ -1811,10 +1809,7 @@ class Command {
     return add_flag_bool(name, description, bind_value, std::move(action),
                          std::move(negated_action));
   }
-  template <typename T>
-    requires detail::is_integral_v<T> ||
-             (detail::is_optional_v<T> &&
-              detail::is_integral_v<typename T::value_type>)
+  template <bindable_int_flag T>
   Flag<T>& add_flag(const std::string& name, const std::string& description,
                     T& bind_value) {
     std::function<void(detail::extract_value_type_t<T>&)> action =
@@ -1825,8 +1820,7 @@ class Command {
                         std::move(negated_action));
   }
 
-  template <typename T>
-    requires std::same_as<T, bool> || std::same_as<std::optional<bool>, T>
+  template <bindable_bool_flag T>
   Flag<T>& add_negative_flag(const std::string& name,
                              const std::string& description, T& bind_value) {
     std::function<void(detail::extract_value_type_t<T>&)> action = store_false;
@@ -1835,8 +1829,7 @@ class Command {
     return add_flag_bool(name, description, bind_value, std::move(action),
                          std::move(negated_action));
   }
-  template <typename T>
-    requires std::same_as<T, int> || std::same_as<std::optional<int>, T>
+  template <bindable_int_flag T>
   Flag<T>& add_negative_flag(const std::string& name,
                              const std::string& description, T& bind_value) {
     std::function<void(detail::extract_value_type_t<T>&)> action =

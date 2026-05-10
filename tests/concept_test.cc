@@ -36,41 +36,6 @@ class NonStringConstructible {
 };
 
 // ============================================================
-// 1. is_integral_v
-// ============================================================
-
-TEST(ConceptTest, IsIntegral) {
-  // Non-integral types
-  ASSERT_FALSE(argparse::detail::is_integral_v<bool>);
-  ASSERT_FALSE(argparse::detail::is_integral_v<std::string>);
-  ASSERT_FALSE(argparse::detail::is_integral_v<char*>);
-
-  // Character types
-  ASSERT_TRUE(argparse::detail::is_integral_v<char>);
-  ASSERT_TRUE(argparse::detail::is_integral_v<signed char>);
-  ASSERT_TRUE(argparse::detail::is_integral_v<unsigned char>);
-  ASSERT_TRUE(argparse::detail::is_integral_v<wchar_t>);
-  ASSERT_TRUE(argparse::detail::is_integral_v<char16_t>);
-  ASSERT_TRUE(argparse::detail::is_integral_v<char32_t>);
-
-  // Standard integer types
-  ASSERT_TRUE(argparse::detail::is_integral_v<short>);
-  ASSERT_TRUE(argparse::detail::is_integral_v<int>);
-  ASSERT_TRUE(argparse::detail::is_integral_v<long>);
-  ASSERT_TRUE(argparse::detail::is_integral_v<long long>);
-  ASSERT_TRUE(argparse::detail::is_integral_v<unsigned short>);
-  ASSERT_TRUE(argparse::detail::is_integral_v<unsigned int>);
-  ASSERT_TRUE(argparse::detail::is_integral_v<unsigned long>);
-  ASSERT_TRUE(argparse::detail::is_integral_v<unsigned long long>);
-
-  // Enum types are not integral
-  enum UnscopedEnum { A, B, C };
-  enum class ScopedEnum { X, Y, Z };
-  ASSERT_FALSE(argparse::detail::is_integral_v<UnscopedEnum>);
-  ASSERT_FALSE(argparse::detail::is_integral_v<ScopedEnum>);
-}
-
-// ============================================================
 // 2. is_string_v
 // ============================================================
 
@@ -1433,4 +1398,167 @@ TEST(ConceptTest, ExtractValueTypeGtest) {
   ASSERT_TRUE(
       (std::is_same_v<argparse::detail::extract_value_type_t<std::string>,
                       std::string>));
+}
+
+// ============================================================
+// 19. bindable_flag / bindable_int_flag / bindable_bool_flag
+// ============================================================
+
+TEST(ConceptTest, BindableFlag) {
+  // bool and int directly
+  ASSERT_TRUE((argparse::bindable_flag<bool>));
+  ASSERT_TRUE((argparse::bindable_flag<int>));
+
+  // std::optional of bool and int
+  ASSERT_TRUE((argparse::bindable_flag<std::optional<bool>>));
+  ASSERT_TRUE((argparse::bindable_flag<std::optional<int>>));
+
+  // Non-flag types
+  ASSERT_FALSE((argparse::bindable_flag<double>));
+  ASSERT_FALSE((argparse::bindable_flag<float>));
+  ASSERT_FALSE((argparse::bindable_flag<std::string>));
+  ASSERT_FALSE((argparse::bindable_flag<char>));
+  ASSERT_FALSE((argparse::bindable_flag<unsigned>));
+  ASSERT_FALSE((argparse::bindable_flag<long>));
+  ASSERT_FALSE((argparse::bindable_flag<std::optional<double>>));
+  ASSERT_FALSE((argparse::bindable_flag<std::optional<std::string>>));
+  ASSERT_FALSE((argparse::bindable_flag<std::optional<unsigned>>));
+}
+
+TEST(ConceptTest, BindableIntFlag) {
+  // int directly
+  ASSERT_TRUE((argparse::bindable_int_flag<int>));
+
+  // std::optional of int
+  ASSERT_TRUE((argparse::bindable_int_flag<std::optional<int>>));
+
+  // Non-int-flag types
+  ASSERT_FALSE((argparse::bindable_int_flag<bool>));
+  ASSERT_FALSE((argparse::bindable_int_flag<std::optional<bool>>));
+  ASSERT_FALSE((argparse::bindable_int_flag<double>));
+  ASSERT_FALSE((argparse::bindable_int_flag<float>));
+  ASSERT_FALSE((argparse::bindable_int_flag<std::string>));
+  ASSERT_FALSE((argparse::bindable_int_flag<unsigned>));
+  ASSERT_FALSE((argparse::bindable_int_flag<long>));
+  ASSERT_FALSE((argparse::bindable_int_flag<char>));
+  ASSERT_FALSE((argparse::bindable_int_flag<std::optional<double>>));
+  ASSERT_FALSE((argparse::bindable_int_flag<std::optional<unsigned>>));
+}
+
+TEST(ConceptTest, BindableBoolFlag) {
+  // bool directly
+  ASSERT_TRUE((argparse::bindable_bool_flag<bool>));
+
+  // std::optional of bool
+  ASSERT_TRUE((argparse::bindable_bool_flag<std::optional<bool>>));
+
+  // Non-bool-flag types
+  ASSERT_FALSE((argparse::bindable_bool_flag<int>));
+  ASSERT_FALSE((argparse::bindable_bool_flag<std::optional<int>>));
+  ASSERT_FALSE((argparse::bindable_bool_flag<double>));
+  ASSERT_FALSE((argparse::bindable_bool_flag<float>));
+  ASSERT_FALSE((argparse::bindable_bool_flag<std::string>));
+  ASSERT_FALSE((argparse::bindable_bool_flag<char>));
+  ASSERT_FALSE((argparse::bindable_bool_flag<unsigned>));
+  ASSERT_FALSE((argparse::bindable_bool_flag<long>));
+  ASSERT_FALSE((argparse::bindable_bool_flag<std::optional<double>>));
+  ASSERT_FALSE((argparse::bindable_bool_flag<std::optional<std::string>>));
+}
+
+TEST(ConceptTest, BindableFlagRelationships) {
+  // bindable_bool_flag ⇒ bindable_flag (bool subset)
+  ASSERT_TRUE((argparse::bindable_flag<bool>));
+  ASSERT_TRUE((argparse::bindable_bool_flag<bool>));
+
+  // bindable_int_flag ⇒ bindable_flag (int subset)
+  ASSERT_TRUE((argparse::bindable_flag<int>));
+  ASSERT_TRUE((argparse::bindable_int_flag<int>));
+
+  // bindable_bool_flag ⊥ bindable_int_flag (mutually exclusive at type level)
+  ASSERT_TRUE((argparse::bindable_bool_flag<bool>));
+  ASSERT_FALSE((argparse::bindable_int_flag<bool>));
+  ASSERT_TRUE((argparse::bindable_int_flag<int>));
+  ASSERT_FALSE((argparse::bindable_bool_flag<int>));
+
+  // Both optional variants
+  ASSERT_TRUE((argparse::bindable_flag<std::optional<bool>>));
+  ASSERT_TRUE((argparse::bindable_bool_flag<std::optional<bool>>));
+  ASSERT_FALSE((argparse::bindable_int_flag<std::optional<bool>>));
+
+  ASSERT_TRUE((argparse::bindable_flag<std::optional<int>>));
+  ASSERT_TRUE((argparse::bindable_int_flag<std::optional<int>>));
+  ASSERT_FALSE((argparse::bindable_bool_flag<std::optional<int>>));
+}
+
+TEST(ConceptTest, BindableFlagCompileTimeConstraint) {
+  // Verify that the Flag template only accepts bindable_flag types.
+  // This is a compile-time test: if the concept constraint were violated,
+  // the code would not compile.
+  argparse::ArgParser parser("test", "Test parser");
+
+  // bool flag (bindable_bool_flag and bindable_flag)
+  {
+    bool bind_val = false;
+    auto& flag = parser.add_flag("f,flag", "A bool flag", bind_val);
+    (void)flag;
+  }
+
+  // int flag (bindable_int_flag and bindable_flag)
+  {
+    int bind_val = 0;
+    auto& flag = parser.add_flag("i,int", "An int flag", bind_val);
+    (void)flag;
+  }
+
+  // std::optional<bool> flag (bindable_bool_flag and bindable_flag)
+  {
+    std::optional<bool> bind_val;
+    auto& flag = parser.add_flag("o,opt", "An optional bool flag", bind_val);
+    (void)flag;
+  }
+
+  // std::optional<int> flag (bindable_int_flag and bindable_flag)
+  {
+    std::optional<int> bind_val;
+    auto& flag = parser.add_flag("n,num", "An optional int flag", bind_val);
+    (void)flag;
+  }
+}
+
+TEST(ConceptTest, BindableFlagNegativeFlag) {
+  // Test that add_negative_flag works with bindable_bool_flag and
+  // bindable_int_flag constrained types.
+  argparse::ArgParser parser("test", "Test parser");
+
+  // Negative bool flag
+  {
+    bool bind_val = true;
+    auto& flag =
+        parser.add_negative_flag("n,neg", "A negative bool flag", bind_val);
+    (void)flag;
+  }
+
+  // Negative int flag
+  {
+    int bind_val = 10;
+    auto& flag =
+        parser.add_negative_flag("v,val", "A negative int flag", bind_val);
+    (void)flag;
+  }
+
+  // Negative std::optional<bool> flag
+  {
+    std::optional<bool> bind_val;
+    auto& flag = parser.add_negative_flag(
+        "no,neg-opt", "A negative optional bool flag", bind_val);
+    (void)flag;
+  }
+
+  // Negative std::optional<int> flag
+  {
+    std::optional<int> bind_val;
+    auto& flag = parser.add_negative_flag(
+        "nv,neg-val", "A negative optional int flag", bind_val);
+    (void)flag;
+  }
 }
