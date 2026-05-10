@@ -2337,7 +2337,8 @@ static std::pair<int, std::string> checkShellSyntax(const std::string& shell,
   } else {
     auto [ec, out, err] =
         subprocess::capture_run(shell, "-n", "-", $stdin < inbuf);
-    return {ec, err.to_string()};
+    return {ec, "\n==> stdout:\n" + out.to_string() + "\n==> stderr:\n" +
+                    err.to_string() + "\n ==> script:\n" + script};
   }
 }
 
