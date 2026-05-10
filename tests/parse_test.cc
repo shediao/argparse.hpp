@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <cstdlib>
 #include <initializer_list>
 #include <map>
 #include <stdexcept>
@@ -7,7 +8,38 @@
 #include <tuple>
 #include <vector>
 
+#if defined(_WIN32)
+#include "Windows.h"
+#endif
+
 #include "argparse/argparse.hpp"
+
+// Portable wrappers for environment variable manipulation.
+// setenv/unsetenv are POSIX-only; Windows uses SetEnvironmentVariableA.
+static bool setEnvVariable(const std::string& name, const std::string& value,
+                           bool overwrite = true) {
+#if defined(_WIN32)
+  if (!overwrite) {
+    std::vector<char> buf(128);
+    GetEnvironmentVariableA(name.c_str(), buf.data(),
+                            static_cast<DWORD>(buf.size()));
+    if (GetLastError() != ERROR_ENVVAR_NOT_FOUND) {
+      return true;  // already exists, don't overwrite
+    }
+  }
+  return SetEnvironmentVariableA(name.c_str(), value.c_str()) != 0;
+#else
+  return setenv(name.c_str(), value.c_str(), overwrite ? 1 : 0) == 0;
+#endif
+}
+
+static void unsetEnvVariable(const std::string& name) {
+#if defined(_WIN32)
+  SetEnvironmentVariableA(name.c_str(), nullptr);
+#else
+  unsetenv(name.c_str());
+#endif
+}
 
 using namespace argparse;
 
@@ -1103,7 +1135,7 @@ TEST_F(ArgParserTest, SubCmdParentCallback) {
 // Parent env() fallback is processed before subcommand dispatch.
 TEST_F(ArgParserTest, SubCmdParentEnvFallback) {
   auto args = make_args("prog", {"sub"});
-  setenv("ARG_TEST_NAME", "env-name", 1);
+  setEnvVariable("ARG_TEST_NAME", "env-name", true);
   ArgParser parser("prog", "test");
   std::string name;
   bool sub_called{false};
@@ -1114,7 +1146,7 @@ TEST_F(ArgParserTest, SubCmdParentEnvFallback) {
   ASSERT_NO_THROW(parser.parse(args.size(), args.data()));
   EXPECT_EQ(name, "env-name");
   EXPECT_TRUE(sub_called);
-  unsetenv("ARG_TEST_NAME");
+  unsetEnvVariable("ARG_TEST_NAME");
 }
 
 // Parent default_value() is processed before subcommand dispatch.
