@@ -1755,6 +1755,12 @@ class Command {
   Command(std::string cmd, std::string description)
       : command_{std::move(cmd)}, description_(std::move(description)) {}
   virtual ~Command() {}
+
+ protected:
+  Command(Command&&) = default;
+  Command& operator=(Command&&) = default;
+
+ public:
   template <bindable_bool_flag T>
   Flag<T>& add_flag(const std::string& name, const std::string& description,
                     T& bind_value) {
@@ -2279,6 +2285,8 @@ class ArgParser : public Command {
   ArgParser(std::string prog, std::string description)
       : Command(prog, description) {}
   virtual ~ArgParser() {}
+  ArgParser(ArgParser&& other) = default;
+  ArgParser& operator=(ArgParser&& other) = default;
   using Command::add_flag;
   using Command::add_option;
   using Command::add_positional;
