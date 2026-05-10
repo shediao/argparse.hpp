@@ -487,19 +487,6 @@ TEST(ParseFromStringTest, Container) {
 // Tests for the new from_string (C++20 concepts)
 // ============================================================
 
-// --- from_string: types constructible from std::string ---
-
-TEST(FromStringTest, ConstructibleFromString) {
-  // std::string_view is constructible from std::string
-  std::string hello("hello world");
-  auto sv = from_string<std::string_view>(hello);
-  EXPECT_EQ(sv, "hello world");
-
-  // std::string itself
-  auto s = from_string<std::string>("test string");
-  EXPECT_EQ(s, "test string");
-}
-
 // --- from_string: integral types ---
 
 TEST(FromStringTest, Int) {

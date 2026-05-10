@@ -266,10 +266,20 @@ template <typename T>
 constexpr bool is_string_v = is_string<T>::value;
 
 template <typename T>
-  requires(!is_optional_v<T> &&
-           ((std::is_integral_v<T> && !std::is_enum_v<T> &&
-             !std::is_same_v<T, wchar_t> && !std::is_same_v<T, char16_t> &&
-             !std::is_same_v<T, char32_t> &&
+struct is_string_view : std::false_type {};
+
+template <class _CharT, class _Traits>
+struct is_string_view<std::basic_string_view<_CharT, _Traits>>
+    : std::true_type {};
+
+template <typename T>
+constexpr bool is_string_view_v = is_string_view<T>::value;
+
+template <typename T>
+  requires(!is_optional_v<T> && !is_string_view_v<T> &&
+           ((std::is_integral_v<T> && !std::is_same_v<T, wchar_t> &&
+             !std::is_same_v<T, char16_t> && !std::is_same_v<T, char32_t> &&
+             !std::is_same_v<T, signed char> &&
              !std::is_same_v<T, unsigned char>) ||
             std::is_floating_point_v<T> ||
             std::is_constructible_v<T, std::string>))
@@ -399,7 +409,9 @@ concept can_from_string_all_tuple_like_items = requires {
   typename std::tuple_size<T>::type;
   requires std::tuple_size<T>::value > 0;
 } && []<std::size_t... I>(std::integer_sequence<std::size_t, I...>) constexpr {
-  return (can_from_string_without_delim<std::tuple_element_t<I, T>> && ...);
+  return (
+      can_from_string_without_delim<std::decay_t<std::tuple_element_t<I, T>>> &&
+      ...);
 }(std::make_index_sequence<std::tuple_size_v<T>>());
 
 template <typename T>
@@ -427,6 +439,7 @@ concept can_from_string_with_delim = requires {
 template <typename T>
 concept can_from_string =
     can_from_string_without_delim<T> || can_from_string_with_delim<T>;
+
 template <typename T>
 concept is_container = requires(T t) {
   typename T::value_type;
@@ -434,11 +447,9 @@ concept is_container = requires(T t) {
       T, typename std::vector<typename T::value_type>::iterator,
       typename std::vector<typename T::value_type>::iterator>;
 } && (
-    requires(T t){ t.insert(t.end(), std::declval<typename T::value_type>()); }
-    ||
     requires(T t){ t.push_back(std::declval<typename T::value_type>()); }
     ||
-    requires(T t){ t.push_front(std::declval<typename T::value_type>()); }
+    requires(T t){ t.insert(t.end(), std::declval<typename T::value_type>()); }
     ||
     requires(T t){ t.push(std::declval<typename T::value_type>()); }
     );
@@ -766,6 +777,45 @@ inline std::wstring to_wstring(T const& value)
     return value.to_wstring();
   } else if constexpr (has_wstring_memfunc_v<T>) {
     return value.wstring();
+  }
+}
+
+template <is_container T>
+void push_back(T& t, typename T::value_type&& value) {
+  if constexpr (requires(T t) {
+                  t.push_back(std::declval<typename T::value_type>());
+                }) {
+    t.push_back(std::forward<typename T::value_type>(value));
+  } else if constexpr (requires(T t) {
+                         t.insert(t.end(),
+                                  std::declval<typename T::value_type>());
+                       }) {
+    t.insert(t.end(), std::forward<typename T::value_type>(value));
+  } else if constexpr (requires(T t) {
+                         t.push(std::declval<typename T::value_type>());
+                       }) {
+    t.push(std::forward<typename T::value_type>(value));
+  } else {
+    throw std::runtime_error("Unsupported container type");
+  }
+}
+template <is_container T>
+void push_back(T& t, typename T::value_type const& value) {
+  if constexpr (requires(T t) {
+                  t.push_back(std::declval<typename T::value_type>());
+                }) {
+    t.push_back(value);
+  } else if constexpr (requires(T t) {
+                         t.insert(t.end(),
+                                  std::declval<typename T::value_type>());
+                       }) {
+    t.insert(t.end(), value);
+  } else if constexpr (requires(T t) {
+                         t.push(std::declval<typename T::value_type>());
+                       }) {
+    t.push(value);
+  } else {
+    throw std::runtime_error("Unsupported container type");
   }
 }
 
@@ -1388,8 +1438,7 @@ class Option final : public OptionBaseCRTP<Option<T>> {
       }
     }
     if constexpr (detail::from_string_container<T>) {
-      bind_value_.get().insert(bind_value_.get().end(),
-                               std::move(parsed_value));
+      detail::push_back(bind_value_.get(), std::move(parsed_value));
     } else {
       bind_value_.get() = std::move(parsed_value);
     }
@@ -1644,8 +1693,7 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
       }
     }
     if constexpr (detail::from_string_container<T>) {
-      bind_value_.get().insert(bind_value_.get().end(),
-                               std::move(parsed_value));
+      detail::push_back(bind_value_.get(), std::move(parsed_value));
     } else {
       bind_value_.get() = std::move(parsed_value);
     }
