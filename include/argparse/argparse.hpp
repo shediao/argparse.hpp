@@ -805,6 +805,13 @@ class ArgBase {
         detail::report_invalid_argument("Invalid option name: " + name + ", " +
                                         opt_name + " contains whitespace");
       }
+      if (opt_name.find_first_of("<>[]{}()|;!`&$\\ \a\b\f\n\r\t\v") !=
+          std::string::npos) {
+        detail::report_invalid_argument(
+            "Invalid option name: " + name + ", " + opt_name +
+            " contains special characters (<>[]{}()|;!`&$\\ "
+            "\\a\\b\\f\\n\\r\\t\\v) ");
+      }
       if (opt_name.length() == 1) {
         short_opt_names_.push_back(std::move(opt_name));
       } else if (opt_name.length() > 1) {

@@ -782,6 +782,77 @@ TEST_F(ArgParserTest, InvalidOptionNameWithWhitespaceTest) {
       std::invalid_argument);
 }
 
+// 测试选项名称包含特殊字符时抛出异常
+TEST_F(ArgParserTest, InvalidOptionNameWithSpecialCharsTest) {
+  ArgParser parser("prog", "the prog description");
+  bool flag = false;
+  std::string opt, pos;
+
+  // 测试 Flag 的选项名称包含各种特殊字符
+  EXPECT_THROW(parser.add_flag("f<lag", "Invalid flag name", flag),
+               std::invalid_argument);
+  EXPECT_THROW(parser.add_flag("f>lag", "Invalid flag name", flag),
+               std::invalid_argument);
+  EXPECT_THROW(parser.add_flag("f[lag", "Invalid flag name", flag),
+               std::invalid_argument);
+  EXPECT_THROW(parser.add_flag("f]lag", "Invalid flag name", flag),
+               std::invalid_argument);
+  EXPECT_THROW(parser.add_flag("f{lag", "Invalid flag name", flag),
+               std::invalid_argument);
+  EXPECT_THROW(parser.add_flag("f}lag", "Invalid flag name", flag),
+               std::invalid_argument);
+  EXPECT_THROW(parser.add_flag("f(lag", "Invalid flag name", flag),
+               std::invalid_argument);
+  EXPECT_THROW(parser.add_flag("f)lag", "Invalid flag name", flag),
+               std::invalid_argument);
+  EXPECT_THROW(parser.add_flag("f|lag", "Invalid flag name", flag),
+               std::invalid_argument);
+  EXPECT_THROW(parser.add_flag("f;lag", "Invalid flag name", flag),
+               std::invalid_argument);
+  EXPECT_THROW(parser.add_flag("f!lag", "Invalid flag name", flag),
+               std::invalid_argument);
+  EXPECT_THROW(parser.add_flag("f`lag", "Invalid flag name", flag),
+               std::invalid_argument);
+  EXPECT_THROW(parser.add_flag("f&lag", "Invalid flag name", flag),
+               std::invalid_argument);
+  EXPECT_THROW(parser.add_flag("f$lag", "Invalid flag name", flag),
+               std::invalid_argument);
+  // 测试 Flag 的选项名称包含反斜线
+  EXPECT_THROW(parser.add_flag("f\\lag", "Invalid flag name", flag),
+               std::invalid_argument);
+
+  // 测试多字符 Flag 的选项名称包含特殊字符
+  EXPECT_THROW(parser.add_flag("flag|name", "Invalid flag name", flag),
+               std::invalid_argument);
+  // 测试带有别名的 Flag 的选项名称包含特殊字符
+  EXPECT_THROW(parser.add_flag("f,flag|name", "Invalid flag name", flag),
+               std::invalid_argument);
+  // 测试带有别名的 Flag 的选项名称包含反斜线
+  EXPECT_THROW(parser.add_flag("f,flag\\name", "Invalid flag name", flag),
+               std::invalid_argument);
+
+  // 测试 Option 的选项名称包含特殊字符
+  EXPECT_THROW(parser.add_option("o<ption", "Invalid option name", opt),
+               std::invalid_argument);
+  EXPECT_THROW(parser.add_option("option>name", "Invalid option name", opt),
+               std::invalid_argument);
+  EXPECT_THROW(parser.add_option("o,option[name", "Invalid option name", opt),
+               std::invalid_argument);
+  EXPECT_THROW(parser.add_option("o\\ption", "Invalid option name", opt),
+               std::invalid_argument);
+
+  // 测试 Positional 的选项名称包含特殊字符
+  EXPECT_THROW(
+      parser.add_positional("input|file", "Invalid positional name", pos),
+      std::invalid_argument);
+  EXPECT_THROW(
+      parser.add_positional("input;file", "Invalid positional name", pos),
+      std::invalid_argument);
+  EXPECT_THROW(
+      parser.add_positional("input\\file", "Invalid positional name", pos),
+      std::invalid_argument);
+}
+
 // Test count() function
 TEST_F(ArgParserTest, CountTest) {
   auto args = make_args("prog", "-v", "-v", "--name", "test");
