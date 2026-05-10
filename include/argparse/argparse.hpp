@@ -2059,6 +2059,8 @@ class Command {
               ARG_PARSER_DEBUG(
                   "subcmd: " << detail::join(
                       std::vector<std::string>{argv + i, argv + argc}, ' '));
+              // Finish parent post-processing before dispatching.
+              finish_parse_();
               return (*subcmd_ptr_it)->parse(argc - i, argv + i);
             } else {
               detail::die("Unknown subcommand: " + arg);
@@ -2085,6 +2087,14 @@ class Command {
       ++i;
     }
 
+    finish_parse_();
+  }
+
+ private:
+  /// Post-processing shared by the no-subcommand and subcommand-dispatch
+  /// paths: apply env fallback, default values, required-option checks,
+  /// and finally invoke the command callback (if set).
+  void finish_parse_() {
     // Handle environment variables
     for (const auto& arg : args_) {
       if ((arg->is_option() || arg->is_positional()) && arg->count() == 0) {
@@ -2097,7 +2107,7 @@ class Command {
         dynamic_cast<OptionBase*>(arg.get())->use_default_if_needed();
       }
     }
-
+    // Check required options
     for (const auto& arg : args_) {
       if ((arg->is_option() || arg->is_positional()) && arg->count() == 0 &&
           dynamic_cast<OptionBase*>(arg.get())->is_required()) {
@@ -2107,12 +2117,13 @@ class Command {
                          : *(arg->long_opt_names_.begin())));
       }
     }
-
+    // Invoke command-level callback
     if (callback_) {
       callback_();
     }
   }
 
+ public:
   virtual std::string usage() const {
     std::stringstream usage_str;
 

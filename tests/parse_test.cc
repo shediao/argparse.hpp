@@ -1077,3 +1077,184 @@ TEST_F(ArgParserTest, OptionAliasTest) {
   parser.parse(args.size(), args.data());
   ASSERT_EQ("https://www.google.com", url);
 }
+
+// ============================================================
+// Tests for parent-command callback / post-processing
+// when a subcommand is dispatched.  Regressions for the bug
+// where "return subcmd->parse(...)" skipped env, defaults,
+// required checks, and callback on the parent Command.
+// ============================================================
+
+// Parent callback is invoked even when a subcommand is matched.
+TEST_F(ArgParserTest, SubCmdParentCallback) {
+  auto args = make_args("prog", {"sub"});
+  ArgParser parser("prog", "test");
+  bool parent_called{false};
+  bool sub_called{false};
+
+  parser.callback([&]() { parent_called = true; });
+  parser.add_command("sub", "").callback([&]() { sub_called = true; });
+
+  ASSERT_NO_THROW(parser.parse(args.size(), args.data()));
+  EXPECT_TRUE(parent_called);
+  EXPECT_TRUE(sub_called);
+}
+
+// Parent env() fallback is processed before subcommand dispatch.
+TEST_F(ArgParserTest, SubCmdParentEnvFallback) {
+  auto args = make_args("prog", {"sub"});
+  setenv("ARG_TEST_NAME", "env-name", 1);
+  ArgParser parser("prog", "test");
+  std::string name;
+  bool sub_called{false};
+
+  parser.add_option("name", "", name).env("ARG_TEST_NAME");
+  parser.add_command("sub", "").callback([&]() { sub_called = true; });
+
+  ASSERT_NO_THROW(parser.parse(args.size(), args.data()));
+  EXPECT_EQ(name, "env-name");
+  EXPECT_TRUE(sub_called);
+  unsetenv("ARG_TEST_NAME");
+}
+
+// Parent default_value() is processed before subcommand dispatch.
+TEST_F(ArgParserTest, SubCmdParentDefaultValue) {
+  auto args = make_args("prog", {"sub"});
+  ArgParser parser("prog", "test");
+  std::string name;
+  bool sub_called{false};
+
+  parser.add_option("name", "", name).default_value("default-name");
+  parser.add_command("sub", "").callback([&]() { sub_called = true; });
+
+  ASSERT_NO_THROW(parser.parse(args.size(), args.data()));
+  EXPECT_EQ(name, "default-name");
+  EXPECT_TRUE(sub_called);
+}
+
+// Parent required() check still runs; missing value should die.
+TEST_F(ArgParserTest, SubCmdParentRequiredMissing) {
+  auto args = make_args("prog", {"sub"});
+  ArgParser parser("prog", "test");
+  std::string name;
+
+  parser.add_option("name", "", name).required();
+  parser.add_command("sub", "");
+
+  EXPECT_THROW(parser.parse(args.size(), args.data()), std::runtime_error);
+}
+
+// Parent required() satisfied -> no error.
+TEST_F(ArgParserTest, SubCmdParentRequiredSatisfied) {
+  auto args = make_args("prog", {"--name", "x", "sub"});
+  ArgParser parser("prog", "test");
+  std::string name;
+  bool sub_called{false};
+
+  parser.add_option("name", "", name).required();
+  parser.add_command("sub", "").callback([&]() { sub_called = true; });
+
+  ASSERT_NO_THROW(parser.parse(args.size(), args.data()));
+  EXPECT_EQ(name, "x");
+  EXPECT_TRUE(sub_called);
+}
+
+// Parent callback is NOT called when option parsing dies before subcommand.
+TEST_F(ArgParserTest, SubCmdParentCallbackNotOnError) {
+  auto args = make_args("prog", {"--bad-opt", "sub"});
+  ArgParser parser("prog", "test");
+  bool parent_called{false};
+
+  parser.callback([&]() { parent_called = true; });
+  parser.add_command("sub", "");
+
+  EXPECT_THROW(parser.parse(args.size(), args.data()), std::runtime_error);
+  EXPECT_FALSE(parent_called);
+}
+
+// Nested subcommands: middle command's callback fires.
+TEST_F(ArgParserTest, SubCmdNestedParentCallbacks) {
+  auto args = make_args("prog", {"cmd1"});
+  ArgParser parser("prog", "test");
+  bool root_called{false};
+  bool cmd1_called{false};
+
+  parser.callback([&]() { root_called = true; });
+  parser.add_command("cmd1", "").callback([&]() { cmd1_called = true; });
+
+  ASSERT_NO_THROW(parser.parse(args.size(), args.data()));
+  EXPECT_TRUE(root_called);
+  EXPECT_TRUE(cmd1_called);
+}
+
+// Parent flag callbacks still fire (flags are parsed before subcommand name).
+TEST_F(ArgParserTest, SubCmdParentFlagCallback) {
+  auto args = make_args("prog", {"-v", "sub"});
+  ArgParser parser("prog", "test");
+  bool verbose{false};
+  bool flag_cb_called{false};
+  bool parent_cb_called{false};
+
+  parser.add_flag("v", "verbose", verbose).callback([&](bool) {
+    flag_cb_called = true;
+  });
+  parser.callback([&]() { parent_cb_called = true; });
+  parser.add_command("sub", "");
+
+  ASSERT_NO_THROW(parser.parse(args.size(), args.data()));
+  EXPECT_TRUE(verbose);
+  EXPECT_TRUE(flag_cb_called);
+  EXPECT_TRUE(parent_cb_called);
+}
+
+// Parent option callbacks still fire for options before subcommand name.
+TEST_F(ArgParserTest, SubCmdParentOptionCallback) {
+  auto args = make_args("prog", {"--name", "hello", "sub"});
+  ArgParser parser("prog", "test");
+  std::string name;
+  bool opt_cb_called{false};
+  bool parent_cb_called{false};
+
+  parser.add_option("name", "", name).callback([&](std::string const&) {
+    opt_cb_called = true;
+  });
+  parser.callback([&]() { parent_cb_called = true; });
+  parser.add_command("sub", "");
+
+  ASSERT_NO_THROW(parser.parse(args.size(), args.data()));
+  EXPECT_EQ(name, "hello");
+  EXPECT_TRUE(opt_cb_called);
+  EXPECT_TRUE(parent_cb_called);
+}
+
+// No subcommand matched: parent callback fires as usual.
+TEST_F(ArgParserTest, SubCmdParentCallbackWithoutSubcommand) {
+  auto args = make_args("prog");
+  ArgParser parser("prog", "test");
+  bool parent_called{false};
+
+  parser.callback([&]() { parent_called = true; });
+  parser.add_command("sub", "");
+
+  ASSERT_NO_THROW(parser.parse(args.size(), args.data()));
+  EXPECT_TRUE(parent_called);
+}
+
+// Default values on parent work with subcommand and options.
+TEST_F(ArgParserTest, SubCmdWithDefaultsAndOptions) {
+  auto args = make_args("prog", {"-o", "opt-val", "cmd1"});
+  ArgParser parser("prog", "test");
+  std::string opt_val;
+  std::string default_val;
+  bool cmd1_cb{false};
+
+  parser.add_option("o", "", opt_val);
+  parser.add_option("d", "", default_val).default_value("default-d");
+  parser.callback([]() {});
+  parser.add_command("cmd1", "").callback([&]() { cmd1_cb = true; });
+
+  ASSERT_NO_THROW(parser.parse(args.size(), args.data()));
+  EXPECT_EQ(opt_val, "opt-val");
+  EXPECT_EQ(default_val, "default-d");
+  EXPECT_TRUE(cmd1_cb);
+}
