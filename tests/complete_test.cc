@@ -1784,41 +1784,44 @@ class SpecialCharsCompletionTest : public ::testing::Test {
 // the surrounding shell quoting).
 // ---------------------------------------------------------------------------
 
-static bool hasUnmatchedSingleQuotes(const std::string& s) {
-  int count = 0;
+static char hasUnmatchedQuotes(const std::string& s) {
+  bool in_single = false;
   bool in_double = false;
   for (size_t i = 0; i < s.size(); ++i) {
     if (s[i] == '\\' && i + 1 < s.size()) {
-      ++i;  // skip the escaped character (handles \', \", \\, etc.)
-      continue;
-    }
-    if (s[i] == '"') {
-      in_double = !in_double;
-      continue;
-    }
-    if (!in_double && s[i] == '\'') {
-      count++;
-    }
-  }
-  return (count % 2) != 0;
-}
-static bool hasUnmatchedDoubleQuotes(const std::string& s) {
-  int count = 0;
-  bool in_single = false;
-  for (size_t i = 0; i < s.size(); ++i) {
-    if (s[i] == '\\' && i + 1 < s.size()) {
-      ++i;  // skip the escaped character
+      if (!in_single) {
+        ++i;  // skip the escaped character
+      }
       continue;
     }
     if (s[i] == '\'') {
-      in_single = !in_single;
-      continue;
+      if (in_double) {
+        continue;
+      } else {
+        in_single = !in_single;
+      }
     }
-    if (!in_single && s[i] == '"') {
-      count++;
+    if (s[i] == '"') {
+      if (in_single) {
+        continue;
+      } else {
+        in_double = !in_double;
+      }
     }
   }
-  return (count % 2) != 0;
+  if (in_single) {
+    return '\'';
+  } else if (in_double) {
+    return '"';
+  } else {
+    return '\0';
+  }
+}
+static bool hasUnmatchedSingleQuotes(const std::string& s) {
+  return hasUnmatchedQuotes(s) == '\'';
+}
+static bool hasUnmatchedDoubleQuotes(const std::string& s) {
+  return hasUnmatchedQuotes(s) == '"';
 }
 
 // =========================================================================
@@ -1836,7 +1839,8 @@ TEST_F(SpecialCharsCompletionTest, FishFlagDescWithSingleQuote) {
   EXPECT_TRUE(out.find("Flag desc with '\\''single'\\''") != std::string::npos);
 
   // The output should not have unescaped unmatched single quotes
-  EXPECT_FALSE(hasUnmatchedSingleQuotes(out));
+  EXPECT_FALSE(hasUnmatchedSingleQuotes(out)) << out;
+  EXPECT_FALSE(hasUnmatchedDoubleQuotes(out)) << out;
 }
 
 TEST_F(SpecialCharsCompletionTest, FishFlagDescWithDoubleQuote) {
@@ -1860,6 +1864,8 @@ TEST_F(SpecialCharsCompletionTest, FishFlagDescWithShellSpecialChars) {
   // fish single-quoted strings and should appear verbatim.
   EXPECT_TRUE(out.find("|pipe <redirect> [brackets] {braces}") !=
               std::string::npos);
+  EXPECT_FALSE(hasUnmatchedSingleQuotes(out)) << out;
+  EXPECT_FALSE(hasUnmatchedDoubleQuotes(out)) << out;
 }
 
 TEST_F(SpecialCharsCompletionTest, FishChoiceKeysWithSpecialChars) {
@@ -1883,7 +1889,8 @@ TEST_F(SpecialCharsCompletionTest, FishChoiceKeysWithSpecialChars) {
   EXPECT_TRUE(out.find("key*6") != std::string::npos);
 
   // No unmatched quotes
-  EXPECT_FALSE(hasUnmatchedSingleQuotes(out));
+  EXPECT_FALSE(hasUnmatchedSingleQuotes(out)) << out;
+  EXPECT_FALSE(hasUnmatchedDoubleQuotes(out)) << out;
 }
 
 TEST_F(SpecialCharsCompletionTest, FishChoiceKeysWithDollarAndBacktick) {
@@ -1915,7 +1922,8 @@ TEST_F(SpecialCharsCompletionTest, FishSubcommandDescWithSpecialChars) {
   EXPECT_TRUE(out.find("|~<>[]{}()?;") != std::string::npos);
 
   // No unmatched quotes
-  EXPECT_FALSE(hasUnmatchedSingleQuotes(out));
+  EXPECT_FALSE(hasUnmatchedSingleQuotes(out)) << out;
+  EXPECT_FALSE(hasUnmatchedDoubleQuotes(out)) << out;
 }
 
 TEST_F(SpecialCharsCompletionTest, FishSubFlagDescWithSpecialChars) {
@@ -1959,7 +1967,8 @@ TEST_F(SpecialCharsCompletionTest, ZshFlagDescWithSingleQuote) {
   // ' with \'\' (which renders literally inside a zsh single-quoted string,
   // effectively ending and restarting the quoted segment).
   // The description should not break the surrounding '...' syntax.
-  EXPECT_FALSE(hasUnmatchedSingleQuotes(out));
+  EXPECT_FALSE(hasUnmatchedSingleQuotes(out)) << out;
+  EXPECT_FALSE(hasUnmatchedDoubleQuotes(out)) << out;
 
   // The flag description should appear in the output (possibly escaped)
   EXPECT_TRUE(out.find("Flag desc with") != std::string::npos);
@@ -2214,7 +2223,9 @@ TEST_F(SpecialCharsCompletionTest, AllShellsHaveBalancedQuotes) {
     EXPECT_FALSE(hasUnmatchedSingleQuotes(out))
         << "Bash output has unbalanced single quotes:\n"
         << out;
-    (void)hasUnmatchedDoubleQuotes;  // known limitation with key"2
+    EXPECT_FALSE(hasUnmatchedDoubleQuotes(out))
+        << "Bash output has unbalanced double quotes:\n"
+        << out;
   }
   {
     std::ostringstream os;
@@ -2223,6 +2234,9 @@ TEST_F(SpecialCharsCompletionTest, AllShellsHaveBalancedQuotes) {
     EXPECT_FALSE(hasUnmatchedSingleQuotes(out))
         << "Zsh output has unbalanced single quotes:\n"
         << out;
+    EXPECT_FALSE(hasUnmatchedDoubleQuotes(out))
+        << "Zsh output has unbalanced double quotes:\n"
+        << out;
   }
   {
     std::ostringstream os;
@@ -2230,6 +2244,9 @@ TEST_F(SpecialCharsCompletionTest, AllShellsHaveBalancedQuotes) {
     std::string out = os.str();
     EXPECT_FALSE(hasUnmatchedSingleQuotes(out))
         << "Fish output has unbalanced single quotes:\n"
+        << out;
+    EXPECT_FALSE(hasUnmatchedDoubleQuotes(out))
+        << "Fish output has unbalanced double quotes:\n"
         << out;
   }
 }
