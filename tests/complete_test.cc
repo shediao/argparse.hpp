@@ -1967,13 +1967,9 @@ TEST_F(SpecialCharsCompletionTest, ZshValuePlaceholderWithSpecialChars) {
   parser->print_zsh_complete(os);
   std::string out = os.str();
 
-  // value_placeholder "VAL'UE" is inserted directly (not escaped)
-  // into the zsh spec string: :VAL'UE:
-  // The single quote inside the placeholder may break the surrounding
-  // single-quoted zsh spec.
-  // Verify the placeholder appears in the output
-  EXPECT_TRUE(out.find("VAL'UE") != std::string::npos ||
-              out.find("VAL") != std::string::npos);
+  // value_placeholder "VAL'UE" is now escaped as VAL'\''UE
+  // so that the single quote does not break the surrounding zsh spec.
+  EXPECT_TRUE(out.find("VAL'\\''UE") != std::string::npos);
 }
 
 TEST_F(SpecialCharsCompletionTest, ZshValuePlaceholderWithPipeAndTilde) {
@@ -1992,11 +1988,9 @@ TEST_F(SpecialCharsCompletionTest, ZshChoiceKeysWithSpecialChars) {
   parser->print_zsh_complete(os);
   std::string out = os.str();
 
-  // Choice keys are placed inside (...) in zsh specs directly (not escaped).
-  // Keys like key'1 contain single quotes which may break the spec.
-  // Verify the key names appear
-  EXPECT_TRUE(out.find("key'1") != std::string::npos ||
-              out.find("key") != std::string::npos);
+  // Choice keys are now escaped inside (...) in zsh specs.
+  // Single quotes are turned into '\'' sequences.
+  EXPECT_TRUE(out.find("key'\\''1") != std::string::npos);
   EXPECT_TRUE(out.find("key|3") != std::string::npos);
   EXPECT_TRUE(out.find("key~4") != std::string::npos);
 }
@@ -2009,13 +2003,11 @@ TEST_F(SpecialCharsCompletionTest, ZshPositionalWithSpecialChars) {
 
   // Zsh positionals do NOT include the description in the completion
   // spec — only the value_placeholder and choices are emitted.
-  // Verify the value_placeholder appears.
-  EXPECT_TRUE(out.find("POS'VAL") != std::string::npos ||
-              out.find("POS") != std::string::npos);
+  // The value_placeholder is now escaped to protect single quotes.
+  EXPECT_TRUE(out.find("POS'\\''VAL") != std::string::npos);
 
-  // Positional with choices including special keys
-  EXPECT_TRUE(out.find("ch'a") != std::string::npos ||
-              out.find("ch") != std::string::npos);
+  // Positional with choices including special keys (now escaped)
+  EXPECT_TRUE(out.find("ch'\\''a") != std::string::npos);
   EXPECT_TRUE(out.find("ch|c") != std::string::npos);
   EXPECT_TRUE(out.find("ch~d") != std::string::npos);
 }
@@ -2026,10 +2018,9 @@ TEST_F(SpecialCharsCompletionTest, ZshSubcommandDescWithSpecialChars) {
   parser->print_zsh_complete(os);
   std::string out = os.str();
 
-  // Subcommand description should appear (possibly escaped)
+  // Subcommand description should appear with properly escaped quotes
   EXPECT_TRUE(out.find("Subcmd") != std::string::npos);
-  EXPECT_TRUE(out.find("single") != std::string::npos ||
-              out.find("\\'\\'") != std::string::npos);
+  EXPECT_TRUE(out.find("single") != std::string::npos);
   EXPECT_TRUE(out.find("double") != std::string::npos);
 }
 
@@ -2071,12 +2062,9 @@ TEST_F(SpecialCharsCompletionTest, BashChoiceKeysWithDoubleQuote) {
   parser->print_bash_complete(os);
   std::string out = os.str();
 
-  // Double quotes in choice keys are NOT escaped by escape_bash.
-  // The key key"2 appears inside a double-quoted string, which would
-  // prematurely end the quoting in the generated bash script.
-  // Verify the key name appears
-  EXPECT_TRUE(out.find("key\"2") != std::string::npos ||
-              out.find("key") != std::string::npos);
+  // Double quotes in choice keys are now escaped via backslash,
+  // preventing premature end of the double-quoted string.
+  EXPECT_TRUE(out.find("key\\\"2") != std::string::npos);
 }
 
 TEST_F(SpecialCharsCompletionTest, BashChoiceKeysWithDollarSign) {
@@ -2085,11 +2073,8 @@ TEST_F(SpecialCharsCompletionTest, BashChoiceKeysWithDollarSign) {
   parser->print_bash_complete(os);
   std::string out = os.str();
 
-  // $ is NOT escaped by escape_bash, but it appears inside a
-  // double-quoted string in the generated script, where bash would
-  // try to expand it as a variable reference.
-  // Verify the key appears
-  EXPECT_TRUE(out.find("key$3") != std::string::npos ||
+  // $ is now escaped via backslash, preventing variable expansion.
+  EXPECT_TRUE(out.find("key\\$3") != std::string::npos ||
               out.find("key") != std::string::npos);
 }
 
@@ -2099,10 +2084,8 @@ TEST_F(SpecialCharsCompletionTest, BashChoiceKeysWithBacktick) {
   parser->print_bash_complete(os);
   std::string out = os.str();
 
-  // ` is NOT escaped by escape_bash, but inside double quotes bash
-  // would interpret it as command substitution.
-  // Verify the key appears
-  EXPECT_TRUE(out.find("key`5") != std::string::npos ||
+  // ` is now escaped via backslash, preventing command substitution.
+  EXPECT_TRUE(out.find("key\\`5") != std::string::npos ||
               out.find("key") != std::string::npos);
 }
 
@@ -2112,9 +2095,8 @@ TEST_F(SpecialCharsCompletionTest, BashChoiceKeysWithExclamationMark) {
   parser->print_bash_complete(os);
   std::string out = os.str();
 
-  // ! inside double quotes triggers history expansion in interactive bash.
-  // Verify the key appears
-  EXPECT_TRUE(out.find("key!7") != std::string::npos ||
+  // ! is now escaped via backslash, preventing history expansion.
+  EXPECT_TRUE(out.find("key\\!7") != std::string::npos ||
               out.find("key") != std::string::npos);
 }
 
@@ -2352,9 +2334,7 @@ TEST_F(SpecialCharsCompletionTest, BashSyntaxCheckWithSpecialChars) {
   std::ostringstream os;
   parser->print_bash_complete(os);
   auto [ec, err] = checkShellSyntax("bash", os.str());
-  // KNOWN BUG: key"2 in choices breaks double-quoted strings.
-  // When escape_bash() is fixed, change to EXPECT_EQ(ec, 0).
-  EXPECT_NE(ec, 0) << "Bash syntax unexpectedly passed:\n" << err;
+  EXPECT_EQ(ec, 0) << "Bash syntax error:\n" << err;
 }
 
 TEST_F(SpecialCharsCompletionTest, ZshSyntaxCheckWithSpecialChars) {
@@ -2365,9 +2345,7 @@ TEST_F(SpecialCharsCompletionTest, ZshSyntaxCheckWithSpecialChars) {
   std::ostringstream os;
   parser->print_zsh_complete(os);
   auto [ec, err] = checkShellSyntax("zsh", os.str());
-  // KNOWN BUG: ' in descriptions/choices not properly escaped for zsh.
-  // When escape_zsh_desc() is fixed, change to EXPECT_EQ(ec, 0).
-  EXPECT_NE(ec, 0) << "Zsh syntax unexpectedly passed:\n" << err;
+  EXPECT_EQ(ec, 0) << "Zsh syntax error:\n" << err;
 }
 
 TEST_F(SpecialCharsCompletionTest, FishSyntaxCheckWithSpecialChars) {
@@ -2426,9 +2404,7 @@ TEST_F(SpecialCharsCompletionTest, BashSyntaxCheckPositionalWithSpecialChars) {
   std::ostringstream os;
   parser->print_bash_complete(os);
   auto [ec, err] = checkShellSyntax("bash", os.str());
-  // KNOWN BUG: ch"b in choices breaks double-quoted strings.
-  // When escape_bash() is fixed, change to EXPECT_EQ(ec, 0).
-  EXPECT_NE(ec, 0) << "Bash syntax unexpectedly passed:\n" << err;
+  EXPECT_EQ(ec, 0) << "Bash syntax error:\n" << err;
 }
 
 TEST_F(SpecialCharsCompletionTest, ZshSyntaxCheckPositionalWithSpecialChars) {
@@ -2439,9 +2415,7 @@ TEST_F(SpecialCharsCompletionTest, ZshSyntaxCheckPositionalWithSpecialChars) {
   std::ostringstream os;
   parser->print_zsh_complete(os);
   auto [ec, err] = checkShellSyntax("zsh", os.str());
-  // KNOWN BUG: ' in value_placeholder and " in choices not escaped.
-  // When fixed, change to EXPECT_EQ(ec, 0).
-  EXPECT_NE(ec, 0) << "Zsh syntax unexpectedly passed:\n" << err;
+  EXPECT_EQ(ec, 0) << "Zsh syntax error:\n" << err;
 }
 
 TEST_F(SpecialCharsCompletionTest, FishSyntaxCheckPositionalWithSpecialChars) {

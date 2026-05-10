@@ -2365,11 +2365,16 @@ class ArgParser : public Command {
     return name;
   }
 
-  /// Escape a string for single-quoted Bash contexts.
+  /// Escape a string for double-quoted Bash contexts.
+  /// Escapes ", $, `, \, !, and ' to prevent premature string
+  /// termination, variable/command expansion, and history expansion.
   static std::string escape_bash(std::string const& s) {
     std::string result;
     for (char c : s) {
-      if (c == '\'') {
+      if (c == '"' || c == '$' || c == '`' || c == '\\' || c == '!') {
+        result += '\\';
+        result += c;
+      } else if (c == '\'') {
         result += "'\\''";
       } else {
         result += c;
@@ -2732,18 +2737,29 @@ class ArgParser : public Command {
     os << "complete -F " << root_func << " " << command_ << "\n";
   }
   void print_zsh_complete(std::ostream& os = std::cout) const {
-    auto escape_zsh_desc = [](std::string const& s) -> std::string {
+    auto escape_zsh_spec = [](std::string const& s) -> std::string {
+      std::string result;
+      for (char c : s) {
+        if (c == '\'') {
+          result += "'\\''";
+        } else {
+          result += c;
+        }
+      }
+      return result;
+    };
+
+    auto escape_zsh_desc = [&](std::string const& s) -> std::string {
       std::string result;
       for (char c : s) {
         if (c == ':' || c == '[' || c == ']') {
           result += '\\';
         }
-        // Single quotes cannot be escaped inside single-quoted shell
-        // strings; simply omit them from the description.
         if (c == '\'') {
-          result += "\\'\\'";
+          result += "'\\''";
+        } else {
+          result += c;
         }
-        result += c;
       }
       return result;
     };
@@ -2780,12 +2796,12 @@ class ArgParser : public Command {
                 os << ":"
                    << (opt->value_placeholder_.empty()
                            ? "arg"
-                           : opt->value_placeholder_);
+                           : escape_zsh_spec(opt->value_placeholder_));
                 if (has_choices) {
                   os << ":(";
                   std::vector<std::string> choice_keys;
                   for (auto const& [k, _] : opt->choices_) {
-                    choice_keys.push_back(k);
+                    choice_keys.push_back(escape_zsh_spec(k));
                   }
                   os << detail::join(choice_keys, ' ');
                   os << ")";
@@ -2804,12 +2820,12 @@ class ArgParser : public Command {
                 os << ":"
                    << (opt->value_placeholder_.empty()
                            ? "arg"
-                           : opt->value_placeholder_);
+                           : escape_zsh_spec(opt->value_placeholder_));
                 if (has_choices) {
                   os << ":(";
                   std::vector<std::string> choice_keys;
                   for (auto const& [k, _] : opt->choices_) {
-                    choice_keys.push_back(k);
+                    choice_keys.push_back(escape_zsh_spec(k));
                   }
                   os << detail::join(choice_keys, ' ');
                   os << ")";
@@ -2894,12 +2910,12 @@ class ArgParser : public Command {
                 os << " \\\n        '" << (idx + 1) << ":"
                    << (positionals[idx]->value_placeholder_.empty()
                            ? "arg" + argparse::to_string(idx + 1)
-                           : positionals[idx]->value_placeholder_);
+                           : escape_zsh_spec(positionals[idx]->value_placeholder_));
                 if (!positionals[idx]->choices_.empty()) {
                   os << ":(";
                   std::vector<std::string> choice_keys;
                   for (auto const& [k, _] : positionals[idx]->choices_) {
-                    choice_keys.push_back(k);
+                    choice_keys.push_back(escape_zsh_spec(k));
                   }
                   os << detail::join(choice_keys, ' ');
                   os << ")";
