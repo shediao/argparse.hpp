@@ -1272,7 +1272,107 @@ TEST_F(ArgParserTest, SubCmdParentCallbackWithoutSubcommand) {
   EXPECT_TRUE(parent_called);
 }
 
-// Default values on parent work with subcommand and options.
+// Regression: parent flag that appears AFTER the subcommand name
+// (e.g. "cmd --cmd-flag1 subcmd --cmd-flag2") must be parsed and
+// visible in the parent's finish_parse_ callback.
+TEST_F(ArgParserTest, SubCmdParentFlagAfterSubcommand) {
+  auto args = make_args("prog", {"--opt1", "val1", "--flag1", "subcmd",
+                                 "--sub-opt", "val2", "--sub-flag", "--flag2"});
+  ArgParser parser("prog", "test");
+
+  // Parent options and flags
+  std::string opt1;
+  bool flag1{false};
+  bool flag2{false};
+  bool parent_cb_called{false};
+  bool flag2_seen_in_parent_cb{false};
+
+  parser.add_option("opt1", "", opt1);
+  parser.add_flag("flag1", "", flag1);
+  parser.add_flag("flag2", "", flag2);
+  parser.callback([&]() {
+    parent_cb_called = true;
+    flag2_seen_in_parent_cb = flag2;
+  });
+
+  // Subcommand
+  std::string sub_opt;
+  bool sub_flag{false};
+  bool sub_cb_called{false};
+  auto& sub = parser.add_command("subcmd", "");
+  sub.add_option("sub-opt", "", sub_opt);
+  sub.add_flag("sub-flag", "", sub_flag);
+  sub.callback([&]() { sub_cb_called = true; });
+
+  ASSERT_NO_THROW(parser.parse(args.size(), args.data()));
+
+  // All values must have been parsed
+  EXPECT_EQ(opt1, "val1");
+  EXPECT_TRUE(flag1);
+  EXPECT_EQ(sub_opt, "val2");
+  EXPECT_TRUE(sub_flag);
+
+  // The key assertion: --flag2 appears AFTER subcmd but belongs to parent
+  EXPECT_TRUE(flag2);
+  EXPECT_TRUE(parent_cb_called);
+  EXPECT_TRUE(flag2_seen_in_parent_cb)
+      << "--flag2 was parsed but the parent callback did not see it";
+  EXPECT_TRUE(sub_cb_called);
+}
+
+// Parent option that appears after subcommand name with =value syntax.
+TEST_F(ArgParserTest, SubCmdParentOptionWithEqualsAfterSubcommand) {
+  auto args = make_args("prog", {"subcmd", "--parent-opt=after_sub"});
+  ArgParser parser("prog", "test");
+
+  std::string parent_opt;
+  bool parent_cb_called{false};
+  bool opt_seen_in_parent_cb{false};
+
+  parser.add_option("parent-opt", "", parent_opt);
+  parser.callback([&]() {
+    parent_cb_called = true;
+    opt_seen_in_parent_cb = (parent_opt == "after_sub");
+  });
+
+  bool sub_cb_called{false};
+  parser.add_command("subcmd", "").callback([&]() { sub_cb_called = true; });
+
+  ASSERT_NO_THROW(parser.parse(args.size(), args.data()));
+
+  EXPECT_EQ(parent_opt, "after_sub");
+  EXPECT_TRUE(parent_cb_called);
+  EXPECT_TRUE(opt_seen_in_parent_cb);
+  EXPECT_TRUE(sub_cb_called);
+}
+
+// Parent short-flag after subcommand name.
+TEST_F(ArgParserTest, SubCmdParentShortFlagAfterSubcommand) {
+  auto args = make_args("prog", {"subcmd", "-v"});
+  ArgParser parser("prog", "test");
+
+  bool verbose{false};
+  bool parent_cb_called{false};
+  bool flag_seen_in_parent_cb{false};
+
+  parser.add_flag("v,verbose", "", verbose);
+  parser.callback([&]() {
+    parent_cb_called = true;
+    flag_seen_in_parent_cb = verbose;
+  });
+
+  bool sub_cb_called{false};
+  parser.add_command("subcmd", "").callback([&]() { sub_cb_called = true; });
+
+  ASSERT_NO_THROW(parser.parse(args.size(), args.data()));
+
+  EXPECT_TRUE(verbose);
+  EXPECT_TRUE(parent_cb_called);
+  EXPECT_TRUE(flag_seen_in_parent_cb)
+      << "-v was parsed but the parent callback did not see it";
+  EXPECT_TRUE(sub_cb_called);
+}
+
 TEST_F(ArgParserTest, SubCmdWithDefaultsAndOptions) {
   auto args = make_args("prog", {"-o", "opt-val", "cmd1"});
   ArgParser parser("prog", "test");

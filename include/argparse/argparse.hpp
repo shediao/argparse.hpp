@@ -2059,9 +2059,17 @@ class Command {
               ARG_PARSER_DEBUG(
                   "subcmd: " << detail::join(
                       std::vector<std::string>{argv + i, argv + argc}, ' '));
-              // Finish parent post-processing before dispatching.
+              // Dispatch to subcommand first; parent-level arguments that
+              // appear after the subcommand name (e.g. --parent-flag in
+              // "cmd --flag subcmd --parent-flag") are resolved via parent
+              // lookup during subcommand parsing.  Only after the subcommand
+              // has consumed those arguments do we run the parent's
+              // post-processing (env fallback, defaults, required checks,
+              // callback), so that the parent sees the complete set of
+              // parsed values.
+              (*subcmd_ptr_it)->parse(argc - i, argv + i);
               finish_parse_();
-              return (*subcmd_ptr_it)->parse(argc - i, argv + i);
+              return;
             } else {
               detail::die("Unknown subcommand: " + arg);
             }
