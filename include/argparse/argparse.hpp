@@ -64,57 +64,7 @@
 #include <unistd.h>
 #endif  // _WIN32
 
-#ifndef ARGPARSE_HAS_EXCEPTIONS
-#if defined(_MSC_VER) && defined(_CPPUNWIND)
-// MSVC defines _CPPUNWIND to 1 if and only if exceptions are enabled.
-#define ARGPARSE_HAS_EXCEPTIONS 1
-#elif defined(__BORLANDC__)
-// C++Builder's implementation of the STL uses the _HAS_EXCEPTIONS
-// macro to enable exceptions, so we'll do the same.
-// Assumes that exceptions are enabled by default.
-#ifndef _HAS_EXCEPTIONS
-#define _HAS_EXCEPTIONS 1
-#endif  // _HAS_EXCEPTIONS
-#define ARGPARSE_HAS_EXCEPTIONS _HAS_EXCEPTIONS
-#elif defined(__clang__)
-// clang defines __EXCEPTIONS if and only if exceptions are enabled before clang
-// 220714, but if and only if cleanups are enabled after that. In Obj-C++ files,
-// there can be cleanups for ObjC exceptions which also need cleanups, even if
-// C++ exceptions are disabled. clang has __has_feature(cxx_exceptions) which
-// checks for C++ exceptions starting at clang r206352, but which checked for
-// cleanups prior to that. To reliably check for C++ exception availability with
-// clang, check for
-// __EXCEPTIONS && __has_feature(cxx_exceptions).
-#if defined(__EXCEPTIONS) && __EXCEPTIONS && __has_feature(cxx_exceptions)
-#define ARGPARSE_HAS_EXCEPTIONS 1
-#else
-#define ARGPARSE_HAS_EXCEPTIONS 0
-#endif
-#elif defined(__GNUC__) && defined(__EXCEPTIONS) && __EXCEPTIONS
-// gcc defines __EXCEPTIONS to 1 if and only if exceptions are enabled.
-#define ARGPARSE_HAS_EXCEPTIONS 1
-#elif defined(__SUNPRO_CC)
-// Sun Pro CC supports exceptions.  However, there is no compile-time way of
-// detecting whether they are enabled or not.  Therefore, we assume that
-// they are enabled unless the user tells us otherwise.
-#define ARGPARSE_HAS_EXCEPTIONS 1
-#elif defined(__IBMCPP__) && defined(__EXCEPTIONS) && __EXCEPTIONS
-// xlC defines __EXCEPTIONS to 1 if and only if exceptions are enabled.
-#define ARGPARSE_HAS_EXCEPTIONS 1
-#elif defined(__HP_aCC)
-// Exception handling is in effect by default in HP aCC compiler. It has to
-// be turned of by +noeh compiler option if desired.
-#define ARGPARSE_HAS_EXCEPTIONS 1
-#else
-// For other compilers, we assume exceptions are disabled to be
-// conservative.
-#define ARGPARSE_HAS_EXCEPTIONS 0
-#endif  // defined(_MSC_VER) || defined(__BORLANDC__)
-#endif  // ARGPARSE_HAS_EXCEPTIONS
-
-#if ARGPARSE_HAS_EXCEPTIONS
 #include <stdexcept>
-#endif
 
 #if defined(ARG_PARSE_DEBUG)
 #define ARG_PARSER_DEBUG(msg)                   \
@@ -194,36 +144,10 @@ using std::to_wstring;
 inline std::string to_string(std::string const& s) { return s; }
 inline std::wstring to_wstring(std::wstring const& s) { return s; }
 
-inline void die(std::string const& msg) {
-#if ARGPARSE_HAS_EXCEPTIONS
-  throw std::runtime_error(msg);
-#else
-  if (!msg.empty()) {
-#if defined(_WIN32)
-    (void)WriteFile(GetStdHandle(STD_ERROR_HANDLE), msg.c_str(),
-                    static_cast<DWORD>(msg.size()), NULL, NULL);
-#else
-    [[maybe_unused]] auto ret = write(STDERR_FILENO, msg.c_str(), msg.size());
-#endif
-  }
-  abort();
-#endif
-}
+inline void die(std::string const& msg) { throw std::runtime_error(msg); }
 
 inline void report_invalid_argument(std::string const& msg) {
-#if ARGPARSE_HAS_EXCEPTIONS
   throw std::invalid_argument(msg);
-#else
-  if (!msg.empty()) {
-#if defined(_WIN32)
-    (void)WriteFile(GetStdHandle(STD_ERROR_HANDLE), msg.c_str(),
-                    static_cast<DWORD>(msg.size()), NULL, NULL);
-#else
-    [[maybe_unused]] auto ret = write(STDERR_FILENO, msg.c_str(), msg.size());
-#endif
-  }
-  abort();
-#endif
 }
 
 }  // namespace detail

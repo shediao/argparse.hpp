@@ -25,7 +25,8 @@
 *.la
 *.a
 *.lib
-
+/compile_commands.json
+.DS_Store
 # Executables
 *.exe
 *.out
