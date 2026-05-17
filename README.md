@@ -1,42 +1,6 @@
 [![cmake-multi-platform](https://github.com/shediao/argparse.hpp/actions/workflows/cmake-multi-platform.yml/badge.svg)](https://github.com/shediao/argparse.hpp/actions/workflows/cmake-multi-platform.yml)
 [![msys2](https://github.com/shediao/argparse.hpp/actions/workflows/msys2.yml/badge.svg)](https://github.com/shediao/argparse.hpp/actions/workflows/msys2.yml)
 
-## Feature Comparison
-
-| Feature               | argparse.hpp | [cxxopts](https://github.com/jarro2783/cxxopts) | [CLI11](https://github.com/CLIUtils/CLI11) | [Boost](https://www.boost.org/doc/libs/1_84_0/doc/html/program_options.html) | [gflags](https://github.com/gflags/gflags) |
-| --------------------- | ------------ | ----------------------------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------- | ------------------------------------------ |
-| Header-only           | ✅           | ✅                                              | ✅                                         | ❌                                                                           | ❌                                         |
-| Dependencies          | None         | None                                            | None                                       | Boost                                                                        | None                                       |
-| C++ Standard          | C++20        | C++11                                           | C++11                                      | C++11                                                                        | C++11                                      |
-| GNU-style options     | ✅           | ✅                                              | ✅                                         | ✅                                                                           | ❌                                         |
-| Positional arguments  | ✅           | ✅                                              | ✅                                         | ✅                                                                           | ❌                                         |
-| Default values        | ✅           | ✅                                              | ✅                                         | ✅                                                                           | ✅                                         |
-| Real Type-safe        | ✅           | ❓                                              | ❓                                         | ❓                                                                           | ❓                                         |
-| Container support     | ✅           | ✅                                              | ✅                                         | ✅                                                                           | ❌                                         |
-| Custom types          | ✅           | ✅                                              | ✅                                         | ✅                                                                           | ❌                                         |
-| Subcommands           | ✅           | ❌                                              | ✅                                         | ❌                                                                           | ❌                                         |
-| Config file           | ❌           | ❌                                              | ✅                                         | ✅                                                                           | ✅                                         |
-| Help generation       | ✅           | ✅                                              | ✅                                         | ✅                                                                           | ✅                                         |
-| Combined flags (-abc) | ✅           | ✅                                              | ✅                                         | ✅                                                                           | ❌                                         |
-| Required options      | ✅           | ✅                                              | ✅                                         | ✅                                                                           | ✅                                         |
-| Option groups         | ❌           | ✅                                              | ✅                                         | ✅                                                                           | ❌                                         |
-| Validation            | ✅           | ✅                                              | ✅                                         | ✅                                                                           | ❌                                         |
-| Bash completion       | ✅           | ❌                                              | ❌                                         | ❌                                                                           | ❌                                         |
-| Zsh completion        | ✅           | ❌                                              | ❌                                         | ❌                                                                           | ❌                                         |
-| Fish completion       | ✅           | ❌                                              | ❌                                         | ❌                                                                           | ❌                                         |
-
-## Key Differentiator: Direct Variable Binding
-
-A significant advantage of `argparse.hpp` over many other C++ command-line parsing libraries is its approach to argument handling. Instead of requiring users to retrieve argument values through template functions like `parser.get<Type>("arg_name")` or `results["arg_name"].as<Type>()` after parsing, `argparse.hpp` binds flags, options, and positional arguments directly to user-defined variables.
-
-This means:
-
-- **True Type Safety at Compile Time**: The types are known and checked when you define the arguments.
-- **No Runtime Type Conversions/Casting for Access**: Once `parser.parse()` is called, the bound variables are populated directly with the parsed and converted values. You can use these variables immediately without needing `get<T>()`, `cast<T>()`, or similar accessor methods.
-- **Simpler and Cleaner Code**: Accessing parsed values is as simple as using the variable itself (e.g., `if (args.verbose) { ... }`, `std::string filename = args.output_file;`).
-
-This design philosophy leads to more robust, readable, and maintainable code by leveraging C++'s type system more effectively for command-line argument parsing.
-
 ## Quick start
 
 This is a lightweight & typesafe C++ option parser library, supporting the standard GNU style syntax for options.
@@ -682,11 +646,3 @@ if (completion_args.print_fish_completion) {
   return 0;
 }
 ```
-
-## TODO
-
-- [ ] windows style
-
-## docs
-
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/shediao/argparse.hpp)

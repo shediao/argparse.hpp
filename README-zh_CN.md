@@ -1,43 +1,6 @@
 [![cmake-multi-platform](https://github.com/shediao/argparse.hpp/actions/workflows/cmake-multi-platform.yml/badge.svg)](https://github.com/shediao/argparse.hpp/actions/workflows/cmake-multi-platform.yml)
 [![msys2](https://github.com/shediao/argparse.hpp/actions/workflows/msys2.yml/badge.svg)](https://github.com/shediao/argparse.hpp/actions/workflows/msys2.yml)
 
-## 功能比较
-
-| 功能            | argparse.hpp | [cxxopts](https://github.com/jarro2783/cxxopts) | [CLI11](https://github.com/CLIUtils/CLI11) | [Boost](https://www.boost.org/doc/libs/1_84_0/doc/html/program_options.html) | [gflags](https://github.com/gflags/gflags) |
-| --------------- | ------------ | ----------------------------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------- | ------------------------------------------ |
-| 仅头文件        | ✅           | ✅                                              | ✅                                         | ❌                                                                           | ❌                                         |
-| 依赖            | 无           | 无                                              | 无                                         | Boost                                                                        | 无                                         |
-| C++ 标准        | C++20        | C++11                                           | C++11                                      | C++11                                                                        | C++11                                      |
-| GNU风格选项     | ✅           | ✅                                              | ✅                                         | ✅                                                                           | ❌                                         |
-| 位置参数        | ✅           | ✅                                              | ✅                                         | ✅                                                                           | ❌                                         |
-| 默认值          | ✅           | ✅                                              | ✅                                         | ✅                                                                           | ✅                                         |
-| 类型安全        | ✅           | ❓                                              | ❓                                         | ❓                                                                           | ❓                                         |
-| 容器支持        | ✅           | ✅                                              | ✅                                         | ✅                                                                           | ❌                                         |
-| 自定义类型      | ✅           | ✅                                              | ✅                                         | ✅                                                                           | ❌                                         |
-| 子命令          | ✅           | ❌                                              | ✅                                         | ❌                                                                           | ❌                                         |
-| 配置文件        | ❌           | ❌                                              | ✅                                         | ✅                                                                           | ✅                                         |
-| 帮助信息生成    | ✅           | ✅                                              | ✅                                         | ✅                                                                           | ✅                                         |
-| 组合标志 (-abc) | ✅           | ✅                                              | ✅                                         | ✅                                                                           | ❌                                         |
-| 必填选项        | ✅           | ✅                                              | ✅                                         | ✅                                                                           | ✅                                         |
-| 选项组          | ❌           | ✅                                              | ✅                                         | ✅                                                                           | ❌                                         |
-| 校验            | ✅           | ✅                                              | ✅                                         | ✅                                                                           | ❌                                         |
-| Bash 自动补全   | ✅           | ❌                                              | ❌                                         | ❌                                                                           | ❌                                         |
-| Zsh 自动补全    | ✅           | ❌                                              | ❌                                         | ❌                                                                           | ❌                                         |
-| Fish 自动补全   | ✅           | ❌                                              | ❌                                         | ❌                                                                           | ❌                                         |
-
-## 关键区别：直接变量绑定
-
-`argparse.hpp` 相对于许多其他 C++ 命令行解析库的一个显著优势是其参数处理方式。它不要求用户在解析后通过模板函数如 `parser.get<Type>("arg_name")` 或 `results["arg_name"].as<Type>()` 来检索参数值，而是将标志、选项和位置参数直接绑定到用户定义的变量上。
-
-这意味着：
-
-- **编译时真正的类型安全**：在定义参数时，类型就已知并被检查。
-- **访问时无需运行时类型转换/强制转换**：一旦 `parser.parse()` 被调用，绑定的变量会直接填充解析和转换后的值。您可以立即使用这些变量，无需 `get<T>()`、`cast<T>()` 或类似的访问方法。
-- **更简单、更清晰的代码**：访问解析后的值就像使用变量本身一样简单（例如，`if (args.verbose) {
-... }`，`std::string filename = args.output_file;`）。
-
-这种设计哲学通过更有效地利用 C++ 的类型系统，使得命令行参数解析的代码更加健壮、可读和易于维护。
-
 ## 快速入门
 
 这是一个轻量级且类型安全的 C++ 选项解析库，支持标准的 GNU 风格选项语法。
@@ -689,11 +652,3 @@ if (completion_args.print_fish_completion) {
   return 0;
 }
 ```
-
-## TODO
-
-- [ ] Windows 风格
-
-## 文档
-
-[![在 DeepWiki 中提问](https://deepwiki.com/badge.svg)](https://deepwiki.com/shediao/argparse.hpp)
