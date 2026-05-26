@@ -639,6 +639,62 @@ TEST_F(ArgParserTest, MapAndVectorPairDefaultValueTest) {
   EXPECT_EQ(attributes[1].second, "20");
 }
 
+// Test default_value with a pre-existing std::vector<std::string> variable.
+// This verifies the new vector const& overload (not just initializer_list).
+TEST_F(ArgParserTest, DefaultValueWithVectorVariable) {
+  auto args = make_args("prog");
+
+  std::vector<int> opt_vec;
+  std::vector<std::string> pos_vec;
+  std::map<std::string, std::string> opt_map;
+  std::vector<std::pair<std::string, std::string>> opt_pairs;
+
+  // Create vector variables to pass to default_value
+  std::vector<std::string> opt_defaults = {"10", "20", "30"};
+  std::vector<std::string> pos_defaults = {"input.txt", "output.txt"};
+  std::vector<std::string> map_defaults = {"key1=val1", "key2=val2"};
+  std::vector<std::string> pair_defaults = {"x:1", "y:2", "z:3"};
+
+  ArgParser parser("prog", "the prog description");
+  parser.add_option("v", "Vector value", opt_vec).default_value(opt_defaults);
+  parser.add_positional("files", "Input files", pos_vec)
+      .default_value(pos_defaults);
+  parser.add_option("m", "Map value", opt_map, '=').default_value(map_defaults);
+  parser.add_option("p", "Pair value", opt_pairs, ':')
+      .default_value(pair_defaults);
+
+  parser.parse(args.size(), args.data());
+
+  // Verify vector option
+  ASSERT_EQ(opt_vec.size(), 3);
+  EXPECT_EQ(opt_vec[0], 10);
+  EXPECT_EQ(opt_vec[1], 20);
+  EXPECT_EQ(opt_vec[2], 30);
+
+  // Verify vector positional
+  ASSERT_EQ(pos_vec.size(), 2);
+  EXPECT_EQ(pos_vec[0], "input.txt");
+  EXPECT_EQ(pos_vec[1], "output.txt");
+
+  // Verify map option
+  ASSERT_EQ(opt_map.size(), 2);
+  EXPECT_EQ(opt_map["key1"], "val1");
+  EXPECT_EQ(opt_map["key2"], "val2");
+
+  // Verify vector<pair> option
+  ASSERT_EQ(opt_pairs.size(), 3);
+  EXPECT_EQ(opt_pairs[0].first, "x");
+  EXPECT_EQ(opt_pairs[0].second, "1");
+  EXPECT_EQ(opt_pairs[1].first, "y");
+  EXPECT_EQ(opt_pairs[1].second, "2");
+  EXPECT_EQ(opt_pairs[2].first, "z");
+  EXPECT_EQ(opt_pairs[2].second, "3");
+
+  // Also verify that the original vector variables are unchanged
+  EXPECT_EQ(opt_defaults.size(), 3);
+  EXPECT_EQ(pos_defaults.size(), 2);
+}
+
 TEST_F(ArgParserTest, OptionalValueTest) {
   auto args = make_args("prog", "--name", "myname");
 

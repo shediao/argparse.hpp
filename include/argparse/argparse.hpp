@@ -1216,7 +1216,8 @@ class Option final : public OptionBaseCRTP<Option<T>> {
     this->default_value_ = default_value;
     return *this;
   }
-  Option<T>& default_value(std::initializer_list<std::string> default_value)
+
+  Option<T>& default_value(std::vector<std::string> const& default_value)
     requires detail::from_string_container<T>
   {
     this->default_value_ = default_value;
@@ -1470,7 +1471,7 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
     this->default_value_ = default_value;
     return *this;
   }
-  Positional<T>& default_value(std::initializer_list<std::string> default_value)
+  Positional<T>& default_value(std::vector<std::string> const& default_value)
     requires detail::from_string_container<T>
   {
     this->default_value_ = default_value;
