@@ -19,7 +19,7 @@ FetchContent_MakeAvailable(googletest)
 FetchContent_Declare(
   subprocess
   GIT_REPOSITORY https://github.com/shediao/subprocess.hpp
-  GIT_TAG v0.0.15)
+  GIT_TAG v0.0.33)
 FetchContent_MakeAvailable(subprocess)
 
 # Suppress -Wcharacter-conversion for gtest/gmock when using Clang and C++20.
