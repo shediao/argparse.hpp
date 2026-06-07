@@ -1052,9 +1052,9 @@ concept has_wstring_memfunc = requires(T t) {
   { t.wstring() } -> std::convertible_to<std::wstring>;
 };
 
-template <typename T>
+template <typename T, typename CharT = char>
 concept has_c_str_memfunc = requires(T t) {
-  { t.c_str() } -> std::convertible_to<std::string>;
+  { t.c_str() } -> std::same_as<const CharT*>;
 };
 
 template <typename T>
@@ -1250,13 +1250,13 @@ inline std::optional<std::string> getenv(std::string const& name) {
 template <typename T>
 inline std::string to_string(T const& value)
   requires(has_to_string_memfunc<T> || has_string_memfunc<T> ||
-           has_c_str_memfunc<T> || std::is_convertible_v<T, std::string>)
+           has_c_str_memfunc<T, char> || std::is_convertible_v<T, std::string>)
 {
   if constexpr (has_to_string_memfunc<T>) {
     return value.to_string();
   } else if constexpr (has_string_memfunc<T>) {
     return value.string();
-  } else if constexpr (has_c_str_memfunc<T>) {
+  } else if constexpr (has_c_str_memfunc<T, char>) {
     return value.c_str();
   } else {
     return static_cast<std::string>(value);
@@ -1266,12 +1266,15 @@ inline std::string to_string(T const& value)
 template <typename T>
 inline std::wstring to_wstring(T const& value)
   requires(has_to_wstring_memfunc<T> || has_wstring_memfunc<T> ||
+           has_c_str_memfunc<T, wchar_t> ||
            std::is_convertible_v<T, std::wstring>)
 {
   if constexpr (has_to_wstring_memfunc<T>) {
     return value.to_wstring();
   } else if constexpr (has_wstring_memfunc<T>) {
     return value.wstring();
+  } else if constexpr (has_c_str_memfunc<T, wchar_t>) {
+    return value.c_str();
   } else {
     return static_cast<std::wstring>(value);
   }

@@ -769,7 +769,11 @@ struct WithWstringMemfunc {
 };
 
 struct WithCStrMemfunc {
-  std::string c_str() const { return "via c_str()"; }
+  const char* c_str() const { return "via c_str()"; }
+};
+
+struct WithWCStrMemfunc {
+  const wchar_t* c_str() const { return L"via c_str() [wide]"; }
 };
 
 struct WithAll {
@@ -777,7 +781,7 @@ struct WithAll {
   std::string string() const { return "all"; }
   std::wstring to_wstring() const { return L"all"; }
   std::wstring wstring() const { return L"all"; }
-  std::string c_str() const { return "all"; }
+  const char* c_str() const { return "all"; }
 };
 
 // Types with wrong return types
@@ -828,7 +832,7 @@ struct NonConstWstring {
 };
 
 struct NonConstCStr {
-  std::string c_str() { return "non-const"; }
+  const char* c_str() { return "non-const"; }
 };
 
 struct Empty {};
@@ -956,6 +960,18 @@ TEST(ConceptTest, HasCStrMemfunc) {
 
   // Const qualification
   ASSERT_TRUE(argparse::detail::has_c_str_memfunc<const WithCStrMemfunc>);
+
+  // wchar_t overload: WithWCStrMemfunc has c_str() -> const wchar_t*
+  ASSERT_FALSE(argparse::detail::has_c_str_memfunc<WithWCStrMemfunc>);
+  ASSERT_TRUE((argparse::detail::has_c_str_memfunc<WithWCStrMemfunc, wchar_t>));
+
+  // std::wstring has c_str() -> const wchar_t*
+  ASSERT_FALSE(argparse::detail::has_c_str_memfunc<std::wstring>);
+  ASSERT_TRUE((argparse::detail::has_c_str_memfunc<std::wstring, wchar_t>));
+
+  // WithAll returns const char*, not const wchar_t*
+  ASSERT_TRUE(argparse::detail::has_c_str_memfunc<WithAll>);
+  ASSERT_FALSE((argparse::detail::has_c_str_memfunc<WithAll, wchar_t>));
 }
 
 TEST(ConceptTest, MemfuncTraitsCombined) {
@@ -980,6 +996,14 @@ TEST(ConceptTest, MemfuncTraitsCombined) {
   ASSERT_TRUE(argparse::detail::has_c_str_memfunc<WithCStrMemfunc>);
   ASSERT_FALSE(argparse::detail::has_to_string_memfunc<WithCStrMemfunc>);
   ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc<WithCStrMemfunc>);
+  // WithCStrMemfunc returns const char*, not const wchar_t*
+  ASSERT_FALSE((argparse::detail::has_c_str_memfunc<WithCStrMemfunc, wchar_t>));
+
+  // WithWCStrMemfunc only satisfies c_str with wchar_t
+  ASSERT_FALSE(argparse::detail::has_c_str_memfunc<WithWCStrMemfunc>);
+  ASSERT_TRUE((argparse::detail::has_c_str_memfunc<WithWCStrMemfunc, wchar_t>));
+  ASSERT_FALSE(argparse::detail::has_to_string_memfunc<WithWCStrMemfunc>);
+  ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc<WithWCStrMemfunc>);
 
   // std::string: only has c_str()
   ASSERT_FALSE(argparse::detail::has_to_string_memfunc<std::string>);
@@ -994,6 +1018,7 @@ TEST(ConceptTest, MemfuncTraitsCombined) {
   ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc<std::wstring>);
   ASSERT_FALSE(argparse::detail::has_wstring_memfunc<std::wstring>);
   ASSERT_FALSE(argparse::detail::has_c_str_memfunc<std::wstring>);
+  ASSERT_TRUE((argparse::detail::has_c_str_memfunc<std::wstring, wchar_t>));
 
   // Empty type satisfies none
   ASSERT_FALSE(argparse::detail::has_to_string_memfunc<Empty>);
@@ -1031,6 +1056,12 @@ TEST(ConceptTest, ToWstringViaMemberFunctions) {
 
   WithWstringMemfunc obj2;
   ASSERT_EQ(argparse::detail::to_wstring(obj2), L"via wstring()");
+
+  WithWCStrMemfunc obj3;
+  ASSERT_EQ(argparse::detail::to_wstring(obj3), L"via c_str() [wide]");
+
+  std::wstring ws = L"hello";
+  ASSERT_EQ(argparse::detail::to_wstring(ws), L"hello");
 }
 
 TEST(ConceptTest, ToStringCStrWorksForStdString) {
@@ -1054,6 +1085,7 @@ TEST(ConceptTest, ToStringAndToWstringNoMatch) {
   ASSERT_FALSE(argparse::detail::has_to_string_memfunc<std::wstring>);
   ASSERT_FALSE(argparse::detail::has_string_memfunc<std::wstring>);
   ASSERT_FALSE(argparse::detail::has_c_str_memfunc<std::wstring>);
+  ASSERT_TRUE((argparse::detail::has_c_str_memfunc<std::wstring, wchar_t>));
   ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc<std::wstring>);
   ASSERT_FALSE(argparse::detail::has_wstring_memfunc<std::wstring>);
 }
