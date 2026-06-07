@@ -1291,16 +1291,16 @@ void push_back(T& t, typename T::value_type&& value) {
   if constexpr (requires(T t) {
                   t.push_back(std::declval<typename T::value_type>());
                 }) {
-    t.push_back(std::forward<typename T::value_type>(value));
+    t.push_back(std::move(value));
   } else if constexpr (requires(T t) {
                          t.insert(t.end(),
                                   std::declval<typename T::value_type>());
                        }) {
-    t.insert(t.end(), std::forward<typename T::value_type>(value));
+    t.insert(t.end(), std::move(value));
   } else if constexpr (requires(T t) {
                          t.push(std::declval<typename T::value_type>());
                        }) {
-    t.push(std::forward<typename T::value_type>(value));
+    t.push(std::move(value));
   } else {
     throw std::runtime_error("Unsupported container type");
   }
