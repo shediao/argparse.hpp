@@ -1289,16 +1289,20 @@ inline std::wstring to_wstring(T const& value)
 template <is_container T>
 void push_back(T& t, typename T::value_type&& value) {
   if constexpr (requires(T t) {
-                  t.push_back(std::declval<typename T::value_type>());
+                  t.emplace_back(std::declval<typename T::value_type&&>());
                 }) {
+    t.emplace_back(std::move(value));
+  } else if constexpr (requires(T t) {
+                         t.push_back(std::declval<typename T::value_type&&>());
+                       }) {
     t.push_back(std::move(value));
   } else if constexpr (requires(T t) {
                          t.insert(t.end(),
-                                  std::declval<typename T::value_type>());
+                                  std::declval<typename T::value_type&&>());
                        }) {
     t.insert(t.end(), std::move(value));
   } else if constexpr (requires(T t) {
-                         t.push(std::declval<typename T::value_type>());
+                         t.push(std::declval<typename T::value_type&&>());
                        }) {
     t.push(std::move(value));
   } else {
@@ -1308,8 +1312,12 @@ void push_back(T& t, typename T::value_type&& value) {
 template <is_container T>
 void push_back(T& t, typename T::value_type const& value) {
   if constexpr (requires(T t) {
-                  t.push_back(std::declval<typename T::value_type>());
+                  t.emplace_back(std::declval<typename T::value_type>());
                 }) {
+    t.emplace_back(value);
+  } else if constexpr (requires(T t) {
+                         t.push_back(std::declval<typename T::value_type>());
+                       }) {
     t.push_back(value);
   } else if constexpr (requires(T t) {
                          t.insert(t.end(),
