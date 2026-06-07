@@ -1196,15 +1196,17 @@ inline std::wstring to_wstring(const std::string_view& str) {
   if (str.empty()) {
     return {};
   }
-  int size_needed =
-      MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
+  DWORD size_needed = MultiByteToWideChar(
+      CP_UTF8, 0, str.data(), static_cast<DWORD>(str.size()), NULL, 0);
   if (size_needed <= 0) {
     // TODO: throw an exception on conversion errors
     return {};
   }
-  std::wstring wstr(size_needed, 0);
-  MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &wstr[0],
-                      size_needed);
+  std::wstring wstr(size_needed, L'\0');
+  DWORD size = MultiByteToWideChar(CP_UTF8, 0, str.data(),
+                                   static_cast<DWORD>(str.size()), wstr.data(),
+                                   size_needed);
+  wstr.resize(size);
   return wstr;
 }
 
@@ -1213,15 +1215,18 @@ inline std::string to_string(const std::wstring_view& wstr) {
   if (wstr.empty()) {
     return {};
   }
-  int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(),
-                                        NULL, 0, NULL, NULL);
+  DWORD size_needed =
+      WideCharToMultiByte(CP_UTF8, 0, wstr.data(),
+                          static_cast<DWORD>(wstr.size()), NULL, 0, NULL, NULL);
   if (size_needed <= 0) {
     // TODO: throw an exception on conversion errors
     return {};
   }
-  std::string str(size_needed, 0);
-  WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), &str[0],
-                      size_needed, NULL, NULL);
+  std::string str(size_needed, '\0');
+  DWORD size = WideCharToMultiByte(CP_UTF8, 0, wstr.data(),
+                                   static_cast<DWORD>(wstr.size()), str.data(),
+                                   size_needed, NULL, NULL);
+  str.resize(size);
   return str;
 }
 #endif  // _WIN32
@@ -1229,15 +1234,16 @@ inline std::string to_string(const std::wstring_view& wstr) {
 inline std::optional<std::string> getenv(std::string const& name) {
 #if defined(_WIN32)
   auto wname = to_wstring(name);
-  auto const size = GetEnvironmentVariableW(wname.c_str(), nullptr, 0);
+  auto size = GetEnvironmentVariableW(wname.c_str(), nullptr, 0);
   if (size == 0) {
     return GetLastError() == ERROR_ENVVAR_NOT_FOUND
                ? std::nullopt
                : std::optional<std::string>{""};
   }
-  std::vector<wchar_t> value(size);
-  GetEnvironmentVariableW(wname.data(), value.data(), size);
-  return to_string(value.data());
+  std::wstring ret(size, L'\0');
+  size = GetEnvironmentVariableW(wname.data(), ret.data(), size);
+  ret.resize(size);
+  return to_string(ret);
 #else
   auto* env = ::getenv(name.c_str());
   if (env) {
