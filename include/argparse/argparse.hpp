@@ -1024,88 +1024,38 @@ template <typename T>
 concept bindable = bindable_without_delim<T> || bindable_with_delim<T>;
 
 template <typename T>
-struct has_to_string : std::false_type {};
+concept has_to_string = requires(T t) {
+  { to_string(t) } -> std::convertible_to<std::string>;
+};
+template <typename T>
+concept has_to_wstring = requires(T t) {
+  { to_wstring(t) } -> std::convertible_to<std::wstring>;
+};
 
 template <typename T>
-  requires(requires(T& t) {
-    { to_string(t) } -> std::convertible_to<std::string>;
-  })
-struct has_to_string<T> : std::true_type {};
+concept has_to_string_memfunc = requires(T t) {
+  { t.to_string() } -> std::convertible_to<std::string>;
+};
 
 template <typename T>
-constexpr bool has_to_string_v = has_to_string<T>::value;
+concept has_to_wstring_memfunc = requires(T t) {
+  { t.to_wstring() } -> std::convertible_to<std::wstring>;
+};
 
 template <typename T>
-struct has_to_wstring : std::false_type {};
+concept has_string_memfunc = requires(T t) {
+  { t.string() } -> std::convertible_to<std::string>;
+};
 
 template <typename T>
-  requires(requires(T& t) {
-    { to_wstring(t) } -> std::convertible_to<std::wstring>;
-  })
-struct has_to_wstring<T> : std::true_type {};
+concept has_wstring_memfunc = requires(T t) {
+  { t.wstring() } -> std::convertible_to<std::wstring>;
+};
 
 template <typename T>
-constexpr bool has_to_wstring_v = has_to_wstring<T>::value;
-
-template <typename T>
-struct has_to_string_memfunc : std::false_type {};
-
-template <typename T>
-  requires(requires(T& t) {
-    { t.to_string() } -> std::convertible_to<std::string>;
-  })
-struct has_to_string_memfunc<T> : std::true_type {};
-
-template <typename T>
-constexpr bool has_to_string_memfunc_v = has_to_string_memfunc<T>::value;
-
-template <typename T>
-struct has_string_memfunc : std::false_type {};
-
-template <typename T>
-  requires(requires(T& t) {
-    { t.string() } -> std::convertible_to<std::string>;
-  })
-struct has_string_memfunc<T> : std::true_type {};
-
-template <typename T>
-constexpr bool has_string_memfunc_v = has_string_memfunc<T>::value;
-
-template <typename T>
-struct has_to_wstring_memfunc : std::false_type {};
-
-template <typename T>
-  requires(requires(T& t) {
-    { t.to_wstring() } -> std::convertible_to<std::wstring>;
-  })
-struct has_to_wstring_memfunc<T> : std::true_type {};
-
-template <typename T>
-constexpr bool has_to_wstring_memfunc_v = has_to_wstring_memfunc<T>::value;
-
-template <typename T>
-struct has_wstring_memfunc : std::false_type {};
-
-template <typename T>
-  requires(requires(T& t) {
-    { t.wstring() } -> std::convertible_to<std::wstring>;
-  })
-struct has_wstring_memfunc<T> : std::true_type {};
-
-template <typename T>
-constexpr bool has_wstring_memfunc_v = has_wstring_memfunc<T>::value;
-
-template <typename T>
-struct has_c_str_memfunc : std::false_type {};
-
-template <typename T>
-  requires(requires(T& t) {
-    { t.c_str() } -> std::convertible_to<std::string>;
-  })
-struct has_c_str_memfunc<T> : std::true_type {};
-
-template <typename T>
-constexpr bool has_c_str_memfunc_v = has_c_str_memfunc<T>::value;
+concept has_c_str_memfunc = requires(T t) {
+  { t.c_str() } -> std::convertible_to<std::string>;
+};
 
 template <typename T>
 struct extract_value_type {
@@ -1299,26 +1249,31 @@ inline std::optional<std::string> getenv(std::string const& name) {
 
 template <typename T>
 inline std::string to_string(T const& value)
-  requires(has_to_string_memfunc_v<T> || has_string_memfunc_v<T> ||
-           has_c_str_memfunc_v<T>)
+  requires(has_to_string_memfunc<T> || has_string_memfunc<T> ||
+           has_c_str_memfunc<T> || std::is_convertible_v<T, std::string>)
 {
-  if constexpr (has_to_string_memfunc_v<T>) {
+  if constexpr (has_to_string_memfunc<T>) {
     return value.to_string();
-  } else if constexpr (has_string_memfunc_v<T>) {
+  } else if constexpr (has_string_memfunc<T>) {
     return value.string();
-  } else if constexpr (has_c_str_memfunc_v<T>) {
+  } else if constexpr (has_c_str_memfunc<T>) {
     return value.c_str();
+  } else {
+    return static_cast<std::string>(value);
   }
 }
 
 template <typename T>
 inline std::wstring to_wstring(T const& value)
-  requires(has_to_wstring_memfunc_v<T> || has_wstring_memfunc_v<T>)
+  requires(has_to_wstring_memfunc<T> || has_wstring_memfunc<T> ||
+           std::is_convertible_v<T, std::wstring>)
 {
-  if constexpr (has_to_wstring_memfunc_v<T>) {
+  if constexpr (has_to_wstring_memfunc<T>) {
     return value.to_wstring();
-  } else if constexpr (has_wstring_memfunc_v<T>) {
+  } else if constexpr (has_wstring_memfunc<T>) {
     return value.wstring();
+  } else {
+    return static_cast<std::wstring>(value);
   }
 }
 
@@ -1981,13 +1936,13 @@ class Option final : public OptionBaseCRTP<Option<T>> {
         msg += opt_value;
         msg += "` is an invalid value. Valid choices are: ";
 
-        if constexpr (detail::has_to_string_v<parsed_value_type> ||
+        if constexpr (detail::has_to_string<parsed_value_type> ||
                       std::is_constructible_v<std::string, parsed_value_type>) {
           std::vector<std::string> keys;
           std::transform(
               value_choices_.begin(), value_choices_.end(),
               std::back_inserter(keys), [](auto const& pair) {
-                if constexpr (detail::has_to_string_v<parsed_value_type>) {
+                if constexpr (detail::has_to_string<parsed_value_type>) {
                   return argparse::to_string(pair.first);
                 } else {
                   return pair.first;
@@ -2241,13 +2196,13 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
         msg += "` is an invalid value. Valid choices are: ";
 
         if constexpr (std::is_same_v<parsed_value_type, std::string> ||
-                      detail::has_to_string_v<parsed_value_type> ||
+                      detail::has_to_string<parsed_value_type> ||
                       std::is_constructible_v<std::string, parsed_value_type>) {
           std::vector<std::string> keys;
           std::transform(
               value_choices_.begin(), value_choices_.end(),
               std::back_inserter(keys), [](auto const& pair) {
-                if constexpr (detail::has_to_string_v<parsed_value_type>) {
+                if constexpr (detail::has_to_string<parsed_value_type>) {
                   return argparse::to_string(pair.first);
                 } else {
                   return pair.first;

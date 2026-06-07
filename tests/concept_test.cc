@@ -640,97 +640,97 @@ inline int to_wstring(BadToWstring const&) { return 42; }
 
 TEST(ConceptTest, HasToString) {
   // Types supported by std::to_string
-  ASSERT_TRUE(argparse::detail::has_to_string_v<int>);
-  ASSERT_TRUE(argparse::detail::has_to_string_v<long>);
-  ASSERT_TRUE(argparse::detail::has_to_string_v<long long>);
-  ASSERT_TRUE(argparse::detail::has_to_string_v<unsigned>);
-  ASSERT_TRUE(argparse::detail::has_to_string_v<unsigned long>);
-  ASSERT_TRUE(argparse::detail::has_to_string_v<unsigned long long>);
-  ASSERT_TRUE(argparse::detail::has_to_string_v<float>);
-  ASSERT_TRUE(argparse::detail::has_to_string_v<double>);
-  ASSERT_TRUE(argparse::detail::has_to_string_v<long double>);
+  ASSERT_TRUE(argparse::detail::has_to_string<int>);
+  ASSERT_TRUE(argparse::detail::has_to_string<long>);
+  ASSERT_TRUE(argparse::detail::has_to_string<long long>);
+  ASSERT_TRUE(argparse::detail::has_to_string<unsigned>);
+  ASSERT_TRUE(argparse::detail::has_to_string<unsigned long>);
+  ASSERT_TRUE(argparse::detail::has_to_string<unsigned long long>);
+  ASSERT_TRUE(argparse::detail::has_to_string<float>);
+  ASSERT_TRUE(argparse::detail::has_to_string<double>);
+  ASSERT_TRUE(argparse::detail::has_to_string<long double>);
 
   // Types that promote to integral types supported by std::to_string
-  ASSERT_TRUE(argparse::detail::has_to_string_v<bool>);
-  ASSERT_TRUE(argparse::detail::has_to_string_v<char>);
-  ASSERT_TRUE(argparse::detail::has_to_string_v<short>);
-  ASSERT_TRUE(argparse::detail::has_to_string_v<unsigned short>);
-  ASSERT_TRUE(argparse::detail::has_to_string_v<unsigned char>);
+  ASSERT_TRUE(argparse::detail::has_to_string<bool>);
+  ASSERT_TRUE(argparse::detail::has_to_string<char>);
+  ASSERT_TRUE(argparse::detail::has_to_string<short>);
+  ASSERT_TRUE(argparse::detail::has_to_string<unsigned short>);
+  ASSERT_TRUE(argparse::detail::has_to_string<unsigned char>);
 
   // std::string (via identity overload in argparse)
-  ASSERT_TRUE(argparse::detail::has_to_string_v<std::string>);
+  ASSERT_TRUE(argparse::detail::has_to_string<std::string>);
 
   // const char* is implicitly convertible to std::string
-  ASSERT_TRUE(argparse::detail::has_to_string_v<const char*>);
+  ASSERT_TRUE(argparse::detail::has_to_string<const char*>);
 
   // Custom types with ADL to_string
-  ASSERT_TRUE(argparse::detail::has_to_string_v<custom_ns::WithToString>);
-  ASSERT_TRUE(argparse::detail::has_to_string_v<custom_ns::WithBoth>);
+  ASSERT_TRUE(argparse::detail::has_to_string<custom_ns::WithToString>);
+  ASSERT_TRUE(argparse::detail::has_to_string<custom_ns::WithBoth>);
 
   // Types without to_string support
-  ASSERT_FALSE(argparse::detail::has_to_string_v<std::wstring>);
-  ASSERT_FALSE(argparse::detail::has_to_string_v<std::vector<int>>);
-  ASSERT_FALSE((argparse::detail::has_to_string_v<std::pair<int, int>>));
-  ASSERT_FALSE(argparse::detail::has_to_string_v<custom_ns::WithToWstring>);
+  ASSERT_FALSE(argparse::detail::has_to_string<std::wstring>);
+  ASSERT_FALSE(argparse::detail::has_to_string<std::vector<int>>);
+  ASSERT_FALSE((argparse::detail::has_to_string<std::pair<int, int>>));
+  ASSERT_FALSE(argparse::detail::has_to_string<custom_ns::WithToWstring>);
 
   // to_string exists but returns wrong type
-  ASSERT_FALSE(argparse::detail::has_to_string_v<custom_ns::BadToString>);
+  ASSERT_FALSE(argparse::detail::has_to_string<custom_ns::BadToString>);
 
   // Unrelated pointer types
-  ASSERT_FALSE(argparse::detail::has_to_string_v<int*>);
+  ASSERT_FALSE(argparse::detail::has_to_string<int*>);
 }
 
 TEST(ConceptTest, HasToWstring) {
   // Types supported by std::to_wstring
-  ASSERT_TRUE(argparse::detail::has_to_wstring_v<int>);
-  ASSERT_TRUE(argparse::detail::has_to_wstring_v<long>);
-  ASSERT_TRUE(argparse::detail::has_to_wstring_v<long long>);
-  ASSERT_TRUE(argparse::detail::has_to_wstring_v<unsigned>);
-  ASSERT_TRUE(argparse::detail::has_to_wstring_v<unsigned long>);
-  ASSERT_TRUE(argparse::detail::has_to_wstring_v<unsigned long long>);
-  ASSERT_TRUE(argparse::detail::has_to_wstring_v<float>);
-  ASSERT_TRUE(argparse::detail::has_to_wstring_v<double>);
-  ASSERT_TRUE(argparse::detail::has_to_wstring_v<long double>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring<int>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring<long>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring<long long>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring<unsigned>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring<unsigned long>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring<unsigned long long>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring<float>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring<double>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring<long double>);
 
   // Types that promote to integral types supported by std::to_wstring
-  ASSERT_TRUE(argparse::detail::has_to_wstring_v<bool>);
-  ASSERT_TRUE(argparse::detail::has_to_wstring_v<char>);
-  ASSERT_TRUE(argparse::detail::has_to_wstring_v<short>);
-  ASSERT_TRUE(argparse::detail::has_to_wstring_v<unsigned short>);
-  ASSERT_TRUE(argparse::detail::has_to_wstring_v<unsigned char>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring<bool>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring<char>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring<short>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring<unsigned short>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring<unsigned char>);
 
   // std::wstring (via identity overload in argparse)
-  ASSERT_TRUE(argparse::detail::has_to_wstring_v<std::wstring>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring<std::wstring>);
 
   // const wchar_t* is implicitly convertible to std::wstring
-  ASSERT_TRUE(argparse::detail::has_to_wstring_v<const wchar_t*>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring<const wchar_t*>);
 
   // Custom types with ADL to_wstring
-  ASSERT_TRUE(argparse::detail::has_to_wstring_v<custom_ns::WithToWstring>);
-  ASSERT_TRUE(argparse::detail::has_to_wstring_v<custom_ns::WithBoth>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring<custom_ns::WithToWstring>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring<custom_ns::WithBoth>);
 
   // Types without to_wstring support
-  ASSERT_FALSE(argparse::detail::has_to_wstring_v<std::string>);
-  ASSERT_FALSE(argparse::detail::has_to_wstring_v<std::vector<int>>);
-  ASSERT_FALSE((argparse::detail::has_to_wstring_v<std::pair<int, int>>));
-  ASSERT_FALSE(argparse::detail::has_to_wstring_v<custom_ns::WithToString>);
+  ASSERT_FALSE(argparse::detail::has_to_wstring<std::string>);
+  ASSERT_FALSE(argparse::detail::has_to_wstring<std::vector<int>>);
+  ASSERT_FALSE((argparse::detail::has_to_wstring<std::pair<int, int>>));
+  ASSERT_FALSE(argparse::detail::has_to_wstring<custom_ns::WithToString>);
 
   // to_wstring exists but returns wrong type
-  ASSERT_FALSE(argparse::detail::has_to_wstring_v<custom_ns::BadToWstring>);
+  ASSERT_FALSE(argparse::detail::has_to_wstring<custom_ns::BadToWstring>);
 
   // Unrelated pointer types
-  ASSERT_FALSE(argparse::detail::has_to_wstring_v<int*>);
+  ASSERT_FALSE(argparse::detail::has_to_wstring<int*>);
 }
 
 TEST(ConceptTest, HasToStringConstVolatile) {
   // Const-qualified types should still work
-  ASSERT_TRUE(argparse::detail::has_to_string_v<const int>);
-  ASSERT_TRUE(argparse::detail::has_to_string_v<const double>);
-  ASSERT_TRUE(argparse::detail::has_to_string_v<const std::string>);
+  ASSERT_TRUE(argparse::detail::has_to_string<const int>);
+  ASSERT_TRUE(argparse::detail::has_to_string<const double>);
+  ASSERT_TRUE(argparse::detail::has_to_string<const std::string>);
 
-  ASSERT_TRUE(argparse::detail::has_to_wstring_v<const int>);
-  ASSERT_TRUE(argparse::detail::has_to_wstring_v<const double>);
-  ASSERT_TRUE(argparse::detail::has_to_wstring_v<const std::wstring>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring<const int>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring<const double>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring<const std::wstring>);
 }
 
 TEST(ConceptTest, HasToStringEnum) {
@@ -738,12 +738,12 @@ TEST(ConceptTest, HasToStringEnum) {
   enum class ScopedFruit { Apple, Banana };
 
   // Unscoped enums implicitly convert to int, so std::to_string works
-  ASSERT_TRUE(argparse::detail::has_to_string_v<UnscopedColor>);
-  ASSERT_TRUE(argparse::detail::has_to_wstring_v<UnscopedColor>);
+  ASSERT_TRUE(argparse::detail::has_to_string<UnscopedColor>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring<UnscopedColor>);
 
   // Scoped enums do not implicitly convert, so std::to_string is unavailable
-  ASSERT_FALSE(argparse::detail::has_to_string_v<ScopedFruit>);
-  ASSERT_FALSE(argparse::detail::has_to_wstring_v<ScopedFruit>);
+  ASSERT_FALSE(argparse::detail::has_to_string<ScopedFruit>);
+  ASSERT_FALSE(argparse::detail::has_to_wstring<ScopedFruit>);
 }
 
 // ============================================================
@@ -839,169 +839,168 @@ TEST(ConceptTest, HasToStringMemfunc) {
   using namespace memfunc_ns;
 
   // Types with correct to_string() -> std::string
-  ASSERT_TRUE(argparse::detail::has_to_string_memfunc_v<WithToStringMemfunc>);
+  ASSERT_TRUE(argparse::detail::has_to_string_memfunc<WithToStringMemfunc>);
 
   // Non-const member function also accepted (tested via T&)
-  ASSERT_TRUE(argparse::detail::has_to_string_memfunc_v<NonConstToString>);
+  ASSERT_TRUE(argparse::detail::has_to_string_memfunc<NonConstToString>);
 
   // Types without to_string() member function
-  ASSERT_FALSE(argparse::detail::has_to_string_memfunc_v<std::string>);
-  ASSERT_FALSE(argparse::detail::has_to_string_memfunc_v<WithStringMemfunc>);
-  ASSERT_FALSE(argparse::detail::has_to_string_memfunc_v<Empty>);
+  ASSERT_FALSE(argparse::detail::has_to_string_memfunc<std::string>);
+  ASSERT_FALSE(argparse::detail::has_to_string_memfunc<WithStringMemfunc>);
+  ASSERT_FALSE(argparse::detail::has_to_string_memfunc<Empty>);
 
   // Wrong return type
-  ASSERT_FALSE(argparse::detail::has_to_string_memfunc_v<BadToStringMemfunc>);
-  ASSERT_FALSE(argparse::detail::has_to_string_memfunc_v<WrongStringReturn>);
+  ASSERT_FALSE(argparse::detail::has_to_string_memfunc<BadToStringMemfunc>);
+  ASSERT_FALSE(argparse::detail::has_to_string_memfunc<WrongStringReturn>);
 
   // Const qualification
   ASSERT_TRUE(
-      argparse::detail::has_to_string_memfunc_v<const WithToStringMemfunc>);
+      argparse::detail::has_to_string_memfunc<const WithToStringMemfunc>);
 
   // Volatile qualification is not accepted
-  ASSERT_FALSE((
-      argparse::detail::has_to_string_memfunc_v<volatile WithToStringMemfunc>));
+  ASSERT_FALSE(
+      (argparse::detail::has_to_string_memfunc<volatile WithToStringMemfunc>));
 }
 
 TEST(ConceptTest, HasStringMemfunc) {
   using namespace memfunc_ns;
 
   // Types with correct string() -> std::string
-  ASSERT_TRUE(argparse::detail::has_string_memfunc_v<WithStringMemfunc>);
-  ASSERT_TRUE(argparse::detail::has_string_memfunc_v<WithAll>);
+  ASSERT_TRUE(argparse::detail::has_string_memfunc<WithStringMemfunc>);
+  ASSERT_TRUE(argparse::detail::has_string_memfunc<WithAll>);
 
   // Non-const member function also accepted
-  ASSERT_TRUE(argparse::detail::has_string_memfunc_v<NonConstString>);
+  ASSERT_TRUE(argparse::detail::has_string_memfunc<NonConstString>);
 
   // Types without string() member function
-  ASSERT_FALSE(argparse::detail::has_string_memfunc_v<int>);
-  ASSERT_FALSE(argparse::detail::has_string_memfunc_v<std::string>);
-  ASSERT_FALSE(argparse::detail::has_string_memfunc_v<WithToStringMemfunc>);
-  ASSERT_FALSE(argparse::detail::has_string_memfunc_v<Empty>);
+  ASSERT_FALSE(argparse::detail::has_string_memfunc<int>);
+  ASSERT_FALSE(argparse::detail::has_string_memfunc<std::string>);
+  ASSERT_FALSE(argparse::detail::has_string_memfunc<WithToStringMemfunc>);
+  ASSERT_FALSE(argparse::detail::has_string_memfunc<Empty>);
 
   // Wrong return type
-  ASSERT_FALSE(argparse::detail::has_string_memfunc_v<BadStringMemfunc>);
+  ASSERT_FALSE(argparse::detail::has_string_memfunc<BadStringMemfunc>);
 
   // Const qualification
-  ASSERT_TRUE(argparse::detail::has_string_memfunc_v<const WithStringMemfunc>);
+  ASSERT_TRUE(argparse::detail::has_string_memfunc<const WithStringMemfunc>);
 }
 
 TEST(ConceptTest, HasToWstringMemfunc) {
   using namespace memfunc_ns;
 
   // Types with correct to_wstring() -> std::wstring
-  ASSERT_TRUE(argparse::detail::has_to_wstring_memfunc_v<WithToWstringMemfunc>);
-  ASSERT_TRUE(argparse::detail::has_to_wstring_memfunc_v<WithAll>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring_memfunc<WithToWstringMemfunc>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring_memfunc<WithAll>);
 
   // Non-const member function also accepted
-  ASSERT_TRUE(argparse::detail::has_to_wstring_memfunc_v<NonConstToWstring>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring_memfunc<NonConstToWstring>);
 
   // Types without to_wstring() member function
-  ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc_v<int>);
-  ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc_v<std::wstring>);
-  ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc_v<WithWstringMemfunc>);
-  ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc_v<Empty>);
+  ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc<int>);
+  ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc<std::wstring>);
+  ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc<WithWstringMemfunc>);
+  ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc<Empty>);
 
   // Wrong return type
-  ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc_v<BadToWstringMemfunc>);
-  ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc_v<WrongWstringReturn>);
+  ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc<BadToWstringMemfunc>);
+  ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc<WrongWstringReturn>);
 
   // Const qualification
   ASSERT_TRUE(
-      argparse::detail::has_to_wstring_memfunc_v<const WithToWstringMemfunc>);
+      argparse::detail::has_to_wstring_memfunc<const WithToWstringMemfunc>);
 }
 
 TEST(ConceptTest, HasWstringMemfunc) {
   using namespace memfunc_ns;
 
   // Types with correct wstring() -> std::wstring
-  ASSERT_TRUE(argparse::detail::has_wstring_memfunc_v<WithWstringMemfunc>);
-  ASSERT_TRUE(argparse::detail::has_wstring_memfunc_v<WithAll>);
+  ASSERT_TRUE(argparse::detail::has_wstring_memfunc<WithWstringMemfunc>);
+  ASSERT_TRUE(argparse::detail::has_wstring_memfunc<WithAll>);
 
   // Non-const member function also accepted
-  ASSERT_TRUE(argparse::detail::has_wstring_memfunc_v<NonConstWstring>);
+  ASSERT_TRUE(argparse::detail::has_wstring_memfunc<NonConstWstring>);
 
   // Types without wstring() member function
-  ASSERT_FALSE(argparse::detail::has_wstring_memfunc_v<int>);
-  ASSERT_FALSE(argparse::detail::has_wstring_memfunc_v<std::wstring>);
-  ASSERT_FALSE(argparse::detail::has_wstring_memfunc_v<WithToStringMemfunc>);
-  ASSERT_FALSE(argparse::detail::has_wstring_memfunc_v<Empty>);
+  ASSERT_FALSE(argparse::detail::has_wstring_memfunc<int>);
+  ASSERT_FALSE(argparse::detail::has_wstring_memfunc<std::wstring>);
+  ASSERT_FALSE(argparse::detail::has_wstring_memfunc<WithToStringMemfunc>);
+  ASSERT_FALSE(argparse::detail::has_wstring_memfunc<Empty>);
 
   // Wrong return type
-  ASSERT_FALSE(argparse::detail::has_wstring_memfunc_v<BadWstringMemfunc>);
+  ASSERT_FALSE(argparse::detail::has_wstring_memfunc<BadWstringMemfunc>);
 
   // Const qualification
-  ASSERT_TRUE(
-      argparse::detail::has_wstring_memfunc_v<const WithWstringMemfunc>);
+  ASSERT_TRUE(argparse::detail::has_wstring_memfunc<const WithWstringMemfunc>);
 }
 
 TEST(ConceptTest, HasCStrMemfunc) {
   using namespace memfunc_ns;
 
   // Types with correct c_str() -> std::string
-  ASSERT_TRUE(argparse::detail::has_c_str_memfunc_v<WithCStrMemfunc>);
-  ASSERT_TRUE(argparse::detail::has_c_str_memfunc_v<WithAll>);
+  ASSERT_TRUE(argparse::detail::has_c_str_memfunc<WithCStrMemfunc>);
+  ASSERT_TRUE(argparse::detail::has_c_str_memfunc<WithAll>);
 
   // Non-const member function also accepted
-  ASSERT_TRUE(argparse::detail::has_c_str_memfunc_v<NonConstCStr>);
+  ASSERT_TRUE(argparse::detail::has_c_str_memfunc<NonConstCStr>);
 
   // std::string has c_str() returning const char* (convertible to std::string)
-  ASSERT_TRUE(argparse::detail::has_c_str_memfunc_v<std::string>);
+  ASSERT_TRUE(argparse::detail::has_c_str_memfunc<std::string>);
 
   // Types without c_str() member function
-  ASSERT_FALSE(argparse::detail::has_c_str_memfunc_v<int>);
-  ASSERT_FALSE(argparse::detail::has_c_str_memfunc_v<WithToStringMemfunc>);
-  ASSERT_FALSE(argparse::detail::has_c_str_memfunc_v<Empty>);
+  ASSERT_FALSE(argparse::detail::has_c_str_memfunc<int>);
+  ASSERT_FALSE(argparse::detail::has_c_str_memfunc<WithToStringMemfunc>);
+  ASSERT_FALSE(argparse::detail::has_c_str_memfunc<Empty>);
 
   // Wrong return type
-  ASSERT_FALSE(argparse::detail::has_c_str_memfunc_v<BadCStrMemfunc>);
+  ASSERT_FALSE(argparse::detail::has_c_str_memfunc<BadCStrMemfunc>);
 
   // Const qualification
-  ASSERT_TRUE(argparse::detail::has_c_str_memfunc_v<const WithCStrMemfunc>);
+  ASSERT_TRUE(argparse::detail::has_c_str_memfunc<const WithCStrMemfunc>);
 }
 
 TEST(ConceptTest, MemfuncTraitsCombined) {
   using namespace memfunc_ns;
 
   // WithAll should satisfy all five traits
-  ASSERT_TRUE(argparse::detail::has_to_string_memfunc_v<WithAll>);
-  ASSERT_TRUE(argparse::detail::has_string_memfunc_v<WithAll>);
-  ASSERT_TRUE(argparse::detail::has_to_wstring_memfunc_v<WithAll>);
-  ASSERT_TRUE(argparse::detail::has_wstring_memfunc_v<WithAll>);
-  ASSERT_TRUE(argparse::detail::has_c_str_memfunc_v<WithAll>);
+  ASSERT_TRUE(argparse::detail::has_to_string_memfunc<WithAll>);
+  ASSERT_TRUE(argparse::detail::has_string_memfunc<WithAll>);
+  ASSERT_TRUE(argparse::detail::has_to_wstring_memfunc<WithAll>);
+  ASSERT_TRUE(argparse::detail::has_wstring_memfunc<WithAll>);
+  ASSERT_TRUE(argparse::detail::has_c_str_memfunc<WithAll>);
 
   // Each specialized type should only satisfy its own trait
-  ASSERT_TRUE(argparse::detail::has_to_string_memfunc_v<WithToStringMemfunc>);
-  ASSERT_FALSE(argparse::detail::has_string_memfunc_v<WithToStringMemfunc>);
-  ASSERT_FALSE(argparse::detail::has_c_str_memfunc_v<WithToStringMemfunc>);
+  ASSERT_TRUE(argparse::detail::has_to_string_memfunc<WithToStringMemfunc>);
+  ASSERT_FALSE(argparse::detail::has_string_memfunc<WithToStringMemfunc>);
+  ASSERT_FALSE(argparse::detail::has_c_str_memfunc<WithToStringMemfunc>);
 
-  ASSERT_TRUE(argparse::detail::has_string_memfunc_v<WithStringMemfunc>);
-  ASSERT_FALSE(argparse::detail::has_to_string_memfunc_v<WithStringMemfunc>);
-  ASSERT_FALSE(argparse::detail::has_wstring_memfunc_v<WithStringMemfunc>);
+  ASSERT_TRUE(argparse::detail::has_string_memfunc<WithStringMemfunc>);
+  ASSERT_FALSE(argparse::detail::has_to_string_memfunc<WithStringMemfunc>);
+  ASSERT_FALSE(argparse::detail::has_wstring_memfunc<WithStringMemfunc>);
 
-  ASSERT_TRUE(argparse::detail::has_c_str_memfunc_v<WithCStrMemfunc>);
-  ASSERT_FALSE(argparse::detail::has_to_string_memfunc_v<WithCStrMemfunc>);
-  ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc_v<WithCStrMemfunc>);
+  ASSERT_TRUE(argparse::detail::has_c_str_memfunc<WithCStrMemfunc>);
+  ASSERT_FALSE(argparse::detail::has_to_string_memfunc<WithCStrMemfunc>);
+  ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc<WithCStrMemfunc>);
 
   // std::string: only has c_str()
-  ASSERT_FALSE(argparse::detail::has_to_string_memfunc_v<std::string>);
-  ASSERT_FALSE(argparse::detail::has_string_memfunc_v<std::string>);
-  ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc_v<std::string>);
-  ASSERT_FALSE(argparse::detail::has_wstring_memfunc_v<std::string>);
-  ASSERT_TRUE(argparse::detail::has_c_str_memfunc_v<std::string>);
+  ASSERT_FALSE(argparse::detail::has_to_string_memfunc<std::string>);
+  ASSERT_FALSE(argparse::detail::has_string_memfunc<std::string>);
+  ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc<std::string>);
+  ASSERT_FALSE(argparse::detail::has_wstring_memfunc<std::string>);
+  ASSERT_TRUE(argparse::detail::has_c_str_memfunc<std::string>);
 
   // std::wstring: none of the member functions
-  ASSERT_FALSE(argparse::detail::has_to_string_memfunc_v<std::wstring>);
-  ASSERT_FALSE(argparse::detail::has_string_memfunc_v<std::wstring>);
-  ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc_v<std::wstring>);
-  ASSERT_FALSE(argparse::detail::has_wstring_memfunc_v<std::wstring>);
-  ASSERT_FALSE(argparse::detail::has_c_str_memfunc_v<std::wstring>);
+  ASSERT_FALSE(argparse::detail::has_to_string_memfunc<std::wstring>);
+  ASSERT_FALSE(argparse::detail::has_string_memfunc<std::wstring>);
+  ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc<std::wstring>);
+  ASSERT_FALSE(argparse::detail::has_wstring_memfunc<std::wstring>);
+  ASSERT_FALSE(argparse::detail::has_c_str_memfunc<std::wstring>);
 
   // Empty type satisfies none
-  ASSERT_FALSE(argparse::detail::has_to_string_memfunc_v<Empty>);
-  ASSERT_FALSE(argparse::detail::has_string_memfunc_v<Empty>);
-  ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc_v<Empty>);
-  ASSERT_FALSE(argparse::detail::has_wstring_memfunc_v<Empty>);
-  ASSERT_FALSE(argparse::detail::has_c_str_memfunc_v<Empty>);
+  ASSERT_FALSE(argparse::detail::has_to_string_memfunc<Empty>);
+  ASSERT_FALSE(argparse::detail::has_string_memfunc<Empty>);
+  ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc<Empty>);
+  ASSERT_FALSE(argparse::detail::has_wstring_memfunc<Empty>);
+  ASSERT_FALSE(argparse::detail::has_c_str_memfunc<Empty>);
 }
 
 // ============================================================
@@ -1046,17 +1045,17 @@ TEST(ConceptTest, ToStringAndToWstringNoMatch) {
   // excluded by the traits (the actual to_string/to_wstring calls are
   // constrained at compile time).
 
-  ASSERT_FALSE(argparse::detail::has_to_string_memfunc_v<int>);
-  ASSERT_FALSE(argparse::detail::has_string_memfunc_v<int>);
-  ASSERT_FALSE(argparse::detail::has_c_str_memfunc_v<int>);
-  ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc_v<int>);
-  ASSERT_FALSE(argparse::detail::has_wstring_memfunc_v<int>);
+  ASSERT_FALSE(argparse::detail::has_to_string_memfunc<int>);
+  ASSERT_FALSE(argparse::detail::has_string_memfunc<int>);
+  ASSERT_FALSE(argparse::detail::has_c_str_memfunc<int>);
+  ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc<int>);
+  ASSERT_FALSE(argparse::detail::has_wstring_memfunc<int>);
 
-  ASSERT_FALSE(argparse::detail::has_to_string_memfunc_v<std::wstring>);
-  ASSERT_FALSE(argparse::detail::has_string_memfunc_v<std::wstring>);
-  ASSERT_FALSE(argparse::detail::has_c_str_memfunc_v<std::wstring>);
-  ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc_v<std::wstring>);
-  ASSERT_FALSE(argparse::detail::has_wstring_memfunc_v<std::wstring>);
+  ASSERT_FALSE(argparse::detail::has_to_string_memfunc<std::wstring>);
+  ASSERT_FALSE(argparse::detail::has_string_memfunc<std::wstring>);
+  ASSERT_FALSE(argparse::detail::has_c_str_memfunc<std::wstring>);
+  ASSERT_FALSE(argparse::detail::has_to_wstring_memfunc<std::wstring>);
+  ASSERT_FALSE(argparse::detail::has_wstring_memfunc<std::wstring>);
 }
 
 // ============================================================
