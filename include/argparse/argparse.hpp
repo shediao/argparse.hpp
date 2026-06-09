@@ -45,6 +45,7 @@
 #include <cstdlib>
 #include <functional>
 #include <initializer_list>
+#include <iomanip>
 #include <iostream>
 #include <iterator>
 #include <map>
@@ -149,6 +150,17 @@ struct expected_storage<T, E, false> {
   expected_union<T, E> storage;
   bool has_value;
 };
+template <typename T, typename E>
+class expected;
+
+template <typename T>
+struct is_expected : std::false_type {};
+
+template <typename T, typename E>
+struct is_expected<expected<T, E>> : std::true_type {};
+
+template <typename T>
+constexpr bool is_expected_v = is_expected<T>::value;
 
 template <typename T, typename E>
 class expected : private expected_storage<T, E> {
@@ -265,8 +277,7 @@ class expected : private expected_storage<T, E> {
   template <typename F>
   constexpr auto and_then(F&& f) & {
     using result_type = std::invoke_result_t<F, T&>;
-    static_assert(!std::is_void_v<result_type>,
-                  "and_then must return expected");
+    static_assert(is_expected_v<result_type>, "and_then must return expected");
     if (has_value()) {
       return std::invoke(std::forward<F>(f), this->storage.value);
     }
@@ -276,6 +287,7 @@ class expected : private expected_storage<T, E> {
   template <typename F>
   constexpr auto and_then(F&& f) const& {
     using result_type = std::invoke_result_t<F, const T&>;
+    static_assert(is_expected_v<result_type>, "and_then must return expected");
     if (has_value()) {
       return std::invoke(std::forward<F>(f), this->storage.value);
     }
@@ -285,6 +297,7 @@ class expected : private expected_storage<T, E> {
   template <typename F>
   constexpr auto and_then(F&& f) && {
     using result_type = std::invoke_result_t<F, T&&>;
+    static_assert(is_expected_v<result_type>, "and_then must return expected");
     if (has_value()) {
       return std::invoke(std::forward<F>(f), std::move(this->storage.value));
     }
@@ -294,6 +307,7 @@ class expected : private expected_storage<T, E> {
   template <typename F>
   constexpr auto and_then(F&& f) const&& {
     using result_type = std::invoke_result_t<F, const T&&>;
+    static_assert(is_expected_v<result_type>, "and_then must return expected");
     if (has_value()) {
       return std::invoke(std::forward<F>(f), std::move(this->storage.value));
     }
@@ -871,7 +885,8 @@ template <typename T>
              !std::is_same_v<T, char32_t>) ||
             std::is_same_v<bool, T> || std::is_same_v<char, T> ||
             std::is_floating_point_v<T> ||
-            std::is_constructible_v<T, std::string>))
+            std::is_constructible_v<T, std::string> ||
+            std::is_convertible_v<std::string, T>))
 expected<T, std::string> from_string(std::string const& s) {
   try {
     size_t pos = 0;
@@ -922,6 +937,8 @@ expected<T, std::string> from_string(std::string const& s) {
       return static_cast<T>(result);
     } else if constexpr (std::is_constructible_v<T, std::string>) {
       return T{s};
+    } else if constexpr (std::is_convertible_v<std::string, T>) {
+      return static_cast<T>(s);
     } else {
       return make_unexpected("Unsupported type for from_string");
     }
@@ -1354,6 +1371,332 @@ template <typename T>
 inline void decrement(T& value) {
   --value;
 }
+struct token;
+class argv_stream;
+class Command;
+class ArgParser;
+
+inline expected<std::tuple<std::vector<char>, std::vector<std::string>>,
+                std::string>
+parse_option_name(std::string const& name) {
+  std::tuple<std::vector<char>, std::vector<std::string>> ret;
+  for (auto&& opt_name : detail::split(name, ',', -1)) {
+    if (opt_name.empty()) {
+      continue;
+    }
+    if (opt_name[0] == '-') {
+      return make_unexpected("Invalid option name: " + name + ", " + opt_name +
+                             " starts with '-'");
+    }
+    if (std::find_if(opt_name.begin(), opt_name.end(), [](unsigned char c) {
+          return std::isblank(c);
+        }) != opt_name.end()) {
+      return make_unexpected("Invalid option name: " + name + ", " + opt_name +
+                             " contains whitespace");
+    }
+    if (opt_name.find_first_of("<>[]{}()|;!`&$\\ \a\b\f\n\r\t\v") !=
+        std::string::npos) {
+      return make_unexpected("Invalid option name: " + name + ", " + opt_name +
+                             " contains special characters (<>[]{}()|;!`&$\\ "
+                             "\\a\\b\\f\\n\\r\\t\\v) ");
+    }
+    auto& [short_names, long_names] = ret;
+    if (opt_name.length() == 1 &&
+        std::find(short_names.begin(), short_names.end(), opt_name[0]) ==
+            short_names.end()) {
+      short_names.push_back(opt_name[0]);
+    }
+    if (opt_name.length() > 1 && std::find(long_names.begin(), long_names.end(),
+                                           opt_name) == long_names.end()) {
+      long_names.emplace_back(std::move(opt_name));
+    }
+  }
+  return ret;
+}
+
+inline std::pair<std::string, std::string> help_row(
+    std::vector<char> short_names, std::vector<std::string> long_names,
+    std::string value_placeholder, std::string description) {
+  std::pair<std::string, std::string> ret;
+  std::string& left = get<0>(ret);
+  std::string& right = get<1>(ret);
+  right = description;
+
+  if (!short_names.empty()) {
+    left.append(1, '-');
+    left.append(1, short_names[0]);
+  }
+
+  if (!long_names.empty()) {
+    if (!left.empty()) {
+      left.append(", ");
+    }
+    left.append(2, '-');
+    left.append(long_names[0]);
+  }
+
+  if (!value_placeholder.empty()) {
+    left.append(1, ' ');
+    left.append(value_placeholder);
+  }
+
+  return ret;
+}
+
+class FlagSchema {
+ public:
+  FlagSchema(std::vector<char> short_names, std::vector<std::string> long_names,
+             std::string description)
+      : short_names_(std::move(short_names)),
+        long_names_(std::move(long_names)),
+        description_(std::move(description)) {}
+  void negatable(bool v) { negatable_ = v; }
+  bool is_negatable() { return negatable_; }
+
+  bool has_short_name(char name) const {
+    return std::find(short_names_.begin(), short_names_.end(), name) !=
+           short_names_.end();
+  }
+  bool has_long_name(std::string const& name) const {
+    return std::find(long_names_.begin(), long_names_.end(), name) !=
+           long_names_.end();
+  }
+
+  std::pair<std::string, std::string> help_row() const {
+    return argparse::help_row(short_names_, long_names_, "", description_);
+  }
+
+ private:
+  std::vector<char> short_names_;
+  std::vector<std::string> long_names_;
+  std::string description_;
+  bool negatable_{false};
+  [[maybe_unused]] bool hidden_{false};
+};
+
+class OptionSchema {
+ public:
+  OptionSchema(std::vector<char> short_names,
+               std::vector<std::string> long_names, std::string description)
+      : short_names_(std::move(short_names)),
+        long_names_(std::move(long_names)),
+        description_(std::move(description)) {}
+  void negatable(bool v) { negatable_ = v; }
+  bool is_negatable() const { return negatable_; }
+
+  bool has_short_name(char name) const {
+    return std::find(short_names_.begin(), short_names_.end(), name) !=
+           short_names_.end();
+  }
+  bool has_long_name(std::string const& name) const {
+    return std::find(long_names_.begin(), long_names_.end(), name) !=
+           long_names_.end();
+  }
+
+  std::pair<std::string, std::string> help_row() const {
+    return argparse::help_row(short_names_, long_names_, value_placeholder_,
+                              description_);
+  }
+
+ private:
+  std::vector<char> short_names_;
+  std::vector<std::string> long_names_;
+  std::string description_;
+  std::string value_placeholder_;
+  bool negatable_{false};
+  [[maybe_unused]] bool hidden_{false};
+};
+
+class PositionalSchema {
+ public:
+  PositionalSchema(std::string name, std::size_t size, std::string description)
+      : name_(std::move(name)),
+        size_(size),
+        description_(std::move(description)) {}
+  std::string const& name() const { return name_; }
+
+  std::string usage() const {
+    std::stringstream ret;
+    ret << name_ << "\t" << description_;
+    return ret.str();
+  }
+  std::pair<std::string, std::string> help_row() const {
+    return std::pair<std::string, std::string>{name_, description_};
+  }
+
+ private:
+  std::string name_;
+  [[maybe_unused]] std::size_t size_;
+  std::string description_;
+  [[maybe_unused]] bool hidden_{false};
+};
+
+class CommandSchema {
+ public:
+  CommandSchema(std::string name, std::string description,
+                CommandSchema* parent)
+      : name_(std::move(name)),
+        description_(std::move(description)),
+        parent_(parent) {}
+
+  std::string const& name() const { return name_; }
+
+  FlagSchema& add_flag(std::vector<char> short_names,
+                       std::vector<std::string> long_names,
+                       std::string description) {
+    flags_.emplace_back(std::make_shared<FlagSchema>(
+        std::move(short_names), std::move(long_names), std::move(description)));
+    return *flags_.back();
+  }
+
+  OptionSchema& add_option(std::vector<char> short_names,
+                           std::vector<std::string> long_names,
+                           std::string description) {
+    options_.emplace_back(std::make_shared<OptionSchema>(
+        std::move(short_names), std::move(long_names), std::move(description)));
+    return *options_.back();
+  }
+
+  PositionalSchema& add_positional(std::string name, std::size_t size,
+                                   std::string description) {
+    positionals_.emplace_back(std::make_shared<PositionalSchema>(
+        std::move(name), size, std::move(description)));
+    return *positionals_.back();
+  }
+
+  CommandSchema& add_subcommand(std::string name, std::string description) {
+    subcommands_.emplace_back(std::make_shared<CommandSchema>(
+        std::move(name), std::move(description), this));
+    return *subcommands_.back();
+  }
+  CommandSchema& add_subcommand(std::shared_ptr<CommandSchema> subcommand) {
+    subcommands_.emplace_back(std::move(subcommand));
+    return *subcommands_.back();
+  }
+
+  bool has_flag(std::string const& name) const {
+    for (auto&& flag : flags_) {
+      if (flag->has_long_name(name)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  bool has_flag(char name) const {
+    for (auto&& flag : flags_) {
+      if (flag->has_short_name(name)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool has_option(std::string const& name) const {
+    for (auto&& option : options_) {
+      if (option->has_long_name(name)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  bool has_option(char name) const {
+    for (auto&& option : options_) {
+      if (option->has_short_name(name)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool has_positional(std::string const& name) const {
+    for (auto&& positional : positionals_) {
+      if (positional->name() == name) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool has_subcommand(std::string const& name) const {
+    for (auto&& subcommand : subcommands_) {
+      if (subcommand->name_ == name) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  std::string usage(size_t max_left_width = 32, size_t max_right_width = 80) {
+    {
+      size_t max_width = 0;
+      for (auto&& flag : flags_) {
+        max_width = std::max(max_width, flag->help_row().first.size());
+      }
+      for (auto&& option : options_) {
+        max_width = std::max(max_width, option->help_row().first.size());
+      }
+      for (auto&& positional : positionals_) {
+        max_width = std::max(max_width, positional->help_row().first.size());
+      }
+      max_left_width = std::min(max_width, max_left_width);
+    }
+
+    CommandSchema* parent = parent_;
+    std::string command_str;
+    while (parent != nullptr) {
+      command_str.insert(0, parent->name_ + " ");
+      parent = parent->parent_;
+    }
+    std::stringstream out;
+    out << "Usage:\n";
+    out << "  " << command_str << name_ << "\n";
+    out << "\nDescription:\n";
+    out << description_ << "\n";
+    out << "\nArguments:\n";
+    for (auto&& positional : positionals_) {
+      auto [left, right] = positional->help_row();
+      format_print(out, left, max_left_width, right, max_right_width);
+    }
+    out << "\nOptions:\n";
+    for (auto&& flag : flags_) {
+      auto [left, right] = flag->help_row();
+      format_print(out, left, max_left_width, right, max_right_width);
+    }
+    for (auto&& option : options_) {
+      auto [left, right] = option->help_row();
+      format_print(out, left, max_left_width, right, max_right_width);
+    }
+    out << "\nCommands:\n";
+    for (auto&& subcommand : subcommands_) {
+      format_print(out, subcommand->name_, max_left_width,
+                   subcommand->description_, max_right_width);
+    }
+    return out.str();
+  }
+
+  void format_print(std::stringstream& out, std::string left, size_t left_width,
+                    std::string right, size_t right_width) {
+    right = detail::word_wrap(right, right_width);
+    auto pos = right.find('\n');
+    while (pos != std::string::npos) {
+      right.replace(pos, 1, "\n" + std::string(left_width + 2, ' '));
+      pos = right.find('\n', pos + left_width + 2);
+    }
+    out << "  " << std::left << std::setfill(' ') << std::setw(left_width)
+        << left << "  " << right << "\n";
+  }
+
+ private:
+  std::string name_;
+  std::string description_;
+  [[maybe_unused]] bool hidden_{false};
+  [[maybe_unused]] bool treat_remaining_as_positional_{false};
+  std::vector<std::shared_ptr<FlagSchema>> flags_;
+  std::vector<std::shared_ptr<OptionSchema>> options_;
+  std::vector<std::shared_ptr<PositionalSchema>> positionals_;
+  CommandSchema* parent_{nullptr};
+  std::vector<std::shared_ptr<CommandSchema>> subcommands_;
+};
 
 class ArgBase {
   friend class Command;
@@ -1362,34 +1705,16 @@ class ArgBase {
  public:
   ArgBase(const std::string& name, const std::string& description)
       : description_(description) {
-    for (auto&& opt_name : detail::split(name, ',', -1)) {
-      if (opt_name.empty()) {
-        continue;
-      }
-      if (opt_name[0] == '-') {
-        detail::report_invalid_argument("Invalid option name: " + name + ", " +
-                                        opt_name + " starts with '-'");
-      }
-      if (std::find_if(opt_name.begin(), opt_name.end(), [](unsigned char c) {
-            return std::isblank(c);
-          }) != opt_name.end()) {
-        detail::report_invalid_argument("Invalid option name: " + name + ", " +
-                                        opt_name + " contains whitespace");
-      }
-      if (opt_name.find_first_of("<>[]{}()|;!`&$\\ \a\b\f\n\r\t\v") !=
-          std::string::npos) {
-        detail::report_invalid_argument(
-            "Invalid option name: " + name + ", " + opt_name +
-            " contains special characters (<>[]{}()|;!`&$\\ "
-            "\\a\\b\\f\\n\\r\\t\\v) ");
-      }
-      if (opt_name.length() == 1) {
-        short_opt_names_.push_back(std::move(opt_name));
-      } else if (opt_name.length() > 1) {
-        long_opt_names_.push_back(std::move(opt_name));
-      } else {
-        detail::report_invalid_argument("Invalid option name: " + name);
-      }
+    auto ret = parse_option_name(name);
+
+    if (ret) {
+      std::transform(std::get<0>(*ret).begin(), std::get<0>(*ret).end(),
+                     std::back_inserter(short_opt_names_),
+                     [](char c) { return std::string(1, c); });
+      std::copy(std::get<1>(*ret).begin(), std::get<1>(*ret).end(),
+                std::back_inserter(long_opt_names_));
+    } else {
+      detail::report_invalid_argument(ret.error());
     }
   }
   size_t count() const { return count_; }
@@ -1597,6 +1922,7 @@ class OptionBase : public ArgBase {
   friend class Command;
   friend class ArgParser;
   friend class OptionAlias;
+  friend std::vector<token> tokenize(argv_stream& args, Command& cmd);
 
  public:
   OptionBase(const std::string& name, const std::string& description)
@@ -2294,8 +2620,12 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
   std::map<parsed_value_type, std::string> value_choices_;
 };
 
+struct token;
+class argv_stream;
 class Command {
   friend class ArgParser;
+
+  friend inline std::vector<token> tokenize(argv_stream& args, Command& cmd);
 
   template <typename T>
     requires std::same_as<T, bool> || std::same_as<std::optional<bool>, T>
@@ -2311,6 +2641,13 @@ class Command {
     if (flag_or_option_exists(ret)) {
       detail::die("Flag or option already exists: " + name);
     }
+
+    auto option_names = parse_option_name(name);
+    if (option_names) {
+      command_schema_.add_flag(get<0>(*option_names), get<1>(*option_names),
+                               ret.description_);
+    }
+
     args_.push_back(std::move(flag));
     return ret;
   }
@@ -2328,13 +2665,20 @@ class Command {
     if (flag_or_option_exists(ret)) {
       detail::die("Flag or option already exists: " + name);
     }
+    auto option_names = parse_option_name(name);
+    if (option_names) {
+      command_schema_.add_flag(get<0>(*option_names), get<1>(*option_names),
+                               ret.description_);
+    }
     args_.push_back(std::move(flag));
     return ret;
   }
 
  public:
   Command(std::string cmd, std::string description)
-      : command_{std::move(cmd)}, description_(std::move(description)) {}
+      : command_{std::move(cmd)},
+        description_(std::move(description)),
+        command_schema_{command_, description_, nullptr} {}
   virtual ~Command() {}
 
  protected:
@@ -2399,6 +2743,11 @@ class Command {
     if (flag_or_option_exists(ret)) {
       detail::die("Flag or option already exists: " + name);
     }
+    auto option_names = parse_option_name(name);
+    if (option_names) {
+      command_schema_.add_flag(get<0>(*option_names), get<1>(*option_names),
+                               ret.description_);
+    }
     args_.push_back(std::move(alias));
     return ret;
   }
@@ -2410,6 +2759,11 @@ class Command {
     auto& ret = *(option.get());
     if (flag_or_option_exists(ret)) {
       detail::die("Flag or option already exists: " + name);
+    }
+    auto option_names = parse_option_name(name);
+    if (option_names) {
+      command_schema_.add_option(get<0>(*option_names), get<1>(*option_names),
+                                 ret.description_);
     }
     args_.push_back(std::move(option));
     return ret;
@@ -2423,6 +2777,11 @@ class Command {
     auto& ret = *(option.get());
     if (flag_or_option_exists(ret)) {
       detail::die("Flag or option already exists: " + name);
+    }
+    auto option_names = parse_option_name(name);
+    if (option_names) {
+      command_schema_.add_option(get<0>(*option_names), get<1>(*option_names),
+                                 ret.description_);
     }
     args_.push_back(std::move(option));
     return ret;
@@ -2448,6 +2807,11 @@ class Command {
     if (positional_exists(ret)) {
       detail::die("Positional already exists: " + name);
     }
+    size_t size = 1;
+    if constexpr (detail::from_string_container<T>) {
+      size = 0;
+    }
+    command_schema_.add_positional(name, size, description);
     args_.push_back(std::move(positional));
     return ret;
   }
@@ -2465,6 +2829,13 @@ class Command {
     if (positional_exists(ret)) {
       detail::die("Positional already exists: " + name);
     }
+    size_t size = 1;
+    if constexpr (detail::from_string_container<T>) {
+      size = 0;
+    } else {
+      size = std::tuple_size_v<T>;
+    }
+    command_schema_.add_positional(name, size, description);
     args_.push_back(std::move(positional));
     return ret;
   }
@@ -2826,6 +3197,15 @@ class Command {
     return treat_remaining_as_positional_;
   }
 
+  Command* get_subcommand(std::string const& cmd) {
+    for (auto& subcmd : subcommands_) {
+      if (subcmd->command() == cmd) {
+        return subcmd.get();
+      }
+    }
+    return nullptr;
+  }
+
  protected:
   bool flag_or_option_exists(ArgBase& new_arg) const {
     return flag_exists(new_arg) || option_exists(new_arg);
@@ -2878,7 +3258,81 @@ class Command {
   bool is_parsed_{false};
   bool is_hidden_{false};
   bool treat_remaining_as_positional_{false};
+  CommandSchema command_schema_;
 };
+
+enum class token_kind {
+  short_option,
+  long_option,
+  text,
+  option_terminator,
+  command
+};
+
+struct token {
+  token_kind kind;
+  std::string value;
+};
+
+class argv_stream {
+ public:
+  argv_stream(int argc, const char* argv[])
+      : args_{argv + 1, argv + argc}, index_{0} {}
+
+  bool eof() const { return index_ == args_.size(); }
+  std::string const& consume() {
+    assert(!eof());
+    return args_[index_++];
+  }
+
+  std::string const* peek(size_t offset = 0) {
+    auto pos = index_ + offset;
+    if (pos >= args_.size()) {
+      return nullptr;
+    }
+    return &args_[index_ + offset];
+  }
+
+ private:
+  std::vector<std::string> args_;
+  size_t index_{0};
+};
+
+inline std::vector<token> tokenize(argv_stream& args, Command& cmd) {
+  std::vector<token> tokens;
+  Command* current_command = &cmd;
+  bool positional_only = false;
+  while (!args.eof()) {
+    std::string const& arg = args.consume();
+    if (positional_only) {
+      tokens.emplace_back(token{token_kind::text, arg});
+    } else if (arg == "--") {
+      positional_only = true;
+      tokens.emplace_back(token{token_kind::option_terminator, arg});
+    } else if (arg.starts_with("--")) {
+      std::string body = arg.substr(2);
+      if (auto pos = body.find("="); pos != std::string::npos) {
+        tokens.emplace_back(
+            token{token_kind::long_option, body.substr(0, pos)});
+        tokens.emplace_back(token{token_kind::text, body.substr(pos + 1)});
+      } else {
+        tokens.emplace_back(token{token_kind::long_option, body});
+      }
+    } else if (arg.starts_with("-") && arg.length() > 1) {
+      std::transform(
+          arg.begin() + 1, arg.end(), back_inserter(tokens), [](char c) {
+            return token{token_kind::short_option, std::string(1, c)};
+          });
+    } else if (Command* subcmd = current_command->get_subcommand(arg); subcmd) {
+      tokens.emplace_back(token{token_kind::command, arg});
+      current_command = subcmd;
+    } else {
+      tokens.emplace_back(token{token_kind::text, arg});
+    }
+  }
+
+  return tokens;
+}
 
 class ArgParser : public Command {
  public:
@@ -2948,7 +3402,8 @@ class ArgParser : public Command {
     return parse(argc, args_cstr.data());
   }
   Command& parse(std::vector<std::wstring> const& args) {
-    std::vector<const wchar_t*> args_cstr(args.size() + 1, nullptr);  // NOLINT>
+    std::vector<const wchar_t*> args_cstr(args.size() + 1,
+                                          nullptr);  // NOLINT>
 
     std::transform(args.begin(), args.end(), args_cstr.begin(),
                    [](const std::wstring& s) { return s.data(); });
