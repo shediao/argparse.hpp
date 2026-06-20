@@ -1630,15 +1630,15 @@ class CommandSchema {
     {
       size_t max_width = 0;
       for (auto&& flag : flags_) {
-        max_width = std::max(max_width, flag->help_row().first.size());
+        max_width = (std::max)(max_width, flag->help_row().first.size());
       }
       for (auto&& option : options_) {
-        max_width = std::max(max_width, option->help_row().first.size());
+        max_width = (std::max)(max_width, option->help_row().first.size());
       }
       for (auto&& positional : positionals_) {
-        max_width = std::max(max_width, positional->help_row().first.size());
+        max_width = (std::max)(max_width, positional->help_row().first.size());
       }
-      max_left_width = std::min(max_width, max_left_width);
+      max_left_width = (std::min)(max_width, max_left_width);
     }
 
     CommandSchema* parent = parent_;
