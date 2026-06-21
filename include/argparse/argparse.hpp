@@ -2573,8 +2573,8 @@ class Command {
 
     auto option_names = parse_option_name(name);
     if (option_names) {
-      command_schema_.add_flag(get<0>(*option_names), get<1>(*option_names),
-                               ret.description_);
+      command_schema_.add_flag(std::get<0>(*option_names),
+                               std::get<1>(*option_names), ret.description_);
     }
 
     args_.push_back(std::move(flag));
@@ -2596,8 +2596,8 @@ class Command {
     }
     auto option_names = parse_option_name(name);
     if (option_names) {
-      command_schema_.add_flag(get<0>(*option_names), get<1>(*option_names),
-                               ret.description_);
+      command_schema_.add_flag(std::get<0>(*option_names),
+                               std::get<1>(*option_names), ret.description_);
     }
     args_.push_back(std::move(flag));
     return ret;
@@ -2674,8 +2674,8 @@ class Command {
     }
     auto option_names = parse_option_name(name);
     if (option_names) {
-      command_schema_.add_flag(get<0>(*option_names), get<1>(*option_names),
-                               ret.description_);
+      command_schema_.add_flag(std::get<0>(*option_names),
+                               std::get<1>(*option_names), ret.description_);
     }
     args_.push_back(std::move(alias));
     return ret;
@@ -2691,8 +2691,8 @@ class Command {
     }
     auto option_names = parse_option_name(name);
     if (option_names) {
-      command_schema_.add_option(get<0>(*option_names), get<1>(*option_names),
-                                 ret.description_);
+      command_schema_.add_option(std::get<0>(*option_names),
+                                 std::get<1>(*option_names), ret.description_);
     }
     args_.push_back(std::move(option));
     return ret;
@@ -2709,8 +2709,8 @@ class Command {
     }
     auto option_names = parse_option_name(name);
     if (option_names) {
-      command_schema_.add_option(get<0>(*option_names), get<1>(*option_names),
-                                 ret.description_);
+      command_schema_.add_option(std::get<0>(*option_names),
+                                 std::get<1>(*option_names), ret.description_);
     }
     args_.push_back(std::move(option));
     return ret;
