@@ -1133,46 +1133,46 @@ inline std::string word_wrap(const std::string& text, size_t width) {
 }
 
 // Format a help entry in two columns:
-//   column 1 : option_name (width characters)
-//   column 2 : description (word-wrapped to fit within 80 - width chars)
+//   column 1 : left_content (aligned to option_name_width() characters)
+//   column 2 : right_content (word-wrapped to fit within remaining width)
 //
-// If the option_name already contains embedded '\\n' (because the caller
+// If left_content already contains embedded '\n' (because the caller
 // placed multiple names on separate lines), only the *last* line is used
-// to decide where the description begins.
+// to decide where the right_content begins.
 //
-// The 'prefix' parameter is prepended to the first line and to every
-// continuation line, ensuring consistent indentation when the caller
-// places the formatted block inside a larger layout.
-inline std::string format(std::string const& option_name,
-                          std::string const& description,
-                          std::string const& prefix = "") {
-  constexpr size_t MINIMUM_DESCRIPTION_WIDTH = 40;
-  size_t desc_width =
-      (TOTAL_WIDTH > option_name_width() + MINIMUM_DESCRIPTION_WIDTH)
-          ? (TOTAL_WIDTH - option_name_width())
-          : MINIMUM_DESCRIPTION_WIDTH;
+// The 'indent' parameter specifies the number of spaces to prepend to
+// the first line and to every continuation line.
+inline std::string format(
+    std::string const& left_content, std::string const& right_content,
+    size_t indent,
+    size_t left_width = std::clamp(option_name_width(), static_cast<size_t>(16),
+                                   static_cast<size_t>(40)),
+    size_t right_width = (TOTAL_WIDTH > option_name_width() + 40)
+                             ? (TOTAL_WIDTH - option_name_width())
+                             : 40) {
+  std::string prefix(indent, ' ');
 
-  // Length of the last line of option_name (may be multi-line).
-  auto nl_pos = option_name.rfind('\n');
+  // Length of the last line of left_content (may be multi-line).
+  auto nl_pos = left_content.rfind('\n');
   size_t last_len = (nl_pos == std::string::npos)
-                        ? option_name.size()
-                        : (option_name.size() - nl_pos - 1);
+                        ? left_content.size()
+                        : (left_content.size() - nl_pos - 1);
 
-  std::string result = prefix + option_name;
+  std::string result = prefix + left_content;
 
-  // Split the description on existing \n (intentional hard breaks),
+  // Split the right_content on existing \n (intentional hard breaks),
   // word-wrap each segment, then emit every line with proper indentation.
   size_t seg_start = 0;
   bool first_out_line = true;
 
-  while (seg_start <= description.size()) {
-    auto hard_nl = description.find('\n', seg_start);
+  while (seg_start <= right_content.size()) {
+    auto hard_nl = right_content.find('\n', seg_start);
     auto segment = (hard_nl == std::string::npos)
-                       ? description.substr(seg_start)
-                       : description.substr(seg_start, hard_nl - seg_start);
+                       ? right_content.substr(seg_start)
+                       : right_content.substr(seg_start, hard_nl - seg_start);
 
     // Word-wrap this segment.
-    auto wrapped = word_wrap(segment, desc_width);
+    auto wrapped = word_wrap(segment, right_width);
 
     // Emit the wrapped lines.
     size_t wpos = 0;
@@ -1181,13 +1181,13 @@ inline std::string format(std::string const& option_name,
       auto line = (wnl == std::string::npos) ? wrapped.substr(wpos)
                                              : wrapped.substr(wpos, wnl - wpos);
 
-      if (first_out_line && last_len < option_name_width()) {
-        // First description line goes on the same line as the option.
-        result.append(option_name_width() - last_len, ' ');
+      if (first_out_line && last_len < left_width) {
+        // First right_content line goes on the same line as the option.
+        result.append(left_width - last_len, ' ');
       } else {
         result += '\n';
         result += prefix;
-        result.append(option_name_width(), ' ');
+        result.append(left_width, ' ');
       }
       result += line;
       first_out_line = false;
@@ -1808,7 +1808,7 @@ class FlagBase : public ArgBase {
         extra_desc += " (aliases: " + detail::join(aliases, ", ") + ")";
       }
     }
-    return detail::format(opt_str.str(), description() + extra_desc, " ");
+    return detail::format(opt_str.str(), description() + extra_desc, 1);
   }
 };
 
@@ -2023,7 +2023,7 @@ class OptionBase : public ArgBase {
     } else {
       opt_str << long_opt_names_[0];
     }
-    return detail::format(opt_str.str(), description() + extra_desc, " ");
+    return detail::format(opt_str.str(), description() + extra_desc, 1);
   }
   bool is_required_{false};
   std::string value_placeholder_;
@@ -3099,7 +3099,7 @@ class Command {
   }
   std::string one_line_usage() {
     std::stringstream usage_str;
-    usage_str << detail::format(command_, description_, " ");
+    usage_str << detail::format(command_, description_, 1);
     return usage_str.str();
   }
   void add_default_help_flag() {
