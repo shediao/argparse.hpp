@@ -1773,7 +1773,9 @@ class FlagBase : public ArgBase {
     std::stringstream opt_str;
     if (short_opt_names_.empty()) {
       if (!long_opt_names_.empty()) {
-        opt_str << "  --" << (negatable_ ? "[no-]" : "") << long_opt_names_[0];
+        //         "-x, --foo"
+        opt_str << "    --" << (negatable_ ? "[no-]" : "")
+                << long_opt_names_[0];
       } else {
         opt_str << "  ";
       }
@@ -1797,7 +1799,7 @@ class FlagBase : public ArgBase {
         aliases.push_back(long_opt_names_[i]);
       }
       if (!aliases.empty()) {
-        extra_desc += " (aliases: " + detail::join(aliases, ", ") + ")";
+        extra_desc += "\naliases: " + detail::join(aliases, ", ");
       }
     }
     return detail::format(opt_str.str(), description() + extra_desc, 1);
@@ -1977,16 +1979,15 @@ class OptionBase : public ArgBase {
       for (auto const& [value, help] : this->choices_) {
         choice_strs.push_back("[" + value + "] " + help);
       }
-      extra_desc += " (";
+      extra_desc += "\nchoices: (";
       extra_desc += detail::join(choice_strs, ", ");
       extra_desc += ")";
     }
     if (auto default_value = get_default_value(); default_value.has_value()) {
-      extra_desc += " (default: " + *default_value;
+      extra_desc += "\ndefault: " + *default_value;
       if (!env_key_.empty()) {
         extra_desc += ", ENV:" + env_key_;
       }
-      extra_desc += ")";
     }
     if (is_option()) {
       std::vector<std::string> aliases;
@@ -1997,14 +1998,15 @@ class OptionBase : public ArgBase {
         aliases.push_back(long_opt_names_[i]);
       }
       if (!aliases.empty()) {
-        extra_desc += " (aliases: " + detail::join(aliases, ", ") + ")";
+        extra_desc += "\naliases: " + detail::join(aliases, ", ");
       }
     }
 
     std::stringstream opt_str;
     if (is_option()) {
       if (short_opt_names_.empty()) {
-        opt_str << "  --" << long_opt_names_[0] << " " << value_placeholder_;
+        //         "-x, --foo"
+        opt_str << "    --" << long_opt_names_[0] << " " << value_placeholder_;
       } else {
         opt_str << "-" << short_opt_names_[0];
         if (!long_opt_names_.empty()) {
