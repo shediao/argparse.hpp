@@ -1415,7 +1415,7 @@ parse_option_name(std::string const& name) {
 
 inline std::pair<std::string, std::string> help_row(
     std::vector<char> short_names, std::vector<std::string> long_names,
-    std::string value_placeholder, std::string description) {
+    std::string value_placeholder, std::string description, bool negatable) {
   std::pair<std::string, std::string> ret;
   std::string& left = get<0>(ret);
   std::string& right = get<1>(ret);
@@ -1431,6 +1431,9 @@ inline std::pair<std::string, std::string> help_row(
       left.append(", ");
     }
     left.append(2, '-');
+    if (negatable) {
+      left.append("[no-]");
+    }
     left.append(long_names[0]);
   }
 
@@ -1462,7 +1465,8 @@ class FlagSchema {
   }
 
   std::pair<std::string, std::string> help_row() const {
-    return argparse::help_row(short_names_, long_names_, "", description_);
+    return argparse::help_row(short_names_, long_names_, "", description_,
+                              negatable_);
   }
   bool hidden() const { return hidden_; }
 
@@ -1495,7 +1499,7 @@ class OptionSchema {
 
   std::pair<std::string, std::string> help_row() const {
     return argparse::help_row(short_names_, long_names_, value_placeholder_,
-                              description_);
+                              description_, negatable_);
   }
 
   bool hidden() const { return hidden_; }
