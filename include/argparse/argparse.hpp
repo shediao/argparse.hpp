@@ -1665,35 +1665,27 @@ class CommandSchema {
     out << "\nArguments:\n";
     for (auto&& positional : positionals_) {
       auto [left, right] = positional->help_row();
-      format_print(out, left, max_left_width, right, max_right_width);
+      out << detail::format(left, right, 1, max_left_width, max_right_width)
+          << "\n";
     }
     out << "\nOptions:\n";
     for (auto&& flag : flags_) {
       auto [left, right] = flag->help_row();
-      format_print(out, left, max_left_width, right, max_right_width);
+      out << detail::format(left, right, 1, max_left_width, max_right_width)
+          << "\n";
     }
     for (auto&& option : options_) {
       auto [left, right] = option->help_row();
-      format_print(out, left, max_left_width, right, max_right_width);
+      out << detail::format(left, right, 1, max_left_width, max_right_width)
+          << "\n";
     }
     out << "\nCommands:\n";
     for (auto&& subcommand : subcommands_) {
-      format_print(out, subcommand->name_, max_left_width,
-                   subcommand->description_, max_right_width);
+      out << detail::format(subcommand->name_, subcommand->description_, 1,
+                            max_left_width, max_right_width)
+          << "\n";
     }
     return out.str();
-  }
-
-  void format_print(std::stringstream& out, std::string left, size_t left_width,
-                    std::string right, size_t right_width) {
-    right = detail::word_wrap(right, right_width);
-    auto pos = right.find('\n');
-    while (pos != std::string::npos) {
-      right.replace(pos, 1, "\n" + std::string(left_width + 2, ' '));
-      pos = right.find('\n', pos + left_width + 2);
-    }
-    out << "  " << std::left << std::setfill(' ') << std::setw(left_width)
-        << left << "  " << right << "\n";
   }
 
   bool hidden() const { return hidden_; }
