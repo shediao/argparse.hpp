@@ -50,7 +50,6 @@
 #include <iterator>
 #include <map>
 #include <memory>
-#include <numeric>
 #include <optional>
 #include <ranges>
 #include <sstream>
@@ -1465,13 +1464,14 @@ class FlagSchema {
   std::pair<std::string, std::string> help_row() const {
     return argparse::help_row(short_names_, long_names_, "", description_);
   }
+  bool hidden() const { return hidden_; }
 
  private:
   std::vector<char> short_names_;
   std::vector<std::string> long_names_;
   std::string description_;
   bool negatable_{false};
-  [[maybe_unused]] bool hidden_{false};
+  bool hidden_{false};
 };
 
 class OptionSchema {
@@ -1498,13 +1498,15 @@ class OptionSchema {
                               description_);
   }
 
+  bool hidden() const { return hidden_; }
+
  private:
   std::vector<char> short_names_;
   std::vector<std::string> long_names_;
   std::string description_;
   std::string value_placeholder_;
   bool negatable_{false};
-  [[maybe_unused]] bool hidden_{false};
+  bool hidden_{false};
 };
 
 class PositionalSchema {
@@ -1524,11 +1526,14 @@ class PositionalSchema {
     return std::pair<std::string, std::string>{name_, description_};
   }
 
+  std::size_t size() const { return size_; }
+  bool hidden() const { return hidden_; }
+
  private:
   std::string name_;
-  [[maybe_unused]] std::size_t size_;
+  std::size_t size_;
   std::string description_;
-  [[maybe_unused]] bool hidden_{false};
+  bool hidden_{false};
 };
 
 class CommandSchema {
@@ -1686,11 +1691,16 @@ class CommandSchema {
         << left << "  " << right << "\n";
   }
 
+  bool hidden() const { return hidden_; }
+  bool treat_remaining_as_positional() const {
+    return treat_remaining_as_positional_;
+  }
+
  private:
   std::string name_;
   std::string description_;
-  [[maybe_unused]] bool hidden_{false};
-  [[maybe_unused]] bool treat_remaining_as_positional_{false};
+  bool hidden_{false};
+  bool treat_remaining_as_positional_{false};
   std::vector<std::shared_ptr<FlagSchema>> flags_;
   std::vector<std::shared_ptr<OptionSchema>> options_;
   std::vector<std::shared_ptr<PositionalSchema>> positionals_;
