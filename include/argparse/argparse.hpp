@@ -45,7 +45,6 @@
 #include <cstdlib>
 #include <functional>
 #include <initializer_list>
-#include <iomanip>
 #include <iostream>
 #include <iterator>
 #include <limits>
@@ -2613,10 +2612,13 @@ class Command {
   }
 
  public:
-  Command(std::string cmd, std::string description)
+  Command(std::string cmd, std::string description, Command* parent = nullptr)
       : command_{std::move(cmd)},
         description_(std::move(description)),
-        command_schema_{command_, description_, nullptr} {}
+        parent_{parent},
+        command_schema_{
+            command_, description_,
+            parent == nullptr ? nullptr : &(parent->command_schema_)} {}
   virtual ~Command() {}
 
  protected:
@@ -3124,8 +3126,6 @@ class Command {
     is_hidden_ = v;
     return *this;
   }
-  void set_parent(Command* parent) { parent_ = parent; }
-  bool has_parent() const { return parent_ != nullptr; }
   bool is_parsed() { return is_parsed_; }
   bool is_hidden() const { return is_hidden_; }
   void set_treat_remaining_as_positional(bool v = true) {
@@ -3145,19 +3145,19 @@ class Command {
   }
 
  protected:
-  bool flag_or_option_exists(ArgBase& new_arg) const {
+  bool flag_or_option_exists(ArgBase const& new_arg) const {
     return flag_exists(new_arg) || option_exists(new_arg);
   }
-  bool flag_exists(ArgBase& new_arg) const {
+  bool flag_exists(ArgBase const& new_arg) const {
     return option_name_exists(new_arg, 0);
   }
-  bool option_exists(ArgBase& new_arg) const {
+  bool option_exists(ArgBase const& new_arg) const {
     return option_name_exists(new_arg, 1);
   }
-  bool positional_exists(ArgBase& new_arg) const {
+  bool positional_exists(ArgBase const& new_arg) const {
     return option_name_exists(new_arg, 2);
   }
-  bool option_name_exists(ArgBase& new_arg, int type) const {
+  bool option_name_exists(ArgBase const& new_arg, int type) const {
     for (const auto& arg : args_) {
       if (type == 0 && !arg->is_flag()) {
         continue;
@@ -3275,7 +3275,7 @@ inline std::vector<token> tokenize(argv_stream& args, Command& cmd) {
 class ArgParser : public Command {
  public:
   ArgParser(std::string prog, std::string description)
-      : Command(prog, description) {}
+      : Command(prog, description, nullptr) {}
   virtual ~ArgParser() {}
   ArgParser(ArgParser&& other) = default;
   ArgParser& operator=(ArgParser&& other) = default;
@@ -3354,8 +3354,7 @@ class ArgParser : public Command {
                     [](auto const& a) { return a->is_positional(); })) {
       detail::die("Cannot add a subcommand when positional arguments exist");
     }
-    auto cmd_ptr = std::make_shared<Command>(cmd, description);
-    cmd_ptr->set_parent(this);
+    auto cmd_ptr = std::make_shared<Command>(cmd, description, this);
     subcommands_.push_back(cmd_ptr);
     return *cmd_ptr;
   }
