@@ -750,22 +750,22 @@ TEST_F(ArgParserTest, DuplicateOptionsTest) {
   // 测试重复的短选项
   parser.add_flag("f,flag1", "First flag", flag1);
   EXPECT_THROW(parser.add_flag("f,flag2", "Second flag", flag2),
-               std::runtime_error);
+               std::invalid_argument);
 
   // 测试重复的长选项
   parser.add_option("o1,option", "First option", opt1);
   EXPECT_THROW(parser.add_option("o2,option", "Second option", opt2),
-               std::runtime_error);
+               std::invalid_argument);
 
   // 测试重复的位置参数
   parser.add_positional("input", "Input file", pos1);
   EXPECT_THROW(parser.add_positional("input", "Another input", pos2),
-               std::runtime_error);
+               std::invalid_argument);
 
   // 测试不同类型之间的重复选项
   EXPECT_THROW(
       parser.add_option("flag1", "Option with same name as flag", opt1),
-      std::runtime_error);
+      std::invalid_argument);
   EXPECT_NO_THROW(parser.add_positional(
       "option", "Positional with same name as option", pos2));
 }
@@ -782,16 +782,16 @@ TEST_F(ArgParserTest, MultipleNameConflictTest) {
   // 测试与短选项冲突
   EXPECT_THROW(
       parser.add_option("f,other-flag", "Conflicting short option", opt1),
-      std::runtime_error);
+      std::invalid_argument);
 
   // 测试与长选项冲突
   EXPECT_THROW(parser.add_option("x,flag", "Conflicting long option", opt1),
-               std::runtime_error);
+               std::invalid_argument);
 
   // 测试与另一个长选项冲突
   EXPECT_THROW(
       parser.add_option("x,flag-name", "Conflicting another long option", opt1),
-      std::runtime_error);
+      std::invalid_argument);
 }
 
 // 测试选项名称以'-'开头时抛出异常

@@ -57,6 +57,7 @@
 #include <tuple>
 #include <type_traits>
 #include <utility>
+#include <variant>
 #include <vector>
 #if defined(_WIN32)
 #include <windows.h>
@@ -770,8 +771,8 @@ inline size_t& option_name_width_impl() {
   static size_t width = 24;
   return width;
 }
-template <typename T>
-std::string join(const std::vector<std::string>& v, const T& delim) {
+template <typename C, typename T>
+std::string join(const C& v, const T& delim) {
   std::stringstream result;
   auto it = v.begin();
   if (it != v.end()) {
@@ -1448,12 +1449,15 @@ inline std::pair<std::string, std::string> help_row(
 class FlagSchema {
  public:
   FlagSchema(std::vector<char> short_names, std::vector<std::string> long_names,
-             std::string description)
+             std::string description, bool negatable = false,
+             bool hidden = false)
       : short_names_(std::move(short_names)),
         long_names_(std::move(long_names)),
-        description_(std::move(description)) {}
+        description_(std::move(description)),
+        negatable_(negatable),
+        hidden_(hidden) {}
   void negatable(bool v) { negatable_ = v; }
-  bool is_negatable() { return negatable_; }
+  bool is_negatable() const { return negatable_; }
 
   bool has_short_name(char name) const {
     return std::find(short_names_.begin(), short_names_.end(), name) !=
@@ -1470,6 +1474,10 @@ class FlagSchema {
   }
   bool hidden() const { return hidden_; }
 
+  std::vector<char> const& short_names() const { return short_names_; }
+  std::vector<std::string> const& long_names() const { return long_names_; }
+  std::string const& description() const { return description_; }
+
  private:
   std::vector<char> short_names_;
   std::vector<std::string> long_names_;
@@ -1485,8 +1493,6 @@ class OptionSchema {
       : short_names_(std::move(short_names)),
         long_names_(std::move(long_names)),
         description_(std::move(description)) {}
-  void negatable(bool v) { negatable_ = v; }
-  bool is_negatable() const { return negatable_; }
 
   bool has_short_name(char name) const {
     return std::find(short_names_.begin(), short_names_.end(), name) !=
@@ -1499,42 +1505,45 @@ class OptionSchema {
 
   std::pair<std::string, std::string> help_row() const {
     return argparse::help_row(short_names_, long_names_, value_placeholder_,
-                              description_, negatable_);
+                              description_, false);
   }
 
   bool hidden() const { return hidden_; }
+
+  std::vector<char> const& short_names() const { return short_names_; }
+  std::vector<std::string> const& long_names() const { return long_names_; }
+  std::string const& description() const { return description_; }
 
  private:
   std::vector<char> short_names_;
   std::vector<std::string> long_names_;
   std::string description_;
   std::string value_placeholder_;
-  bool negatable_{false};
   bool hidden_{false};
 };
 
 class PositionalSchema {
  public:
   PositionalSchema(std::string name, std::size_t size, std::string description)
-      : name_(std::move(name)),
+      : long_names_({std::move(name)}),
         size_(size),
         description_(std::move(description)) {}
-  std::string const& name() const { return name_; }
-
-  std::string usage() const {
-    std::stringstream ret;
-    ret << name_ << "\t" << description_;
-    return ret.str();
-  }
   std::pair<std::string, std::string> help_row() const {
-    return std::pair<std::string, std::string>{name_, description_};
+    return std::pair<std::string, std::string>{long_names_.front(),
+                                               description_};
   }
 
   std::size_t size() const { return size_; }
   bool hidden() const { return hidden_; }
 
+  std::vector<char> const& short_names() const { return short_names_; }
+  std::vector<std::string> const& long_names() const { return long_names_; }
+  std::string const& name() const { return long_names_.front(); }
+  std::string const& description() const { return description_; }
+
  private:
-  std::string name_;
+  std::vector<char> short_names_;
+  std::vector<std::string> long_names_;
   std::size_t size_;
   std::string description_;
   bool hidden_{false};
@@ -1549,38 +1558,51 @@ class CommandSchema {
         parent_(parent) {}
 
   std::string const& name() const { return name_; }
+  std::string const& description() const { return description_; }
 
-  FlagSchema& add_flag(std::vector<char> short_names,
-                       std::vector<std::string> long_names,
-                       std::string description) {
+  std::shared_ptr<FlagSchema> add_flag(std::vector<char> short_names,
+                                       std::vector<std::string> long_names,
+                                       std::string description) {
     flags_.emplace_back(std::make_shared<FlagSchema>(
         std::move(short_names), std::move(long_names), std::move(description)));
-    return *flags_.back();
+    return flags_.back();
+  }
+  std::shared_ptr<FlagSchema> add_flag(std::shared_ptr<FlagSchema> flag) {
+    flags_.emplace_back(std::move(flag));
+    return flags_.back();
   }
 
-  OptionSchema& add_option(std::vector<char> short_names,
-                           std::vector<std::string> long_names,
-                           std::string description) {
+  std::shared_ptr<OptionSchema> add_option(std::vector<char> short_names,
+                                           std::vector<std::string> long_names,
+                                           std::string description) {
     options_.emplace_back(std::make_shared<OptionSchema>(
         std::move(short_names), std::move(long_names), std::move(description)));
-    return *options_.back();
+    return options_.back();
+  }
+  std::shared_ptr<OptionSchema> add_option(
+      std::shared_ptr<OptionSchema> option) {
+    options_.emplace_back(std::move(option));
+    return options_.back();
   }
 
-  PositionalSchema& add_positional(std::string name, std::size_t size,
-                                   std::string description) {
+  std::shared_ptr<PositionalSchema> add_positional(std::string name,
+                                                   std::size_t size,
+                                                   std::string description) {
     positionals_.emplace_back(std::make_shared<PositionalSchema>(
         std::move(name), size, std::move(description)));
-    return *positionals_.back();
+    return positionals_.back();
+  }
+  std::shared_ptr<PositionalSchema> add_positional(
+      std::shared_ptr<PositionalSchema> positional) {
+    positionals_.emplace_back(std::move(positional));
+    return positionals_.back();
   }
 
-  CommandSchema& add_subcommand(std::string name, std::string description) {
+  std::shared_ptr<CommandSchema> add_subcommand(std::string name,
+                                                std::string description) {
     subcommands_.emplace_back(std::make_shared<CommandSchema>(
         std::move(name), std::move(description), this));
-    return *subcommands_.back();
-  }
-  CommandSchema& add_subcommand(std::shared_ptr<CommandSchema> subcommand) {
-    subcommands_.emplace_back(std::move(subcommand));
-    return *subcommands_.back();
+    return subcommands_.back();
   }
 
   bool has_flag(std::string const& name) const {
@@ -1635,6 +1657,30 @@ class CommandSchema {
     return false;
   }
 
+  bool exists(std::string const& name) const {
+    return has_flag(name) || has_option(name) || has_positional(name) ||
+           has_subcommand(name);
+  }
+  bool exists(char name) const { return has_flag(name) || has_option(name); }
+
+  bool exists(std::tuple<std::vector<char>, std::vector<std::string>> const&
+                  option_names) {
+    auto&& short_names = std::get<0>(option_names);
+    auto&& long_names = std::get<1>(option_names);
+
+    for (auto&& short_name : short_names) {
+      if (exists(short_name)) {
+        return true;
+      }
+    }
+    for (auto&& long_name : long_names) {
+      if (exists(long_name)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   std::string usage(size_t max_left_width = 32, size_t max_right_width = 80) {
     {
       size_t max_width = 0;
@@ -1659,9 +1705,18 @@ class CommandSchema {
     std::stringstream out;
     out << "Usage:\n";
     out << "  " << command_str << name_ << "\n";
+
+    if (!usage_header_.empty()) {
+      out << usage_header_;
+      if (usage_header_.back() != '\n') {
+        out << '\n';
+      }
+    }
     out << "\nDescription:\n";
     out << description_ << "\n";
-    out << "\nArguments:\n";
+    if (!positionals_.empty()) {
+      out << "\nArguments:\n";
+    }
     for (auto&& positional : positionals_) {
       auto [left, right] = positional->help_row();
       out << detail::format(left, right, 1, max_left_width, max_right_width)
@@ -1678,11 +1733,17 @@ class CommandSchema {
       out << detail::format(left, right, 1, max_left_width, max_right_width)
           << "\n";
     }
-    out << "\nCommands:\n";
+    if (!subcommands_.empty()) {
+      out << "\nCommands:\n";
+    }
     for (auto&& subcommand : subcommands_) {
       out << detail::format(subcommand->name_, subcommand->description_, 1,
                             max_left_width, max_right_width)
           << "\n";
+    }
+
+    if (!usage_footer_.empty()) {
+      out << "\n" << usage_footer_;
     }
     return out.str();
   }
@@ -1691,10 +1752,20 @@ class CommandSchema {
   bool treat_remaining_as_positional() const {
     return treat_remaining_as_positional_;
   }
+  void set_usage_header(std::string header) {
+    usage_header_ = std::move(header);
+  }
+  void set_usage_footer(std::string footer) {
+    usage_footer_ = std::move(footer);
+  }
+  std::string const& usage_header() const { return usage_header_; }
+  std::string const& usage_footer() const { return usage_footer_; }
 
  private:
   std::string name_;
   std::string description_;
+  std::string usage_header_;
+  std::string usage_footer_;
   bool hidden_{false};
   bool treat_remaining_as_positional_{false};
   std::vector<std::shared_ptr<FlagSchema>> flags_;
@@ -1709,20 +1780,9 @@ class ArgBase {
   friend class ArgParser;
 
  public:
-  ArgBase(const std::string& name, const std::string& description)
-      : description_(description) {
-    auto ret = parse_option_name(name);
-
-    if (ret) {
-      std::transform(std::get<0>(*ret).begin(), std::get<0>(*ret).end(),
-                     std::back_inserter(short_opt_names_),
-                     [](char c) { return std::string(1, c); });
-      std::copy(std::get<1>(*ret).begin(), std::get<1>(*ret).end(),
-                std::back_inserter(long_opt_names_));
-    } else {
-      detail::report_invalid_argument(ret.error());
-    }
-  }
+  ArgBase(std::shared_ptr<FlagSchema> flag) : schema_{flag} {}
+  ArgBase(std::shared_ptr<OptionSchema> option) : schema_{option} {}
+  ArgBase(std::shared_ptr<PositionalSchema> positional) : schema_{positional} {}
   size_t count() const { return count_; }
   virtual ~ArgBase() = default;
 
@@ -1735,19 +1795,43 @@ class ArgBase {
     env_key_ = env;
     return *this;
   }
+  std::vector<char> const& short_names() const {
+    return std::visit(
+        [](auto& flag) -> std::vector<char> const& {
+          return flag->short_names();
+        },
+        schema_);
+  }
+  std::vector<std::string> const& long_names() const {
+    return std::visit(
+        [](auto& flag) -> std::vector<std::string> const& {
+          return flag->long_names();
+        },
+        schema_);
+  }
+  std::string const& description() const {
+    return std::visit(
+        [](auto& flag) -> std::string const& { return flag->description(); },
+        schema_);
+  }
 
  protected:
-  virtual bool is_flag() const = 0;
-  virtual bool is_option() const = 0;
-  virtual bool is_positional() const = 0;
+  bool is_flag() const {
+    return std::holds_alternative<std::shared_ptr<FlagSchema>>(schema_);
+  }
+  bool is_option() const {
+    return std::holds_alternative<std::shared_ptr<OptionSchema>>(schema_);
+  }
+  bool is_positional() const {
+    return std::holds_alternative<std::shared_ptr<PositionalSchema>>(schema_);
+  }
   virtual std::string usage() const = 0;
-  const std::string& description() const { return description_; }
   size_t count_{0};
-  std::vector<std::string> short_opt_names_;
-  std::vector<std::string> long_opt_names_;
-  std::string description_;
   std::string env_key_;
   bool hidden_{false};
+  std::variant<std::shared_ptr<FlagSchema>, std::shared_ptr<OptionSchema>,
+               std::shared_ptr<PositionalSchema>>
+      schema_;
 };
 
 class FlagBase : public ArgBase {
@@ -1755,47 +1839,46 @@ class FlagBase : public ArgBase {
   friend class ArgParser;
 
  public:
-  FlagBase(const std::string& name, const std::string& description)
-      : ArgBase(name, description) {}
+  FlagBase(std::shared_ptr<FlagSchema> flag) : ArgBase(flag) {}
 
-  void negatable(bool v = true) { this->negatable_ = v; }
-  bool is_negatable() { return this->negatable_; }
+  void negatable(bool v = true) {
+    std::get<std::shared_ptr<FlagSchema>>(schema_)->negatable(v);
+  }
+  bool is_negatable() const {
+    return std::get<std::shared_ptr<FlagSchema>>(schema_)->is_negatable();
+  }
 
  protected:
-  bool is_flag() const override final { return true; }
-  bool is_option() const override final { return false; }
-  bool is_positional() const override final { return false; }
   virtual void parse() = 0;
   virtual void parse_negated() = 0;
-  bool negatable_ = false;
   std::string usage() const override {
     std::stringstream opt_str;
-    if (short_opt_names_.empty()) {
-      if (!long_opt_names_.empty()) {
+    if (short_names().empty()) {
+      if (!long_names().empty()) {
         //         "-x, --foo"
-        opt_str << "    --" << (negatable_ ? "[no-]" : "")
-                << long_opt_names_[0];
+        opt_str << "    --" << (is_negatable() ? "[no-]" : "")
+                << long_names()[0];
       } else {
         opt_str << "  ";
       }
     } else {
-      if (negatable_ && long_opt_names_.empty()) {
-        opt_str << "[--no]-" << short_opt_names_[0];
+      if (is_negatable() && long_names().empty()) {
+        opt_str << "[--no]-" << short_names()[0];
       } else {
-        opt_str << "-" << short_opt_names_[0];
+        opt_str << "-" << short_names()[0];
       }
-      if (!long_opt_names_.empty()) {
-        opt_str << ", --" << (negatable_ ? "[no-]" : "") << long_opt_names_[0];
+      if (!long_names().empty()) {
+        opt_str << ", --" << (is_negatable() ? "[no-]" : "") << long_names()[0];
       }
     }
     std::string extra_desc;
     {
       std::vector<std::string> aliases;
-      for (size_t i = 1; i < short_opt_names_.size(); ++i) {
-        aliases.push_back(short_opt_names_[i]);
+      for (size_t i = 1; i < short_names().size(); ++i) {
+        aliases.push_back(std::string(1, short_names()[i]));
       }
-      for (size_t i = 1; i < long_opt_names_.size(); ++i) {
-        aliases.push_back(long_opt_names_[i]);
+      for (size_t i = 1; i < long_names().size(); ++i) {
+        aliases.push_back(long_names()[i]);
       }
       if (!aliases.empty()) {
         extra_desc += "\naliases: " + detail::join(aliases, ", ");
@@ -1827,15 +1910,15 @@ class Flag final : public FlagBase {
   using parsed_value_type = detail::extract_value_type_t<T>;
 
  public:
-  Flag(const std::string& name, const std::string& description, T& bind_value)
-      : FlagBase(name, description),
+  Flag(std::shared_ptr<FlagSchema> schema, T& bind_value)
+      : FlagBase(schema),
         bind_value_(std::ref(bind_value)),
         parse_function_{store_true},
         negated_parse_action_{store_false} {}
-  Flag(const std::string& name, const std::string& description, T& bind_value,
+  Flag(std::shared_ptr<FlagSchema> schema, T& bind_value,
        std::function<void(parsed_value_type&)> action,
        std::function<void(parsed_value_type&)> negated_action)
-      : FlagBase(name, description),
+      : FlagBase(schema),
         bind_value_(std::ref(bind_value)),
         parse_function_(std::move(action)),
         negated_parse_action_(std::move(negated_action)) {}
@@ -1899,23 +1982,23 @@ class OptionBase : public ArgBase {
   friend std::vector<token> tokenize(argv_stream& args, Command& cmd);
 
  public:
-  OptionBase(const std::string& name, const std::string& description)
-      : ArgBase(name, description) {}
+  OptionBase(std::shared_ptr<OptionSchema> option) : ArgBase(option) {}
+  OptionBase(std::shared_ptr<PositionalSchema> positional)
+      : ArgBase(positional) {}
 
   void required() { is_required_ = true; }
   bool is_required() const { return is_required_; }
 
  protected:
-  bool is_flag() const override final { return false; }
   virtual void parse(const std::string& opt_value) {
     for (const auto& validator : pre_parse_validators_) {
       if (auto [ok, err_msg] = validator(opt_value); !ok) {
         std::string msg = "Validation failed: ";
-        msg += detail::join(long_opt_names_, ',');
-        if (!long_opt_names_.empty() && !short_opt_names_.empty()) {
+        msg += detail::join(long_names(), ',');
+        if (!long_names().empty() && !short_names().empty()) {
           msg += ", ";
         }
-        msg += detail::join(short_opt_names_, ',');
+        msg += detail::join(short_names(), ',');
         msg += ": `";
         msg += opt_value;
         msg += "` is an invalid value. ";
@@ -1925,11 +2008,11 @@ class OptionBase : public ArgBase {
     if (!choices_.empty()) {
       if (choices_.find(opt_value) == choices_.end()) {
         std::string msg = "Invalid choice: ";
-        msg += detail::join(long_opt_names_, ',');
-        if (!long_opt_names_.empty() && !short_opt_names_.empty()) {
+        msg += detail::join(long_names(), ',');
+        if (!long_names().empty() && !short_names().empty()) {
           msg += ", ";
         }
-        msg += detail::join(short_opt_names_, ',');
+        msg += detail::join(short_names(), ',');
         msg += ": `";
         msg += opt_value;
         msg += "` is an invalid value. Valid choices are: ";
@@ -1990,11 +2073,11 @@ class OptionBase : public ArgBase {
     }
     if (is_option()) {
       std::vector<std::string> aliases;
-      for (size_t i = 1; i < short_opt_names_.size(); ++i) {
-        aliases.push_back(short_opt_names_[i]);
+      for (size_t i = 1; i < short_names().size(); ++i) {
+        aliases.push_back(std::string(1, short_names()[i]));
       }
-      for (size_t i = 1; i < long_opt_names_.size(); ++i) {
-        aliases.push_back(long_opt_names_[i]);
+      for (size_t i = 1; i < long_names().size(); ++i) {
+        aliases.push_back(long_names()[i]);
       }
       if (!aliases.empty()) {
         extra_desc += "\naliases: " + detail::join(aliases, ", ");
@@ -2003,18 +2086,18 @@ class OptionBase : public ArgBase {
 
     std::stringstream opt_str;
     if (is_option()) {
-      if (short_opt_names_.empty()) {
+      if (short_names().empty()) {
         //         "-x, --foo"
-        opt_str << "    --" << long_opt_names_[0] << " " << value_placeholder_;
+        opt_str << "    --" << long_names()[0] << " " << value_placeholder_;
       } else {
-        opt_str << "-" << short_opt_names_[0];
-        if (!long_opt_names_.empty()) {
-          opt_str << ", --" << long_opt_names_[0];
+        opt_str << "-" << short_names()[0];
+        if (!long_names().empty()) {
+          opt_str << ", --" << long_names()[0];
         }
         opt_str << " " << value_placeholder_;
       }
     } else {
-      opt_str << long_opt_names_[0];
+      opt_str << long_names()[0];
     }
     return detail::format(opt_str.str(), description() + extra_desc, 1);
   }
@@ -2096,28 +2179,27 @@ class Option final : public OptionBaseCRTP<Option<T>> {
   using parsed_value_type = detail::extract_value_type_t<T>;
 
  public:
-  Option(const std::string& name, const std::string& description, T& bind_value)
+  Option(std::shared_ptr<OptionSchema> schema, T& bind_value)
     requires requires {
       {
         from_string<parsed_value_type>(std::declval<std::string>())
       } -> std::same_as<expected<parsed_value_type, std::string>>;
     }
-      : OptionBaseCRTP<Option<T>>(name, description),
+      : OptionBaseCRTP<Option<T>>(schema),
         bind_value_(std::ref(bind_value)),
         parse_function_([](std::string const& opt_value) {
           return from_string<parsed_value_type>(opt_value).value();
         }) {
     OptionBase::set_value_placeholder_for_type<T>();
   }
-  Option(const std::string& name, const std::string& description, T& bind_value,
-         char delim)
+  Option(std::shared_ptr<OptionSchema> schema, T& bind_value, char delim)
     requires requires {
       {
         from_string<parsed_value_type>(std::declval<std::string>(),
                                        std::declval<char>())
       } -> std::same_as<expected<parsed_value_type, std::string>>;
     }
-      : OptionBaseCRTP<Option<T>>(name, description),
+      : OptionBaseCRTP<Option<T>>(schema),
         bind_value_(std::ref(bind_value)),
         parse_function_([delim](std::string const& opt_value) {
           return from_string<parsed_value_type>(opt_value, delim).value();
@@ -2180,20 +2262,17 @@ class Option final : public OptionBaseCRTP<Option<T>> {
   T const& value() const { return bind_value_; }
 
  protected:
-  bool is_option() const override final { return true; }
-  bool is_positional() const override final { return false; }
   void parse(const std::string& opt_value) override {
     OptionBaseCRTP<Option<T>>::parse(opt_value);
     auto parsed_value = parse_function_(opt_value);
     for (const auto& validator : value_validators_) {
       if (auto [ok, err_msg] = validator(parsed_value); !ok) {
         std::string msg = "Validation failed: ";
-        msg += detail::join(ArgBase::long_opt_names_, ',');
-        if (!ArgBase::long_opt_names_.empty() &&
-            !ArgBase::short_opt_names_.empty()) {
+        msg += detail::join(ArgBase::long_names(), ',');
+        if (!ArgBase::long_names().empty() && !ArgBase::short_names().empty()) {
           msg += ", ";
         }
-        msg += detail::join(ArgBase::short_opt_names_, ',');
+        msg += detail::join(ArgBase::short_names(), ',');
         msg += ": `";
         msg += opt_value;
         msg += "` is an invalid value. ";
@@ -2206,12 +2285,11 @@ class Option final : public OptionBaseCRTP<Option<T>> {
       if (!value_choices_.empty() &&
           (value_choices_.find(parsed_value) == value_choices_.end())) {
         std::string msg = "Invalid choice: ";
-        msg += detail::join(ArgBase::long_opt_names_, ',');
-        if (!ArgBase::long_opt_names_.empty() &&
-            !ArgBase::short_opt_names_.empty()) {
+        msg += detail::join(ArgBase::long_names(), ',');
+        if (!ArgBase::long_names().empty() && !ArgBase::short_names().empty()) {
           msg += ", ";
         }
-        msg += detail::join(ArgBase::short_opt_names_, ',');
+        msg += detail::join(ArgBase::short_names(), ',');
         msg += ": `";
         msg += opt_value;
         msg += "` is an invalid value. Valid choices are: ";
@@ -2299,17 +2377,9 @@ class Option final : public OptionBaseCRTP<Option<T>> {
 
 class OptionAlias : public FlagBase {
  public:
-  OptionAlias(std::string const& name, OptionBase* option,
+  OptionAlias(std::shared_ptr<FlagSchema> schema, OptionBase* option,
               std::string const& opt_value)
-      : FlagBase(name, "same as " +
-                           (option->long_opt_names_.empty()
-                                ? (option->short_opt_names_.empty()
-                                       ? std::string("")
-                                       : ("-" + option->short_opt_names_[0]))
-                                : ("--" + option->long_opt_names_[0])) +
-                           " " + opt_value),
-        option_{option},
-        opt_value_{opt_value} {}
+      : FlagBase(schema), option_{option}, opt_value_{opt_value} {}
   void parse() override {
     if (option_) {
       option_->parse(opt_value_);
@@ -2334,14 +2404,13 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
   using parsed_value_type = detail::extract_value_type_t<T>;
 
  public:
-  Positional(const std::string& name, const std::string& description,
-             T& bind_value)
+  Positional(std::shared_ptr<PositionalSchema> schema, T& bind_value)
     requires requires {
       {
         from_string<parsed_value_type>(std::declval<std::string>())
       } -> std::same_as<expected<parsed_value_type, std::string>>;
     }
-      : OptionBaseCRTP<Positional<T>>(name, description),
+      : OptionBaseCRTP<Positional<T>>(schema),
         bind_value_(std::ref(bind_value)) {
     if constexpr (detail::from_string_container<T>) {
       parse_function_ = [](std::string const& opt_value) {
@@ -2356,10 +2425,10 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
         return from_string<T>(opt_value).value();
       };
     }
-    (void)OptionBaseCRTP<Positional<T>>::value_placeholder(name);
+    (void)OptionBaseCRTP<Positional<T>>::value_placeholder(schema->name());
   }
-  Positional(const std::string& name, const std::string& description,
-             T& bind_value, char delim)
+  Positional(std::shared_ptr<PositionalSchema> schema, T& bind_value,
+             char delim)
     requires requires {
       {
         from_string<parsed_value_type>(std::declval<std::string>(),
@@ -2367,7 +2436,7 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
 
       } -> std::same_as<expected<parsed_value_type, std::string>>;
     }
-      : OptionBaseCRTP<Positional<T>>(name, description),
+      : OptionBaseCRTP<Positional<T>>(schema),
         bind_value_(std::ref(bind_value)) {
     if constexpr (detail::from_string_container<T>) {
       parse_function_ = [delim](std::string const& opt_value) {
@@ -2382,7 +2451,7 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
         return from_string<T>(opt_value, delim).value();
       };
     }
-    (void)OptionBaseCRTP<Positional<T>>::value_placeholder(name);
+    (void)OptionBaseCRTP<Positional<T>>::value_placeholder(schema->name());
   }
   Positional<T>& default_value(const std::string& default_value)
     requires(!detail::from_string_container<T>)
@@ -2439,20 +2508,17 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
   }
 
  protected:
-  bool is_option() const override final { return false; }
-  bool is_positional() const override final { return true; }
   void parse(const std::string& opt_value) override {
     OptionBaseCRTP<Positional<T>>::parse(opt_value);
     auto parsed_value = parse_function_(opt_value);
     for (const auto& validator : value_validators_) {
       if (auto [ok, err_msg] = validator(parsed_value); !ok) {
         std::string msg = "Validation failed: ";
-        msg += detail::join(ArgBase::long_opt_names_, ',');
-        if (!ArgBase::long_opt_names_.empty() &&
-            !ArgBase::short_opt_names_.empty()) {
+        msg += detail::join(ArgBase::long_names(), ',');
+        if (!ArgBase::long_names().empty() && !ArgBase::short_names().empty()) {
           msg += ", ";
         }
-        msg += detail::join(ArgBase::short_opt_names_, ',');
+        msg += detail::join(ArgBase::short_names(), ',');
         msg += ": `";
         msg += opt_value;
         msg += "` is an invalid value. ";
@@ -2465,12 +2531,11 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
       if (!value_choices_.empty() &&
           (value_choices_.find(parsed_value) == value_choices_.end())) {
         std::string msg = "Invalid choice: ";
-        msg += detail::join(ArgBase::long_opt_names_, ',');
-        if (!ArgBase::long_opt_names_.empty() &&
-            !ArgBase::short_opt_names_.empty()) {
+        msg += detail::join(ArgBase::long_names(), ',');
+        if (!ArgBase::long_names().empty() && !ArgBase::short_names().empty()) {
           msg += ", ";
         }
-        msg += detail::join(ArgBase::short_opt_names_, ',');
+        msg += detail::join(ArgBase::short_names(), ',');
         msg += ": `";
         msg += opt_value;
         msg += "` is an invalid value. Valid choices are: ";
@@ -2571,22 +2636,35 @@ class Command {
       std::function<void(detail::extract_value_type_t<T>&)> action = store_true,
       std::function<void(detail::extract_value_type_t<T>&)> negated_action =
           store_false) {
-    auto flag =
-        std::make_unique<Flag<T>>(name, description, bind_value,
-                                  std::move(action), std::move(negated_action));
-    auto& ret = *(flag.get());
-    if (flag_or_option_exists(ret)) {
-      detail::die("Flag or option already exists: " + name);
-    }
+    auto ret =
+        parse_option_name(name)
+            .and_then(
+                [&]<typename U>(U&& option_names)
+                    -> expected<std::shared_ptr<FlagSchema>, std::string> {
+                  if (command_schema_.exists(option_names)) {
+                    return make_unexpected("Flag or option already exists: " +
+                                           name);
+                  }
 
-    auto option_names = parse_option_name(name);
-    if (option_names) {
-      command_schema_.add_flag(std::get<0>(*option_names),
-                               std::get<1>(*option_names), ret.description_);
+                  return std::make_shared<FlagSchema>(
+                      std::get<0>(std::forward<U>(option_names)),
+                      std::get<1>(std::forward<U>(option_names)), description);
+                })
+            .and_then(
+                [&,
+                 this](auto&& flag_schema) -> expected<Flag<T>*, std::string> {
+                  auto flag = std::make_unique<Flag<T>>(
+                      flag_schema, bind_value, std::move(action),
+                      std::move(negated_action));
+                  auto* ret = flag.get();
+                  command_schema_.add_flag(std::move(flag_schema));
+                  args_.push_back(std::move(flag));
+                  return ret;
+                });
+    if (!ret) {
+      detail::report_invalid_argument(ret.error());
     }
-
-    args_.push_back(std::move(flag));
-    return ret;
+    return *(ret.value());
   }
   template <bindable_int_flag T>
   Flag<T>& add_flag_int(
@@ -2595,29 +2673,41 @@ class Command {
           increment<detail::extract_value_type_t<T>>,
       std::function<void(detail::extract_value_type_t<T>&)> negated_action =
           decrement<detail::extract_value_type_t<T>>) {
-    auto flag =
-        std::make_unique<Flag<T>>(name, description, bind_value,
-                                  std::move(action), std::move(negated_action));
-    auto& ret = *(flag.get());
-    if (flag_or_option_exists(ret)) {
-      detail::die("Flag or option already exists: " + name);
+    auto ret =
+        parse_option_name(name)
+            .and_then(
+                [&]<typename U>(U&& option_names)
+                    -> expected<std::shared_ptr<FlagSchema>, std::string> {
+                  if (command_schema_.exists(option_names)) {
+                    return make_unexpected("Flag or option already exists: " +
+                                           name);
+                  }
+                  return std::make_shared<FlagSchema>(
+                      std::get<0>(std::forward<U>(option_names)),
+                      std::get<1>(std::forward<U>(option_names)), description);
+                })
+            .and_then(
+                [&,
+                 this](auto&& flag_schema) -> expected<Flag<T>*, std::string> {
+                  auto flag = std::make_unique<Flag<T>>(
+                      flag_schema, bind_value, std::move(action),
+                      std::move(negated_action));
+                  auto* ret = flag.get();
+                  command_schema_.add_flag(std::move(flag_schema));
+                  args_.push_back(std::move(flag));
+                  return ret;
+                });
+    if (!ret) {
+      detail::report_invalid_argument(ret.error());
     }
-    auto option_names = parse_option_name(name);
-    if (option_names) {
-      command_schema_.add_flag(std::get<0>(*option_names),
-                               std::get<1>(*option_names), ret.description_);
-    }
-    args_.push_back(std::move(flag));
-    return ret;
+    return *(ret.value());
   }
 
  public:
   Command(std::string cmd, std::string description, Command* parent = nullptr)
-      : command_{std::move(cmd)},
-        description_(std::move(description)),
-        parent_{parent},
+      : parent_{parent},
         command_schema_{
-            command_, description_,
+            std::move(cmd), std::move(description),
             parent == nullptr ? nullptr : &(parent->command_schema_)} {}
   virtual ~Command() {}
 
@@ -2670,90 +2760,156 @@ class Command {
                       const std::string& opt_value) {
     auto* opt = get(opt_name);
     if (!opt) {
-      detail::die("Option not found: " + opt_name);
+      detail::report_invalid_argument("Option not found: " + opt_name);
     }
     if (!opt->is_option()) {
-      detail::die("Not an option: " + opt_name);
+      detail::report_invalid_argument("Not an option: " + opt_name);
     }
 
-    auto alias =
-        std::make_unique<OptionAlias>(name, (OptionBase*)opt, opt_value);
+    auto ret =
+        parse_option_name(name)
+            .and_then(
+                [&]<typename T>(T&& option_names)
+                    -> expected<std::shared_ptr<FlagSchema>, std::string> {
+                  if (command_schema_.exists(option_names)) {
+                    return make_unexpected("Flag or option already exists: " +
+                                           name);
+                  }
+                  std::string desc = "same as ";
+                  auto& tgt_short = opt->short_names();
+                  auto& tgt_long = opt->long_names();
+                  if (!tgt_long.empty()) {
+                    desc += "--" + tgt_long[0] + " " + opt_value;
+                  } else if (!tgt_short.empty()) {
+                    desc +=
+                        "-" + std::string(1, tgt_short[0]) + " " + opt_value;
+                  } else {
+                    desc += opt_value;
+                  }
+                  return std::make_shared<FlagSchema>(
+                      std::get<0>(std::forward<T>(option_names)),
+                      std::get<1>(std::forward<T>(option_names)), desc);
+                })
+            .and_then([&, this](auto&& flag_schema)
+                          -> expected<OptionAlias*, std::string> {
+              auto alias = std::make_unique<OptionAlias>(
+                  flag_schema, (OptionBase*)opt, opt_value);
 
-    auto& ret = *(alias.get());
-    if (flag_or_option_exists(ret)) {
-      detail::die("Flag or option already exists: " + name);
+              auto* ret = alias.get();
+              command_schema_.add_flag(std::move(flag_schema));
+              args_.push_back(std::move(alias));
+              return ret;
+            });
+    if (!ret) {
+      detail::report_invalid_argument(ret.error());
     }
-    auto option_names = parse_option_name(name);
-    if (option_names) {
-      command_schema_.add_flag(std::get<0>(*option_names),
-                               std::get<1>(*option_names), ret.description_);
-    }
-    args_.push_back(std::move(alias));
-    return ret;
+    return *(ret.value());
   }
 
   template <detail::bindable_without_delim T>
   Option<T>& add_option(const std::string& name, const std::string& description,
                         T& bind_value) {
-    auto option = std::make_unique<Option<T>>(name, description, bind_value);
-    auto& ret = *(option.get());
-    if (flag_or_option_exists(ret)) {
-      detail::die("Flag or option already exists: " + name);
+    auto ret =
+        parse_option_name(name)
+            .and_then(
+                [&](auto&& option_names)
+                    -> expected<std::shared_ptr<OptionSchema>, std::string> {
+                  if (command_schema_.exists(option_names)) {
+                    return make_unexpected("Flag or option already exists: " +
+                                           name);
+                  }
+                  return std::make_shared<OptionSchema>(
+                      std::get<0>(option_names), std::get<1>(option_names),
+                      description);
+                })
+            .and_then([&, this](auto&& option_schema)
+                          -> expected<Option<T>*, std::string> {
+              auto option =
+                  std::make_unique<Option<T>>(option_schema, bind_value);
+              auto* ret = option.get();
+
+              command_schema_.add_option(std::move(option_schema));
+              args_.push_back(std::move(option));
+              return ret;
+            });
+    if (!ret) {
+      detail::report_invalid_argument(ret.error());
     }
-    auto option_names = parse_option_name(name);
-    if (option_names) {
-      command_schema_.add_option(std::get<0>(*option_names),
-                                 std::get<1>(*option_names), ret.description_);
-    }
-    args_.push_back(std::move(option));
-    return ret;
+    return *(ret.value());
   }
 
   template <detail::bindable_with_delim T>
   Option<T>& add_option(const std::string& name, const std::string& description,
                         T& bind_value, char delim) {
-    auto option =
-        std::make_unique<Option<T>>(name, description, bind_value, delim);
-    auto& ret = *(option.get());
-    if (flag_or_option_exists(ret)) {
-      detail::die("Flag or option already exists: " + name);
+    auto ret =
+        parse_option_name(name)
+            .and_then(
+                [&](auto&& option_names)
+                    -> expected<std::shared_ptr<OptionSchema>, std::string> {
+                  if (command_schema_.exists(option_names)) {
+                    return make_unexpected("Flag or option already exists: " +
+                                           name);
+                  }
+                  return std::make_shared<OptionSchema>(
+                      std::get<0>(option_names), std::get<1>(option_names),
+                      description);
+                })
+            .and_then([&, this](auto&& option_schema)
+                          -> expected<Option<T>*, std::string> {
+              auto option =
+                  std::make_unique<Option<T>>(option_schema, bind_value, delim);
+              auto* ret = option.get();
+
+              command_schema_.add_option(std::move(option_schema));
+              args_.push_back(std::move(option));
+              return ret;
+            });
+    if (!ret) {
+      detail::report_invalid_argument(ret.error());
     }
-    auto option_names = parse_option_name(name);
-    if (option_names) {
-      command_schema_.add_option(std::get<0>(*option_names),
-                                 std::get<1>(*option_names), ret.description_);
-    }
-    args_.push_back(std::move(option));
-    return ret;
+    return *(ret.value());
   }
 
   template <detail::bindable_without_delim T>
   Positional<T>& add_positional(const std::string& name,
                                 const std::string& description, T& bind_value) {
     if (!subcommands_.empty()) {
-      detail::die("Cannot add positional argument when subcommands exist");
+      detail::report_invalid_argument(
+          "Cannot add positional argument when subcommands exist");
     }
     if (std::ranges::find_if(args_, [](const auto& arg) {
           return arg->is_positional() &&
                  dynamic_cast<OptionBase*>(arg.get())->is_multiple();
         }) != args_.end()) {
-      detail::die(
+      detail::report_invalid_argument(
           "Only one container positional argument is supported, "
           "and it must be the last one.");
     }
-    auto positional =
-        std::make_unique<Positional<T>>(name, description, bind_value);
-    auto& ret = *(positional.get());
-    if (positional_exists(ret)) {
-      detail::die("Positional already exists: " + name);
+
+    if (name.starts_with("-") ||
+        name.find_first_of("<>[]{}()|;!`&$\\ \a\b\f\n\r\t\v") !=
+            std::string::npos) {
+      detail::report_invalid_argument(
+          "Invalid positional: " + name +
+          " contains special characters (<>[]{}()|;!`&$\\ "
+          "\\a\\b\\f\\n\\r\\t\\v) ");
     }
+    if (command_schema_.has_positional(name)) {
+      detail::report_invalid_argument("Positional already exists: " + name);
+    }
+
     size_t size = 1;
     if constexpr (detail::from_string_container<T>) {
       size = 0;
+    } else if constexpr (detail::can_from_string_all_tuple_like_items<T>) {
+      size = std::tuple_size_v<T>;
     }
-    command_schema_.add_positional(name, size, description);
+    auto schema = std::make_shared<PositionalSchema>(name, size, description);
+    auto positional = std::make_unique<Positional<T>>(schema, bind_value);
+    auto* ret = positional.get();
+    command_schema_.add_positional(std::move(schema));
     args_.push_back(std::move(positional));
-    return ret;
+    return *ret;
   }
 
   template <detail::bindable_with_delim T>
@@ -2761,31 +2917,41 @@ class Command {
                                 const std::string& description, T& bind_value,
                                 char delim) {
     if (!subcommands_.empty()) {
-      detail::die("Cannot add positional argument when subcommands exist");
+      detail::report_invalid_argument(
+          "Cannot add positional argument when subcommands exist");
     }
-    auto positional =
-        std::make_unique<Positional<T>>(name, description, bind_value, delim);
-    auto& ret = *(positional.get());
-    if (positional_exists(ret)) {
-      detail::die("Positional already exists: " + name);
+    if (name.starts_with("-") ||
+        name.find_first_of("<>[]{}()|;!`&$\\ \a\b\f\n\r\t\v") !=
+            std::string::npos) {
+      detail::report_invalid_argument(
+          "Invalid positional: " + name +
+          " contains special characters (<>[]{}()|;!`&$\\ "
+          "\\a\\b\\f\\n\\r\\t\\v) ");
     }
+    if (command_schema_.has_positional(name)) {
+      detail::report_invalid_argument("Positional already exists: " + name);
+    }
+
     size_t size = 1;
     if constexpr (detail::from_string_container<T>) {
       size = 0;
-    } else {
+    } else if constexpr (detail::can_from_string_all_tuple_like_items<T>) {
       size = std::tuple_size_v<T>;
     }
-    command_schema_.add_positional(name, size, description);
+    auto schema = std::make_shared<PositionalSchema>(name, size, description);
+    auto positional =
+        std::make_unique<Positional<T>>(schema, bind_value, delim);
+    auto* ret = positional.get();
+    command_schema_.add_positional(std::move(schema));
     args_.push_back(std::move(positional));
-    return ret;
+    return *ret;
   }
 
   ArgBase* get(const std::string& name, bool find_from_parent = true) {
     if (name.length() == 1) {
       auto it = std::ranges::find_if(args_, [name](const auto& arg) {
-        return std::find(arg->short_opt_names_.begin(),
-                         arg->short_opt_names_.end(),
-                         name) != arg->short_opt_names_.end();
+        return std::find(arg->short_names().begin(), arg->short_names().end(),
+                         name[0]) != arg->short_names().end();
       });
       return it != args_.end()
                  ? it->get()
@@ -2793,9 +2959,8 @@ class Command {
                                                   : nullptr);
     } else {
       auto it = std::ranges::find_if(args_, [name](const auto& arg) {
-        return std::find(arg->long_opt_names_.begin(),
-                         arg->long_opt_names_.end(),
-                         name) != arg->long_opt_names_.end();
+        return std::find(arg->long_names().begin(), arg->long_names().end(),
+                         name) != arg->long_names().end();
       });
       return it != args_.end()
                  ? it->get()
@@ -2816,11 +2981,11 @@ class Command {
     return *this;
   }
   Command& usage_header(std::string header) {
-    this->usage_header_ = std::move(header);
+    command_schema_.set_usage_header(std::move(header));
     return *this;
   }
   Command& usage_footer(std::string footer) {
-    this->usage_footer_ = std::move(footer);
+    command_schema_.set_usage_footer(std::move(footer));
     return *this;
   }
 
@@ -2944,9 +3109,9 @@ class Command {
           }
         } else {
           if (!subcommands_.empty()) {
-            auto subcmd_ptr_it =
-                std::find_if(begin(subcommands_), end(subcommands_),
-                             [&arg](auto sub) { return sub->command_ == arg; });
+            auto subcmd_ptr_it = std::find_if(
+                begin(subcommands_), end(subcommands_),
+                [&arg](auto sub) { return sub->command() == arg; });
             if (subcmd_ptr_it != end(subcommands_)) {
               ARG_PARSER_DEBUG(
                   "subcmd: " << detail::join(
@@ -3012,9 +3177,9 @@ class Command {
       if ((arg->is_option() || arg->is_positional()) && arg->count() == 0 &&
           dynamic_cast<OptionBase*>(arg.get())->is_required()) {
         detail::die("Missing required option or positional: " +
-                    (arg->long_opt_names_.empty()
-                         ? *(arg->short_opt_names_.begin())
-                         : *(arg->long_opt_names_.begin())));
+                    (arg->long_names().empty()
+                         ? std::string(1, *(arg->short_names().begin()))
+                         : *(arg->long_names().begin())));
       }
     }
     // Invoke command-level callback
@@ -3038,14 +3203,14 @@ class Command {
                 std::ostream_iterator<std::string>(usage_str, " "));
     }
 
-    if (!usage_header_.empty()) {
-      usage_str << usage_header_;
-      if (usage_header_.back() != '\n') {
+    if (!command_schema_.usage_header().empty()) {
+      usage_str << command_schema_.usage_header();
+      if (command_schema_.usage_header().back() != '\n') {
         usage_str << '\n';
       }
     }
 
-    usage_str << command_;
+    usage_str << command();
     if (std::ranges::find_if(args_, [](const auto& arg) {
           return arg->is_option() || arg->is_flag();
         }) != args_.end()) {
@@ -3088,14 +3253,15 @@ class Command {
         usage_str << "\n" << arg->usage();
       }
     }
-    if (!usage_footer_.empty()) {
-      usage_str << "\n" << usage_footer_;
+    if (!command_schema_.usage_footer().empty()) {
+      usage_str << "\n" << command_schema_.usage_footer();
     }
     return usage_str.str();
   }
   std::string one_line_usage() {
     std::stringstream usage_str;
-    usage_str << detail::format(command_, description_, 1);
+    usage_str << detail::format(command_schema_.name(),
+                                command_schema_.description(), 1);
     return usage_str.str();
   }
   void add_default_help_flag() {
@@ -3119,9 +3285,11 @@ class Command {
 
   virtual void print_usage() const { std::cerr << usage() << "\n"; }
 
-  std::string const& command() const { return command_; }
-  std::string const& name() const { return command_; }
-  std::string const& description() const { return description_; }
+  std::string const& command() const { return command_schema_.name(); }
+  std::string const& name() const { return command_schema_.name(); }
+  std::string const& description() const {
+    return command_schema_.description();
+  }
   Command& hidden(bool v = true) {
     is_hidden_ = v;
     return *this;
@@ -3145,51 +3313,7 @@ class Command {
   }
 
  protected:
-  bool flag_or_option_exists(ArgBase const& new_arg) const {
-    return flag_exists(new_arg) || option_exists(new_arg);
-  }
-  bool flag_exists(ArgBase const& new_arg) const {
-    return option_name_exists(new_arg, 0);
-  }
-  bool option_exists(ArgBase const& new_arg) const {
-    return option_name_exists(new_arg, 1);
-  }
-  bool positional_exists(ArgBase const& new_arg) const {
-    return option_name_exists(new_arg, 2);
-  }
-  bool option_name_exists(ArgBase const& new_arg, int type) const {
-    for (const auto& arg : args_) {
-      if (type == 0 && !arg->is_flag()) {
-        continue;
-      }
-      if (type == 1 && !arg->is_option()) {
-        continue;
-      }
-      if (type == 2 && !arg->is_positional()) {
-        continue;
-      }
-      for (auto& name : arg->long_opt_names_) {
-        if (std::find(new_arg.long_opt_names_.begin(),
-                      new_arg.long_opt_names_.end(),
-                      name) != new_arg.long_opt_names_.end()) {
-          return true;
-        }
-      }
-      for (auto& name : arg->short_opt_names_) {
-        if (std::find(new_arg.short_opt_names_.begin(),
-                      new_arg.short_opt_names_.end(),
-                      name) != new_arg.short_opt_names_.end()) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
   std::vector<std::unique_ptr<ArgBase>> args_;
-  std::string command_;
-  std::string description_;
-  std::string usage_header_;
-  std::string usage_footer_;
   std::vector<std::shared_ptr<Command>> subcommands_;
   Command* parent_{nullptr};
   std::function<void()> callback_{nullptr};
@@ -3284,9 +3408,9 @@ class ArgParser : public Command {
   using Command::add_positional;
   std::string usage() const override {
     std::stringstream usage_str;
-    if (!description_.empty()) {
-      usage_str << description_;
-      if (description_.back() != '\n') {
+    if (!description().empty()) {
+      usage_str << description();
+      if (description().back() != '\n') {
         usage_str << '\n';
       }
     }
@@ -3352,7 +3476,8 @@ class ArgParser : public Command {
   Command& add_command(std::string const& cmd, std::string const& description) {
     if (std::any_of(begin(args_), end(args_),
                     [](auto const& a) { return a->is_positional(); })) {
-      detail::die("Cannot add a subcommand when positional arguments exist");
+      detail::report_invalid_argument(
+          "Cannot add a subcommand when positional arguments exist");
     }
     auto cmd_ptr = std::make_shared<Command>(cmd, description, this);
     subcommands_.push_back(cmd_ptr);
@@ -3440,10 +3565,10 @@ class ArgParser : public Command {
       }
 
       std::vector<std::string> patterns;
-      for (auto const& s : arg->short_opt_names_) {
-        patterns.push_back("-" + s);
+      for (auto const& s : arg->short_names()) {
+        patterns.push_back("-" + std::string(1, s));
       }
-      for (auto const& l : arg->long_opt_names_) {
+      for (auto const& l : arg->long_names()) {
         patterns.push_back("--" + l);
       }
       os << "        " << detail::join(patterns, '|') << ")\n";
@@ -3478,10 +3603,10 @@ class ArgParser : public Command {
       }
 
       std::vector<std::string> patterns;
-      for (auto const& s : arg->short_opt_names_) {
-        patterns.push_back("-" + s);
+      for (auto const& s : arg->short_names()) {
+        patterns.push_back("-" + std::string(1, s));
       }
-      for (auto const& l : arg->long_opt_names_) {
+      for (auto const& l : arg->long_names()) {
         patterns.push_back("--" + l);
       }
       os << "        " << detail::join(patterns, '|') << ")\n";
@@ -3516,7 +3641,7 @@ class ArgParser : public Command {
         os << "        case \"$opt\" in\n";
         has_eq_cases = true;
       }
-      for (auto const& l : arg->long_opt_names_) {
+      for (auto const& l : arg->long_names()) {
         os << "            --" << l << ")\n";
         std::vector<std::string> choice_keys;
         for (auto const& [k, _] : opt->choices_) {
@@ -3546,17 +3671,17 @@ class ArgParser : public Command {
           continue;
         }
         if (arg->is_flag() || arg->is_option()) {
-          for (auto const& s : arg->short_opt_names_) {
-            opt_names.push_back("-" + s);
+          for (auto const& s : arg->short_names()) {
+            opt_names.push_back("-" + std::string(1, s));
           }
-          for (auto const& l : arg->long_opt_names_) {
+          for (auto const& l : arg->long_names()) {
             opt_names.push_back("--" + l);
           }
           // negatable long-flag variants
           if (arg->is_flag()) {
             auto* flag = dynamic_cast<FlagBase*>(arg.get());
             if (flag && flag->is_negatable()) {
-              for (auto const& l : arg->long_opt_names_) {
+              for (auto const& l : arg->long_names()) {
                 opt_names.push_back("--no-" + l);
               }
             }
@@ -3633,10 +3758,10 @@ class ArgParser : public Command {
               continue;
             }
             std::vector<std::string> patterns;
-            for (auto const& s : arg->short_opt_names_) {
-              patterns.push_back("-" + s);
+            for (auto const& s : arg->short_names()) {
+              patterns.push_back("-" + std::string(1, s));
             }
-            for (auto const& l : arg->long_opt_names_) {
+            for (auto const& l : arg->long_names()) {
               patterns.push_back("--" + l);
             }
             os << "                " << detail::join(patterns, '|') << ")\n";
@@ -3703,7 +3828,7 @@ class ArgParser : public Command {
  public:
   /// Print a Bash completion script to @p os.
   void print_bash_complete(std::ostream& os = std::cout) const {
-    std::vector<std::string> root_path{command_};
+    std::vector<std::string> root_path{command()};
     std::string root_func = bash_func_name(root_path);
 
     // First, recursively generate completion functions for every
@@ -3758,7 +3883,7 @@ class ArgParser : public Command {
     os << "    fi\n";
     os << "}\n";
     os << "\n";
-    os << "complete -F " << root_func << " " << command_ << "\n";
+    os << "complete -F " << root_func << " " << command() << "\n";
   }
   void print_zsh_complete(std::ostream& os = std::cout) const {
     auto escape_zsh_spec = [](std::string const& s) -> std::string {
@@ -3814,7 +3939,7 @@ class ArgParser : public Command {
             auto* opt = is_opt ? dynamic_cast<OptionBase*>(arg.get()) : nullptr;
             bool has_choices = opt && !opt->choices_.empty();
 
-            for (auto const& s : arg->short_opt_names_) {
+            for (auto const& s : arg->short_names()) {
               os << "        '-" << s;
               if (!desc.empty()) {
                 os << "[" << desc << "]";
@@ -3838,7 +3963,7 @@ class ArgParser : public Command {
               }
               os << "'\n";
             }
-            for (auto const& l : arg->long_opt_names_) {
+            for (auto const& l : arg->long_names()) {
               os << "        '--" << l;
               if (!desc.empty()) {
                 os << "[" << desc << "]";
@@ -3867,7 +3992,7 @@ class ArgParser : public Command {
             if (arg->is_flag()) {
               auto* flag = dynamic_cast<FlagBase*>(arg.get());
               if (flag && flag->is_negatable()) {
-                for (auto const& l : arg->long_opt_names_) {
+                for (auto const& l : arg->long_names()) {
                   os << "        '--no-" << l;
                   if (!desc.empty()) {
                     os << "[" << desc << "]";
@@ -3975,11 +4100,11 @@ class ArgParser : public Command {
           }
         };
 
-    std::vector<std::string> root_path{command_};
-    os << "#compdef " << command_ << "\n";
+    std::vector<std::string> root_path{command()};
+    os << "#compdef " << command() << "\n";
     os << "\n";
     print_zsh_rec(root_path, this);
-    os << "_" << command_ << " \"$@\"\n";
+    os << "_" << command() << " \"$@\"\n";
   }
   /// Print a Fish completion script to @p os.
   void print_fish_complete(std::ostream& os = std::cout) const {
@@ -4039,8 +4164,8 @@ class ArgParser : public Command {
             auto* opt = is_opt ? dynamic_cast<OptionBase*>(arg.get()) : nullptr;
             bool has_choices = opt && !opt->choices_.empty();
 
-            for (auto const& s : arg->short_opt_names_) {
-              os << "complete -c " << command_ << cond_prefix << " -s " << s;
+            for (auto const& s : arg->short_names()) {
+              os << "complete -c " << command() << cond_prefix << " -s " << s;
               if (!desc.empty()) {
                 os << " -d '" << escape_fish(desc) << "'";
               }
@@ -4058,8 +4183,8 @@ class ArgParser : public Command {
               }
               os << "\n";
             }
-            for (auto const& l : arg->long_opt_names_) {
-              os << "complete -c " << command_ << cond_prefix << " -l " << l;
+            for (auto const& l : arg->long_names()) {
+              os << "complete -c " << command() << cond_prefix << " -l " << l;
               if (!desc.empty()) {
                 os << " -d '" << escape_fish(desc) << "'";
               }
@@ -4082,8 +4207,8 @@ class ArgParser : public Command {
             if (arg->is_flag()) {
               auto* flag = dynamic_cast<FlagBase*>(arg.get());
               if (flag && flag->is_negatable()) {
-                for (auto const& l : arg->long_opt_names_) {
-                  os << "complete -c " << command_ << cond_prefix << " -l no-"
+                for (auto const& l : arg->long_names()) {
+                  os << "complete -c " << command() << cond_prefix << " -l no-"
                      << l;
                   if (!desc.empty()) {
                     os << " -d '" << escape_fish(desc) << "'";
@@ -4115,7 +4240,7 @@ class ArgParser : public Command {
               if (sc->is_hidden()) {
                 continue;
               }
-              os << "complete -c " << command_ << " -n '" << sub_cond
+              os << "complete -c " << command() << " -n '" << sub_cond
                  << "' -f -a '" << sc->command() << "'";
               if (!sc->description().empty()) {
                 os << " -d '" << escape_fish(sc->description()) << "'";
@@ -4146,7 +4271,7 @@ class ArgParser : public Command {
               for (auto const& [k, _] : pos->choices_) {
                 choice_keys.push_back(k);
               }
-              os << "complete -c " << command_ << cond_prefix << " -f -a '"
+              os << "complete -c " << command() << cond_prefix << " -f -a '"
                  << escape_fish(detail::join(choice_keys, ' ')) << "'";
               if (!pos->description().empty()) {
                 os << " -d '" << escape_fish(pos->description()) << "'";

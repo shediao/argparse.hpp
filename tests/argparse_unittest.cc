@@ -46,14 +46,14 @@ TEST(argparse, FlagAlreadyExists) {
   parser.add_flag("f,flag", "", flag);
   ASSERT_NO_THROW(parser.add_positional("flag", "", flag));
 
-  ASSERT_THROW(parser.add_option("f", "", flag), std::runtime_error);
+  ASSERT_THROW(parser.add_option("f", "", flag), std::invalid_argument);
 }
 TEST(argparse, AliasAlreadyExists) {
   ArgParser parser{"prog", "the prog description"};
   bool flag;
   parser.add_option("o,option", "", flag);
   parser.add_option("o2,option2", "", flag);
-  ASSERT_THROW(parser.add_alias("o2", "", "option"), std::runtime_error);
+  ASSERT_THROW(parser.add_alias("o2", "", "option"), std::invalid_argument);
 }
 TEST(argparse, OptionAlreadyExists) {
   ArgParser parser{"prog", "the prog description"};
@@ -61,12 +61,12 @@ TEST(argparse, OptionAlreadyExists) {
   parser.add_option("f,flag", "", flag);
   ASSERT_NO_THROW(parser.add_positional("flag", "", flag));
 
-  ASSERT_THROW(parser.add_flag("f", "", flag), std::runtime_error);
+  ASSERT_THROW(parser.add_flag("f", "", flag), std::invalid_argument);
 }
 TEST(argparse, PositionalAlreadyExists) {
   ArgParser parser{"prog", "the prog description"};
   std::string val;
   parser.add_positional("positional", "", val);
   ASSERT_THROW(parser.add_positional("positional", "", val),
-               std::runtime_error);
+               std::invalid_argument);
 }
