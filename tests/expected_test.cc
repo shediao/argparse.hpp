@@ -1,0 +1,804 @@
+//
+// Tests for argparse::expected<T,E>, expected<T&,E>, and expected<void,E>
+//
+
+#include <gtest/gtest.h>
+
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "argparse/argparse.hpp"
+
+using argparse::bad_expected_access;
+using argparse::expected;
+using argparse::make_unexpected;
+
+// ============================================================================
+// expected<T, E> — construction & basic observers
+// ============================================================================
+
+TEST(ExpectedValueTest, ConstructFromValue) {
+  expected<int, std::string> e(42);
+  EXPECT_TRUE(e.has_value());
+  EXPECT_TRUE(static_cast<bool>(e));
+  EXPECT_EQ(e.value(), 42);
+  EXPECT_EQ(*e, 42);
+}
+
+TEST(ExpectedValueTest, ConstructFromUnexpected) {
+  auto u = make_unexpected(std::string("error"));
+  expected<int, std::string> e(u);
+  EXPECT_FALSE(e.has_value());
+  EXPECT_FALSE(static_cast<bool>(e));
+  EXPECT_EQ(e.error(), "error");
+}
+
+TEST(ExpectedValueTest, ConstructFromUnexpectedConvertible) {
+  // Construct from unexpected<const char*> which is convertible to
+  // unexpected<std::string>
+  expected<int, std::string> e(make_unexpected("fail"));
+  EXPECT_FALSE(e.has_value());
+  EXPECT_EQ(e.error(), "fail");
+}
+
+TEST(ExpectedValueTest, CopyConstruct) {
+  expected<int, std::string> a(10);
+  expected<int, std::string> b(a);
+  EXPECT_EQ(b.value(), 10);
+
+  expected<int, std::string> c(make_unexpected(std::string("err")));
+  expected<int, std::string> d(c);
+  EXPECT_EQ(d.error(), "err");
+}
+
+TEST(ExpectedValueTest, MoveConstruct) {
+  expected<int, std::string> a(10);
+  expected<int, std::string> b(std::move(a));
+  EXPECT_EQ(b.value(), 10);
+  // a is now moved-from but still destructible
+
+  expected<int, std::string> c(make_unexpected(std::string("err")));
+  expected<int, std::string> d(std::move(c));
+  EXPECT_EQ(d.error(), "err");
+}
+
+TEST(ExpectedValueTest, CopyAssignment) {
+  expected<int, std::string> a(10);
+  expected<int, std::string> b(20);
+  b = a;
+  EXPECT_EQ(b.value(), 10);
+
+  expected<int, std::string> c(make_unexpected(std::string("e1")));
+  expected<int, std::string> d(make_unexpected(std::string("e2")));
+  d = c;
+  EXPECT_EQ(d.error(), "e1");
+
+  // cross-state assignment
+  expected<int, std::string> e(100);
+  e = c;
+  EXPECT_EQ(e.error(), "e1");
+
+  expected<int, std::string> f(make_unexpected(std::string("x")));
+  f = a;
+  EXPECT_EQ(f.value(), 10);
+}
+
+TEST(ExpectedValueTest, MoveAssignment) {
+  expected<int, std::string> a(10);
+  expected<int, std::string> b(20);
+  b = std::move(a);
+  EXPECT_EQ(b.value(), 10);
+
+  expected<int, std::string> c(make_unexpected(std::string("e1")));
+  expected<int, std::string> d(make_unexpected(std::string("e2")));
+  d = std::move(c);
+  EXPECT_EQ(d.error(), "e1");
+}
+
+// Self-assignment is protected by the 'if (this == &other)' guard
+// inside the assignment operators.
+TEST(ExpectedValueTest, SelfAssignment) {
+  expected<int, std::string> a(42);
+  const auto& ref = a;
+  a = ref;  // self-copy-assign via const ref to avoid -Wself-assign
+  EXPECT_EQ(a.value(), 42);
+
+  expected<int, std::string> b(make_unexpected(std::string("err")));
+  const auto& bref = b;
+  b = bref;
+  EXPECT_EQ(b.error(), "err");
+
+  // Self-move-assign via an intermediate copy
+  expected<int, std::string> c(99);
+  expected<int, std::string> tmp(std::move(c));
+  c = std::move(tmp);
+  EXPECT_EQ(c.value(), 99);
+}
+
+TEST(ExpectedValueTest, ValueOr) {
+  expected<int, std::string> e(42);
+  EXPECT_EQ(e.value_or(0), 42);
+
+  expected<int, std::string> f(make_unexpected(std::string("err")));
+  EXPECT_EQ(f.value_or(0), 0);
+}
+
+TEST(ExpectedValueTest, Emplace) {
+  expected<int, std::string> e(make_unexpected(std::string("err")));
+  e.emplace(99);
+  EXPECT_TRUE(e.has_value());
+  EXPECT_EQ(e.value(), 99);
+
+  // emplace on an existing value
+  e.emplace(77);
+  EXPECT_EQ(e.value(), 77);
+}
+
+TEST(ExpectedValueTest, ArrowOperator) {
+  expected<std::string, int> e(std::string("hello"));
+  EXPECT_EQ(e->size(), 5);
+
+  const expected<std::string, int> ce(std::string("world"));
+  EXPECT_EQ(ce->size(), 5);
+}
+
+TEST(ExpectedValueTest, ConstAccess) {
+  const expected<int, std::string> e(42);
+  EXPECT_EQ(e.value(), 42);
+
+  const expected<int, std::string> f(make_unexpected(std::string("err")));
+  EXPECT_EQ(f.error(), "err");
+}
+
+TEST(ExpectedValueTest, RvalueAccess) {
+  auto v = expected<std::string, int>(std::string("hello")).value();
+  EXPECT_EQ(v, "hello");
+
+  auto err =
+      expected<int, std::string>(make_unexpected(std::string("e"))).error();
+  EXPECT_EQ(err, "e");
+}
+
+#ifdef __cpp_exceptions
+TEST(ExpectedValueTest, ValueThrowsOnError) {
+  expected<int, std::string> e(make_unexpected(std::string("bad")));
+  EXPECT_THROW(
+      {
+        try {
+          e.value();
+        } catch (const bad_expected_access<std::string>& ex) {
+          EXPECT_EQ(ex.error(), "bad");
+          throw;
+        }
+      },
+      bad_expected_access<std::string>);
+}
+#endif
+
+// ============================================================================
+// expected<T, E> — monadic operations
+// ============================================================================
+
+TEST(ExpectedMonadicTest, AndThenOnValue) {
+  expected<int, std::string> e(5);
+  auto result = e.and_then(
+      [](int v) -> expected<double, std::string> { return v * 2.0; });
+  static_assert(
+      std::is_same_v<decltype(result), expected<double, std::string>>);
+  EXPECT_TRUE(result.has_value());
+  EXPECT_DOUBLE_EQ(result.value(), 10.0);
+}
+
+TEST(ExpectedMonadicTest, AndThenOnError) {
+  expected<int, std::string> e(make_unexpected(std::string("fail")));
+  auto result = e.and_then(
+      [](int v) -> expected<double, std::string> { return v * 2.0; });
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), "fail");
+}
+
+TEST(ExpectedMonadicTest, AndThenConst) {
+  const expected<int, std::string> e(5);
+  auto result = e.and_then(
+      [](const int& v) -> expected<double, std::string> { return v * 3.0; });
+  EXPECT_DOUBLE_EQ(result.value(), 15.0);
+}
+
+TEST(ExpectedMonadicTest, AndThenRvalue) {
+  auto result = expected<int, std::string>(7).and_then(
+      [](int&& v) -> expected<double, std::string> { return v * 2.0; });
+  EXPECT_DOUBLE_EQ(result.value(), 14.0);
+}
+
+TEST(ExpectedMonadicTest, TransformOnValue) {
+  expected<int, std::string> e(5);
+  auto result = e.transform([](int v) { return v * 2; });
+  static_assert(std::is_same_v<decltype(result), expected<int, std::string>>);
+  EXPECT_EQ(result.value(), 10);
+}
+
+TEST(ExpectedMonadicTest, TransformOnError) {
+  expected<int, std::string> e(make_unexpected(std::string("fail")));
+  auto result = e.transform([](int v) { return v * 2; });
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), "fail");
+}
+
+TEST(ExpectedMonadicTest, TransformConstLvalue) {
+  const expected<int, std::string> e(5);
+  auto result = e.transform([](const int& v) { return v + 1; });
+  EXPECT_EQ(result.value(), 6);
+}
+
+TEST(ExpectedMonadicTest, TransformRvalue) {
+  auto result = expected<std::string, int>(std::string("hello"))
+                    .transform([](std::string&& s) { return s + "!"; });
+  EXPECT_EQ(result.value(), "hello!");
+}
+
+TEST(ExpectedMonadicTest, TransformErrorOnValue) {
+  expected<int, std::string> e(42);
+  auto result = e.transform_error(
+      [](std::string& err) -> int { return static_cast<int>(err.size()); });
+  // stays as value since has_value is true
+  EXPECT_TRUE(result.has_value());
+  EXPECT_EQ(result.value(), 42);
+}
+
+TEST(ExpectedMonadicTest, TransformErrorOnError) {
+  expected<int, std::string> e(make_unexpected(std::string("err")));
+  auto result = e.transform_error(
+      [](std::string& err) -> int { return static_cast<int>(err.size()); });
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), 3);
+}
+
+TEST(ExpectedMonadicTest, TransformErrorRvalue) {
+  auto result = expected<int, std::string>(make_unexpected(std::string("xyz")))
+                    .transform_error([](std::string&& err) -> int {
+                      return static_cast<int>(err.size());
+                    });
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), 3);
+}
+
+TEST(ExpectedMonadicTest, OrElseOnValue) {
+  expected<int, std::string> e(42);
+  auto result =
+      e.or_else([](const std::string& err) -> expected<int, std::string> {
+        return expected<int, std::string>(static_cast<int>(err.size()));
+      });
+  EXPECT_TRUE(result.has_value());
+  EXPECT_EQ(result.value(), 42);
+}
+
+TEST(ExpectedMonadicTest, OrElseOnError) {
+  expected<int, std::string> e(make_unexpected(std::string("fix")));
+  auto result =
+      e.or_else([](const std::string& err) -> expected<int, std::string> {
+        return expected<int, std::string>(static_cast<int>(err.size()));
+      });
+  EXPECT_TRUE(result.has_value());
+  EXPECT_EQ(result.value(), 3);
+}
+
+TEST(ExpectedMonadicTest, OrElseRvalue) {
+  auto result =
+      expected<int, std::string>(make_unexpected(std::string("fix")))
+          .or_else([](std::string&& err) -> expected<int, std::string> {
+            return expected<int, std::string>(static_cast<int>(err.size()));
+          });
+  EXPECT_TRUE(result.has_value());
+  EXPECT_EQ(result.value(), 3);
+}
+
+// ============================================================================
+// expected<T, E> — swap
+// ============================================================================
+
+TEST(ExpectedSwapTest, BothHaveValue) {
+  expected<int, std::string> a(1);
+  expected<int, std::string> b(2);
+  a.swap(b);
+  EXPECT_EQ(a.value(), 2);
+  EXPECT_EQ(b.value(), 1);
+}
+
+TEST(ExpectedSwapTest, BothHaveError) {
+  expected<int, std::string> a(make_unexpected(std::string("a")));
+  expected<int, std::string> b(make_unexpected(std::string("b")));
+  a.swap(b);
+  EXPECT_EQ(a.error(), "b");
+  EXPECT_EQ(b.error(), "a");
+}
+
+TEST(ExpectedSwapTest, CrossState) {
+  expected<int, std::string> a(42);
+  expected<int, std::string> b(make_unexpected(std::string("err")));
+  a.swap(b);
+  EXPECT_TRUE(b.has_value());
+  EXPECT_EQ(b.value(), 42);
+  EXPECT_FALSE(a.has_value());
+  EXPECT_EQ(a.error(), "err");
+}
+
+// ============================================================================
+// expected<T, E> — comparison
+// ============================================================================
+
+TEST(ExpectedComparisonTest, EqualValues) {
+  expected<int, std::string> a(10);
+  expected<int, std::string> b(10);
+  EXPECT_TRUE(a == b);
+  EXPECT_FALSE(a != b);
+}
+
+TEST(ExpectedComparisonTest, DifferentValues) {
+  expected<int, std::string> a(10);
+  expected<int, std::string> b(20);
+  EXPECT_FALSE(a == b);
+}
+
+TEST(ExpectedComparisonTest, EqualErrors) {
+  expected<int, std::string> a(make_unexpected(std::string("x")));
+  expected<int, std::string> b(make_unexpected(std::string("x")));
+  EXPECT_TRUE(a == b);
+}
+
+TEST(ExpectedComparisonTest, ValueVsError) {
+  expected<int, std::string> a(10);
+  expected<int, std::string> b(make_unexpected(std::string("x")));
+  EXPECT_FALSE(a == b);
+}
+
+TEST(ExpectedComparisonTest, CompareWithValue) {
+  expected<int, std::string> a(42);
+  EXPECT_TRUE(a == 42);
+  EXPECT_FALSE(a == 0);
+
+  expected<int, std::string> b(make_unexpected(std::string("x")));
+  EXPECT_FALSE(b == 42);
+}
+
+// ============================================================================
+// expected<T&, E> — reference specialization
+// ============================================================================
+
+TEST(ExpectedRefTest, ConstructFromRef) {
+  int val = 42;
+  expected<int&, std::string> e(val);
+  EXPECT_TRUE(e.has_value());
+  EXPECT_EQ(e.value(), 42);
+  EXPECT_EQ(*e, 42);
+
+  // mutate through reference
+  e.value() = 99;
+  EXPECT_EQ(val, 99);
+}
+
+TEST(ExpectedRefTest, ConstructFromUnexpected) {
+  expected<int&, std::string> e(make_unexpected(std::string("err")));
+  EXPECT_FALSE(e.has_value());
+  EXPECT_EQ(e.error(), "err");
+}
+
+TEST(ExpectedRefTest, CopyConstruct) {
+  int val = 10;
+  expected<int&, std::string> a(val);
+  expected<int&, std::string> b(a);
+  EXPECT_EQ(b.value(), 10);
+  EXPECT_EQ(&b.value(), &val);  // refers to same object
+}
+
+TEST(ExpectedRefTest, MoveConstruct) {
+  int val = 10;
+  expected<int&, std::string> a(val);
+  expected<int&, std::string> b(std::move(a));
+  EXPECT_EQ(b.value(), 10);
+  EXPECT_EQ(&b.value(), &val);
+}
+
+TEST(ExpectedRefTest, CopyAssignment) {
+  int v1 = 1, v2 = 2;
+  expected<int&, std::string> a(v1);
+  expected<int&, std::string> b(v2);
+  b = a;
+  EXPECT_EQ(&b.value(), &v1);
+}
+
+TEST(ExpectedRefTest, MoveAssignment) {
+  int v1 = 1, v2 = 2;
+  expected<int&, std::string> a(v1);
+  expected<int&, std::string> b(v2);
+  b = std::move(a);
+  EXPECT_EQ(&b.value(), &v1);
+}
+
+TEST(ExpectedRefTest, Emplace) {
+  int v1 = 1, v2 = 2;
+  expected<int&, std::string> e(v1);
+  e.emplace(v2);  // rebind
+  EXPECT_EQ(&e.value(), &v2);
+
+  // emplace from error state
+  expected<int&, std::string> f(make_unexpected(std::string("err")));
+  f.emplace(v1);
+  EXPECT_TRUE(f.has_value());
+  EXPECT_EQ(&f.value(), &v1);
+}
+
+TEST(ExpectedRefTest, ValueOr) {
+  int val = 42;
+  expected<int&, std::string> e(val);
+  EXPECT_EQ(e.value_or(0), 42);
+
+  expected<int&, std::string> f(make_unexpected(std::string("err")));
+  EXPECT_EQ(f.value_or(0), 0);
+}
+
+TEST(ExpectedRefTest, MonadicAndThen) {
+  int val = 5;
+  expected<int&, std::string> e(val);
+  auto result = e.and_then(
+      [](int& v) -> expected<double, std::string> { return v * 2.0; });
+  EXPECT_DOUBLE_EQ(result.value(), 10.0);
+}
+
+TEST(ExpectedRefTest, MonadicTransform) {
+  int val = 5;
+  expected<int&, std::string> e(val);
+  auto result = e.transform([](int& v) { return v * 3; });
+  EXPECT_EQ(result.value(), 15);
+}
+
+TEST(ExpectedRefTest, MonadicTransformError) {
+  int val = 42;
+  expected<int&, std::string> e(val);
+  auto result = e.transform_error(
+      [](std::string& err) -> int { return static_cast<int>(err.size()); });
+  EXPECT_TRUE(result.has_value());
+}
+
+TEST(ExpectedRefTest, MonadicOrElse) {
+  int val = 99;
+  expected<int&, std::string> e(val);
+  auto result =
+      e.or_else([](std::string& /*err*/) -> expected<int&, std::string> {
+        static int fallback = 0;
+        return expected<int&, std::string>(fallback);
+      });
+  EXPECT_EQ(result.value(), 99);
+}
+
+TEST(ExpectedRefTest, Swap) {
+  int v1 = 1, v2 = 2;
+  expected<int&, std::string> a(v1);
+  expected<int&, std::string> b(v2);
+  a.swap(b);
+  EXPECT_EQ(&a.value(), &v2);
+  EXPECT_EQ(&b.value(), &v1);
+}
+
+TEST(ExpectedRefTest, Comparison) {
+  int v1 = 10, v2 = 10, v3 = 20;
+  expected<int&, std::string> a(v1);
+  expected<int&, std::string> b(v2);
+  expected<int&, std::string> c(v3);
+  EXPECT_TRUE(a == b);
+  EXPECT_FALSE(a == c);
+  EXPECT_TRUE(a == 10);
+}
+
+// ============================================================================
+// expected<void, E> — void specialization
+// ============================================================================
+
+TEST(ExpectedVoidTest, DefaultConstruct) {
+  expected<void, std::string> e;
+  EXPECT_TRUE(e.has_value());
+  e.value();  // should not throw/assert
+}
+
+TEST(ExpectedVoidTest, ConstructFromUnexpected) {
+  expected<void, std::string> e(make_unexpected(std::string("err")));
+  EXPECT_FALSE(e.has_value());
+  EXPECT_EQ(e.error(), "err");
+}
+
+TEST(ExpectedVoidTest, CopyConstruct) {
+  expected<void, std::string> a;
+  expected<void, std::string> b(a);
+  EXPECT_TRUE(b.has_value());
+
+  expected<void, std::string> c(make_unexpected(std::string("err")));
+  expected<void, std::string> d(c);
+  EXPECT_EQ(d.error(), "err");
+}
+
+TEST(ExpectedVoidTest, MoveConstruct) {
+  expected<void, std::string> a;
+  expected<void, std::string> b(std::move(a));
+  EXPECT_TRUE(b.has_value());
+
+  expected<void, std::string> c(make_unexpected(std::string("err")));
+  expected<void, std::string> d(std::move(c));
+  EXPECT_EQ(d.error(), "err");
+}
+
+TEST(ExpectedVoidTest, CopyAssignment) {
+  expected<void, std::string> a;
+  expected<void, std::string> b(make_unexpected(std::string("e")));
+  b = a;
+  EXPECT_TRUE(b.has_value());
+
+  expected<void, std::string> c(make_unexpected(std::string("e1")));
+  expected<void, std::string> d(make_unexpected(std::string("e2")));
+  d = c;
+  EXPECT_EQ(d.error(), "e1");
+
+  // cross-state
+  c = a;
+  EXPECT_TRUE(c.has_value());
+}
+
+TEST(ExpectedVoidTest, MoveAssignment) {
+  expected<void, std::string> a;
+  expected<void, std::string> b(make_unexpected(std::string("e")));
+  b = std::move(a);
+  EXPECT_TRUE(b.has_value());
+}
+
+TEST(ExpectedVoidTest, AndThenOnValue) {
+  expected<void, std::string> e;
+  auto result = e.and_then([]() -> expected<int, std::string> { return 42; });
+  EXPECT_TRUE(result.has_value());
+  EXPECT_EQ(result.value(), 42);
+}
+
+TEST(ExpectedVoidTest, AndThenOnError) {
+  expected<void, std::string> e(make_unexpected(std::string("fail")));
+  auto result = e.and_then([]() -> expected<int, std::string> { return 42; });
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), "fail");
+}
+
+TEST(ExpectedVoidTest, TransformOnValue) {
+  expected<void, std::string> e;
+  auto result = e.transform([]() { return 42; });
+  EXPECT_TRUE(result.has_value());
+  EXPECT_EQ(result.value(), 42);
+}
+
+TEST(ExpectedVoidTest, TransformOnError) {
+  expected<void, std::string> e(make_unexpected(std::string("fail")));
+  auto result = e.transform([]() { return 42; });
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), "fail");
+}
+
+TEST(ExpectedVoidTest, TransformErrorOnValue) {
+  expected<void, std::string> e;
+  auto result = e.transform_error(
+      [](std::string& err) -> int { return static_cast<int>(err.size()); });
+  EXPECT_TRUE(result.has_value());
+}
+
+TEST(ExpectedVoidTest, TransformErrorOnError) {
+  expected<void, std::string> e(make_unexpected(std::string("err")));
+  auto result = e.transform_error(
+      [](std::string& err) -> int { return static_cast<int>(err.size()); });
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), 3);
+}
+
+TEST(ExpectedVoidTest, OrElseOnValue) {
+  expected<void, std::string> e;
+  auto result =
+      e.or_else([](std::string& /*err*/) -> expected<void, std::string> {
+        return make_unexpected(std::string("recovered"));
+      });
+  EXPECT_TRUE(result.has_value());
+}
+
+TEST(ExpectedVoidTest, OrElseOnError) {
+  expected<void, std::string> e(make_unexpected(std::string("fix")));
+  auto result =
+      e.or_else([](std::string& /*err*/) -> expected<void, std::string> {
+        // recovery: return a valid expected
+        return expected<void, std::string>();
+      });
+  EXPECT_TRUE(result.has_value());
+}
+
+TEST(ExpectedVoidTest, Swap) {
+  expected<void, std::string> a;
+  expected<void, std::string> b(make_unexpected(std::string("err")));
+  a.swap(b);
+  EXPECT_FALSE(a.has_value());
+  EXPECT_EQ(a.error(), "err");
+  EXPECT_TRUE(b.has_value());
+
+  expected<void, std::string> c(make_unexpected(std::string("c")));
+  expected<void, std::string> d(make_unexpected(std::string("d")));
+  c.swap(d);
+  EXPECT_EQ(c.error(), "d");
+  EXPECT_EQ(d.error(), "c");
+}
+
+TEST(ExpectedVoidTest, Comparison) {
+  expected<void, std::string> a;
+  expected<void, std::string> b;
+  EXPECT_TRUE(a == b);
+
+  expected<void, std::string> c(make_unexpected(std::string("x")));
+  expected<void, std::string> d(make_unexpected(std::string("x")));
+  EXPECT_TRUE(c == d);
+
+  EXPECT_FALSE(a == c);
+  EXPECT_FALSE(c == a);
+}
+
+#ifdef __cpp_exceptions
+TEST(ExpectedVoidTest, ValueThrowsOnError) {
+  expected<void, std::string> e(make_unexpected(std::string("bad")));
+  EXPECT_THROW(e.value(), bad_expected_access<std::string>);
+}
+#endif
+
+// ============================================================================
+// Non-trivial types
+// ============================================================================
+
+TEST(ExpectedNonTrivialTest, StdStringValue) {
+  expected<std::string, int> e(std::string("hello world"));
+  EXPECT_EQ(e.value(), "hello world");
+  EXPECT_EQ(e->size(), 11);
+}
+
+TEST(ExpectedNonTrivialTest, StdStringError) {
+  expected<int, std::string> e(make_unexpected(std::string("error msg")));
+  EXPECT_EQ(e.error(), "error msg");
+}
+
+TEST(ExpectedNonTrivialTest, VectorValue) {
+  expected<std::vector<int>, std::string> e(std::vector<int>{1, 2, 3});
+  EXPECT_EQ(e.value().size(), 3);
+  EXPECT_EQ(e.value()[0], 1);
+}
+
+TEST(ExpectedNonTrivialTest, MoveOnlyType) {
+  // expected can hold a move-only type like unique_ptr
+  expected<std::unique_ptr<int>, std::string> e(std::make_unique<int>(42));
+  EXPECT_TRUE(e.has_value());
+  EXPECT_EQ(*e.value(), 42);
+
+  auto e2 = std::move(e);
+  EXPECT_TRUE(e2.has_value());
+  EXPECT_EQ(*e2.value(), 42);
+}
+
+// ============================================================================
+// make_unexpected / unexpected
+// ============================================================================
+
+TEST(UnexpectedTest, MakeUnexpected) {
+  auto u = make_unexpected(42);
+  static_assert(std::is_same_v<decltype(u), argparse::unexpected<int>>);
+  EXPECT_EQ(u.error(), 42);
+
+  auto u2 = make_unexpected(std::string("hello"));
+  static_assert(
+      std::is_same_v<decltype(u2), argparse::unexpected<std::string>>);
+  EXPECT_EQ(u2.error(), "hello");
+}
+
+TEST(UnexpectedTest, LvalueRefDecay) {
+  int x = 42;
+  auto u = make_unexpected(x);
+  static_assert(std::is_same_v<decltype(u), argparse::unexpected<int>>);
+}
+
+TEST(UnexpectedTest, ErrorAccess) {
+  argparse::unexpected<int> u(42);
+  EXPECT_EQ(u.error(), 42);
+  const auto& cu = u;
+  EXPECT_EQ(cu.error(), 42);
+  EXPECT_EQ(std::move(u).error(), 42);
+}
+
+// ============================================================================
+// is_expected / is_expected_v
+// ============================================================================
+
+TEST(ExpectedTraitsTest, IsExpected) {
+  static_assert(argparse::is_expected_v<expected<int, std::string>>);
+  static_assert(argparse::is_expected_v<expected<int&, std::string>>);
+  static_assert(argparse::is_expected_v<expected<void, std::string>>);
+  static_assert(!argparse::is_expected_v<int>);
+  static_assert(!argparse::is_expected_v<std::string>);
+}
+
+// ============================================================================
+// bad_expected_access
+// ============================================================================
+
+TEST(BadExpectedAccessTest, What) {
+  bad_expected_access<std::string> ex(std::string("test error"));
+  EXPECT_STREQ(ex.what(), "bad expected access");
+  EXPECT_EQ(ex.error(), "test error");
+}
+
+// ============================================================================
+// constexpr tests — note: placement-new is not constexpr before C++26,
+// so the expected class methods marked constexpr can only be tested at
+// runtime with current compilers.
+// ============================================================================
+
+TEST(ExpectedConstexprTest, BasicConstexpr) {
+  auto e = []() {
+    expected<int, int> e(42);
+    if (!e.has_value()) {
+      return -1;
+    }
+    return e.value();
+  }();
+  EXPECT_EQ(e, 42);
+
+  auto f = []() {
+    expected<int, int> e(make_unexpected(99));
+    if (e.has_value()) {
+      return -1;
+    }
+    return e.error();
+  }();
+  EXPECT_EQ(f, 99);
+}
+
+TEST(ExpectedConstexprTest, ConstexprTransform) {
+  auto result = []() {
+    expected<int, int> e(5);
+    return e.transform([](int v) { return v * 2; });
+  }();
+  EXPECT_TRUE(result.has_value());
+  EXPECT_EQ(result.value(), 10);
+}
+
+// ============================================================================
+// Edge cases / regression
+// ============================================================================
+
+TEST(ExpectedEdgeCaseTest, NestedExpected) {
+  using Inner = expected<int, std::string>;
+  expected<Inner, std::string> e(Inner(42));
+  EXPECT_TRUE(e.has_value());
+  EXPECT_TRUE(e.value().has_value());
+  EXPECT_EQ(e.value().value(), 42);
+}
+
+TEST(ExpectedEdgeCaseTest, ChainedMonadicOps) {
+  expected<int, std::string> e(5);
+  auto result = e.transform([](int v) { return v * 2; })
+                    .and_then([](int v) -> expected<double, std::string> {
+                      if (v > 5) {
+                        return v * 1.5;
+                      }
+                      return make_unexpected(std::string("too small"));
+                    })
+                    .transform([](double v) { return static_cast<int>(v); });
+  EXPECT_TRUE(result.has_value());
+  EXPECT_EQ(result.value(), 15);
+
+  // Chain where and_then returns error
+  expected<int, std::string> e2(2);
+  auto result2 = e2.transform([](int v) {
+                     return v * 2;
+                   }).and_then([](int v) -> expected<double, std::string> {
+    if (v > 5) {
+      return v * 1.5;
+    }
+    return make_unexpected(std::string("too small"));
+  });
+  EXPECT_FALSE(result2.has_value());
+  EXPECT_EQ(result2.error(), "too small");
+}

@@ -605,10 +605,22 @@ class expected<T&, E> {
     return check_value(), std::move(*ptr_);
   }
 
-  constexpr E& error() & { return error_; }
-  constexpr E const& error() const& { return error_; }
-  constexpr E&& error() && { return std::move(error_); }
-  constexpr const E&& error() const&& { return std::move(error_); }
+  constexpr E& error() & {
+    assert(!has_value_);
+    return error_;
+  }
+  constexpr E const& error() const& {
+    assert(!has_value_);
+    return error_;
+  }
+  constexpr E&& error() && {
+    assert(!has_value_);
+    return std::move(error_);
+  }
+  constexpr const E&& error() const&& {
+    assert(!has_value_);
+    return std::move(error_);
+  }
 
   // Operators
   constexpr T& operator*() & { return value(); }
@@ -887,12 +899,24 @@ class expected<void, E> {
 
   constexpr void value() const { check_value(); }
 
-  constexpr E& error() & { return error_; }
+  constexpr E& error() & {
+    assert(!has_value_);
+    return error_;
+  }
 
-  constexpr E const& error() const& { return error_; }
+  constexpr E const& error() const& {
+    assert(!has_value_);
+    return error_;
+  }
 
-  constexpr E&& error() && { return std::move(error_); }
-  constexpr const E&& error() const&& { return std::move(error_); }
+  constexpr E&& error() && {
+    assert(!has_value_);
+    return std::move(error_);
+  }
+  constexpr const E&& error() const&& {
+    assert(!has_value_);
+    return std::move(error_);
+  }
 
   // Assignment
   constexpr expected& operator=(expected const& other) {
@@ -1039,6 +1063,38 @@ class expected<void, E> {
     }
     return result_type(make_unexpected(
         std::invoke(std::forward<F>(f), std::move(*this).error())));
+  }
+
+  template <typename F>
+  constexpr expected or_else(F&& f) & {
+    if (has_value_) {
+      return *this;
+    }
+    return std::invoke(std::forward<F>(f), error_);
+  }
+
+  template <typename F>
+  constexpr expected or_else(F&& f) const& {
+    if (has_value_) {
+      return *this;
+    }
+    return std::invoke(std::forward<F>(f), error_);
+  }
+
+  template <typename F>
+  constexpr expected or_else(F&& f) && {
+    if (has_value_) {
+      return std::move(*this);
+    }
+    return std::invoke(std::forward<F>(f), std::move(*this).error());
+  }
+
+  template <typename F>
+  constexpr expected or_else(F&& f) const&& {
+    if (has_value_) {
+      return std::move(*this);
+    }
+    return std::invoke(std::forward<F>(f), std::move(*this).error());
   }
 
   // swap
