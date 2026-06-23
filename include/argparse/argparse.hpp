@@ -1371,10 +1371,6 @@ template <typename T>
 inline void decrement(T& value) {
   --value;
 }
-struct token;
-class argv_stream;
-class Command;
-class ArgParser;
 
 inline expected<std::tuple<std::vector<char>, std::vector<std::string>>,
                 std::string>
@@ -1524,16 +1520,16 @@ class OptionSchema {
 
 class PositionalSchema {
  public:
-  PositionalSchema(std::string name, std::size_t size, std::string description)
+  PositionalSchema(std::string name, std::string description, bool is_container)
       : long_names_({std::move(name)}),
-        size_(size),
-        description_(std::move(description)) {}
+        description_(std::move(description)),
+        is_container_{is_container} {}
   std::pair<std::string, std::string> help_row() const {
     return std::pair<std::string, std::string>{long_names_.front(),
                                                description_};
   }
 
-  std::size_t size() const { return size_; }
+  bool is_container() const { return is_container_; }
   bool hidden() const { return hidden_; }
 
   std::vector<char> const& short_names() const { return short_names_; }
@@ -1544,8 +1540,8 @@ class PositionalSchema {
  private:
   std::vector<char> short_names_;
   std::vector<std::string> long_names_;
-  std::size_t size_;
   std::string description_;
+  bool is_container_;
   bool hidden_{false};
 };
 
@@ -1586,10 +1582,10 @@ class CommandSchema {
   }
 
   std::shared_ptr<PositionalSchema> add_positional(std::string name,
-                                                   std::size_t size,
-                                                   std::string description) {
+                                                   std::string description,
+                                                   bool is_container) {
     positionals_.emplace_back(std::make_shared<PositionalSchema>(
-        std::move(name), size, std::move(description)));
+        std::move(name), std::move(description), is_container));
     return positionals_.back();
   }
   std::shared_ptr<PositionalSchema> add_positional(
@@ -1605,63 +1601,86 @@ class CommandSchema {
     return subcommands_.back();
   }
 
-  bool has_flag(std::string const& name) const {
+  const FlagSchema* get_flag(std::string const& name,
+                             bool recursive = false) const {
     for (auto&& flag : flags_) {
       if (flag->has_long_name(name)) {
-        return true;
+        return flag.get();
       }
     }
-    return false;
+    if (recursive && parent_) {
+      return parent_->get_flag(name, recursive);
+    }
+    return nullptr;
   }
-  bool has_flag(char name) const {
+  const FlagSchema* get_flag(char name, bool recursive = false) const {
     for (auto&& flag : flags_) {
       if (flag->has_short_name(name)) {
-        return true;
+        return flag.get();
       }
     }
-    return false;
+    if (recursive && parent_) {
+      return parent_->get_flag(name, recursive);
+    }
+    return nullptr;
   }
 
-  bool has_option(std::string const& name) const {
+  const OptionSchema* get_option(std::string const& name,
+                                 bool recursive = false) const {
     for (auto&& option : options_) {
       if (option->has_long_name(name)) {
-        return true;
+        return option.get();
       }
     }
-    return false;
+    if (recursive && parent_) {
+      return parent_->get_option(name, recursive);
+    }
+    return nullptr;
   }
-  bool has_option(char name) const {
+  const OptionSchema* get_option(char name, bool recursive = false) const {
     for (auto&& option : options_) {
       if (option->has_short_name(name)) {
-        return true;
+        return option.get();
       }
     }
-    return false;
+    if (recursive && parent_) {
+      return parent_->get_option(name, recursive);
+    }
+    return nullptr;
   }
 
-  bool has_positional(std::string const& name) const {
+  const PositionalSchema* get_positional(std::string const& name) const {
     for (auto&& positional : positionals_) {
       if (positional->name() == name) {
-        return true;
+        return positional.get();
       }
     }
-    return false;
+    return nullptr;
   }
 
-  bool has_subcommand(std::string const& name) const {
+  const PositionalSchema* get_positional(size_t index) const {
+    if (index < positionals_.size()) {
+      return positionals_[index].get();
+    }
+    return nullptr;
+  }
+
+  const CommandSchema* get_subcommand(std::string const& name) const {
     for (auto&& subcommand : subcommands_) {
       if (subcommand->name_ == name) {
-        return true;
+        return subcommand.get();
       }
     }
-    return false;
+    return nullptr;
   }
 
   bool exists(std::string const& name) const {
-    return has_flag(name) || has_option(name) || has_positional(name) ||
-           has_subcommand(name);
+    return get_flag(name) != nullptr || get_option(name) != nullptr ||
+           get_positional(name) != nullptr || get_subcommand(name) != nullptr;
   }
-  bool exists(char name) const { return has_flag(name) || has_option(name); }
+  bool exists(char name) const {
+    return get_flag(name) != nullptr || get_option(name) != nullptr;
+  }
 
   bool exists(std::tuple<std::vector<char>, std::vector<std::string>> const&
                   option_names) {
@@ -1751,6 +1770,9 @@ class CommandSchema {
   bool hidden() const { return hidden_; }
   bool treat_remaining_as_positional() const {
     return treat_remaining_as_positional_;
+  }
+  void set_treat_remaining_as_positional(bool v = true) {
+    treat_remaining_as_positional_ = v;
   }
   void set_usage_header(std::string header) {
     usage_header_ = std::move(header);
@@ -1979,7 +2001,6 @@ class OptionBase : public ArgBase {
   friend class Command;
   friend class ArgParser;
   friend class OptionAlias;
-  friend std::vector<token> tokenize(argv_stream& args, Command& cmd);
 
  public:
   OptionBase(std::shared_ptr<OptionSchema> option) : ArgBase(option) {}
@@ -2622,12 +2643,128 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
   std::map<parsed_value_type, std::string> value_choices_;
 };
 
-struct token;
-class argv_stream;
+enum class token_kind {
+  short_option,
+  long_option,
+  text,
+  option_terminator,
+  command
+};
+
+struct token {
+  token_kind kind;
+  std::string value;
+};
+
+template <typename T>
+class token_stream {
+ public:
+  template <typename Iterator>
+  token_stream(Iterator first, Iterator last) : args_{first, last}, index_{0} {}
+
+  bool eof() const { return index_ == args_.size(); }
+  T const& consume() {
+    assert(!eof());
+    return args_[index_++];
+  }
+
+  T const* peek(size_t offset = 0) {
+    auto pos = index_ + offset;
+    if (pos >= args_.size()) {
+      return nullptr;
+    }
+    return &args_[pos];
+  }
+
+ private:
+  std::vector<T> args_;
+  size_t index_{0};
+};
+
+inline token_stream<token> tokenize(token_stream<std::string>& args,
+                                    const CommandSchema* cmd) {
+  std::vector<token> tokens;
+  const CommandSchema* current_command = cmd;
+  bool positional_only = false;
+  while (!args.eof()) {
+    std::string arg = args.consume();
+    if (positional_only) {
+      tokens.emplace_back(token{token_kind::text, arg});
+    } else if (arg == "--") {
+      positional_only = true;
+      tokens.emplace_back(token{token_kind::option_terminator, arg});
+    } else if (arg.starts_with("--")) {
+      std::string body = arg.substr(2);
+      if (auto pos = body.find("="); pos != std::string::npos) {
+        tokens.emplace_back(
+            token{token_kind::long_option, body.substr(0, pos)});
+        tokens.emplace_back(token{token_kind::text, body.substr(pos + 1)});
+      } else {
+        tokens.emplace_back(token{token_kind::long_option, body});
+      }
+    } else if (arg.starts_with("-") && arg.length() > 1) {
+      if (arg.length() > 2 && current_command->get_option(arg[1]) != nullptr) {
+        tokens.emplace_back(
+            token{token_kind::short_option, std::string(1, arg[1])});
+        tokens.emplace_back(token{token_kind::text, arg.substr(2)});
+      } else {
+        std::transform(
+            arg.begin() + 1, arg.end(), back_inserter(tokens), [](char c) {
+              return token{token_kind::short_option, std::string(1, c)};
+            });
+      }
+    } else if (auto* subcmd = current_command->get_subcommand(arg);
+               subcmd != nullptr) {
+      tokens.emplace_back(token{token_kind::command, arg});
+      current_command = subcmd;
+    } else {
+      tokens.emplace_back(token{token_kind::text, arg});
+    }
+  }
+
+  return token_stream<token>{std::make_move_iterator(tokens.begin()),
+                             std::make_move_iterator(tokens.end())};
+}
+
+inline expected<token_stream<token>, std::string> transform(
+    token_stream<token>& args, const CommandSchema* cmd) {
+  std::vector<token> tokens;
+  while (!args.eof()) {
+    auto arg = args.consume();
+    switch (arg.kind) {
+      case token_kind::long_option:
+      case token_kind::short_option: {
+        if (auto option = cmd->get_option(arg.value, true); option != nullptr) {
+          if (args.peek() == nullptr || args.peek()->kind != token_kind::text) {
+            return make_unexpected("option `" + arg.value +
+                                   "` requires an argument");
+          }
+        } else if (auto flag = cmd->get_flag(arg.value, true);
+                   flag != nullptr) {
+        } else {
+          return make_unexpected("unknown option `" + arg.value + "`");
+        }
+        tokens.emplace_back(token{arg.kind, arg.value});
+        break;
+      }
+      case token_kind::command:
+        tokens.emplace_back(token{token_kind::command, arg.value});
+        break;
+      case token_kind::option_terminator:
+        tokens.emplace_back(token{token_kind::option_terminator, arg.value});
+        break;
+      case token_kind::text:
+        tokens.emplace_back(token{token_kind::text, arg.value});
+        break;
+    }
+  }
+
+  return token_stream<token>{std::make_move_iterator(tokens.begin()),
+                             std::make_move_iterator(tokens.end())};
+}
+
 class Command {
   friend class ArgParser;
-
-  friend inline std::vector<token> tokenize(argv_stream& args, Command& cmd);
 
   template <typename T>
     requires std::same_as<T, bool> || std::same_as<std::optional<bool>, T>
@@ -2894,17 +3031,16 @@ class Command {
           " contains special characters (<>[]{}()|;!`&$\\ "
           "\\a\\b\\f\\n\\r\\t\\v) ");
     }
-    if (command_schema_.has_positional(name)) {
+    if (command_schema_.get_positional(name) != nullptr) {
       detail::report_invalid_argument("Positional already exists: " + name);
     }
 
-    size_t size = 1;
+    bool is_container{false};
     if constexpr (detail::from_string_container<T>) {
-      size = 0;
-    } else if constexpr (detail::can_from_string_all_tuple_like_items<T>) {
-      size = std::tuple_size_v<T>;
+      is_container = true;
     }
-    auto schema = std::make_shared<PositionalSchema>(name, size, description);
+    auto schema =
+        std::make_shared<PositionalSchema>(name, description, is_container);
     auto positional = std::make_unique<Positional<T>>(schema, bind_value);
     auto* ret = positional.get();
     command_schema_.add_positional(std::move(schema));
@@ -2928,17 +3064,16 @@ class Command {
           " contains special characters (<>[]{}()|;!`&$\\ "
           "\\a\\b\\f\\n\\r\\t\\v) ");
     }
-    if (command_schema_.has_positional(name)) {
+    if (command_schema_.get_positional(name) != nullptr) {
       detail::report_invalid_argument("Positional already exists: " + name);
     }
 
-    size_t size = 1;
+    bool is_container{false};
     if constexpr (detail::from_string_container<T>) {
-      size = 0;
-    } else if constexpr (detail::can_from_string_all_tuple_like_items<T>) {
-      size = std::tuple_size_v<T>;
+      is_container = true;
     }
-    auto schema = std::make_shared<PositionalSchema>(name, size, description);
+    auto schema =
+        std::make_shared<PositionalSchema>(name, description, is_container);
     auto positional =
         std::make_unique<Positional<T>>(schema, bind_value, delim);
     auto* ret = positional.get();
@@ -2987,6 +3122,78 @@ class Command {
   Command& usage_footer(std::string footer) {
     command_schema_.set_usage_footer(std::move(footer));
     return *this;
+  }
+
+  expected<Command*, std::string> parse(token_stream<token>& tokens) {
+    std::vector<ArgBase*> positionals;
+    // Collect all positional arguments
+    for (const auto& arg : args_) {
+      if (arg->is_positional()) {
+        positionals.push_back(arg.get());
+      }
+    }
+    size_t pos_index = 0;
+    while (!tokens.eof()) {
+      auto token = tokens.consume();
+      switch (token.kind) {
+        case token_kind::long_option:
+        case token_kind::short_option: {
+          auto arg = get(token.value);
+          bool is_negatable = false;
+          if (arg == nullptr && token.value.starts_with("no-")) {
+            arg = get(token.value.substr(3));
+            if (arg == nullptr || !arg->is_flag() ||
+                !static_cast<FlagBase*>(arg)->is_negatable()) {
+              return make_unexpected("Unknown option: " + token.value);
+            }
+            is_negatable = true;
+          }
+          if (arg == nullptr) {
+            return make_unexpected("Unknown option: " + token.value);
+          }
+          if (arg->is_flag()) {
+            auto* flag = static_cast<FlagBase*>(arg);
+            if (is_negatable) {
+              flag->parse_negated();
+            } else {
+              flag->parse();
+            }
+          } else {
+            auto* option = static_cast<OptionBase*>(arg);
+            if (tokens.peek() == nullptr ||
+                tokens.peek()->kind != token_kind::text) {
+              return make_unexpected("Missing argument for option: " +
+                                     token.value);
+            }
+            option->parse(tokens.consume().value);
+          }
+          break;
+        }
+        case token_kind::command: {
+          if (auto cmd = get_subcommand(token.value); cmd != nullptr) {
+            return cmd->parse(tokens);
+          }
+          return make_unexpected("Unknown command: " + token.value);
+        }
+        case token_kind::text: {
+          if (pos_index < positionals.size()) {
+            auto* pos = dynamic_cast<OptionBase*>(positionals[pos_index]);
+            pos->parse(token.value);
+            if (!pos->is_multiple()) {
+              pos_index++;
+            }
+          } else {
+            return make_unexpected("Too many positional arguments");
+          }
+          break;
+        }
+        case token_kind::option_terminator:
+          break;
+      }
+    }
+
+    finish_parse_();
+    return this;
   }
 
   void parse(size_t argc, char const* const* argv) {
@@ -3297,10 +3504,10 @@ class Command {
   bool is_parsed() { return is_parsed_; }
   bool is_hidden() const { return is_hidden_; }
   void set_treat_remaining_as_positional(bool v = true) {
-    treat_remaining_as_positional_ = v;
+    command_schema_.set_treat_remaining_as_positional(v);
   }
   bool treat_remaining_as_positional() const {
-    return treat_remaining_as_positional_;
+    return command_schema_.treat_remaining_as_positional();
   }
 
   Command* get_subcommand(std::string const& cmd) {
@@ -3319,82 +3526,8 @@ class Command {
   std::function<void()> callback_{nullptr};
   bool is_parsed_{false};
   bool is_hidden_{false};
-  bool treat_remaining_as_positional_{false};
   CommandSchema command_schema_;
 };
-
-enum class token_kind {
-  short_option,
-  long_option,
-  text,
-  option_terminator,
-  command
-};
-
-struct token {
-  token_kind kind;
-  std::string value;
-};
-
-class argv_stream {
- public:
-  argv_stream(int argc, const char* argv[])
-      : args_{argv + 1, argv + argc}, index_{0} {}
-
-  bool eof() const { return index_ == args_.size(); }
-  std::string const& consume() {
-    assert(!eof());
-    return args_[index_++];
-  }
-
-  std::string const* peek(size_t offset = 0) {
-    auto pos = index_ + offset;
-    if (pos >= args_.size()) {
-      return nullptr;
-    }
-    return &args_[index_ + offset];
-  }
-
- private:
-  std::vector<std::string> args_;
-  size_t index_{0};
-};
-
-inline std::vector<token> tokenize(argv_stream& args, Command& cmd) {
-  std::vector<token> tokens;
-  Command* current_command = &cmd;
-  bool positional_only = false;
-  while (!args.eof()) {
-    std::string const& arg = args.consume();
-    if (positional_only) {
-      tokens.emplace_back(token{token_kind::text, arg});
-    } else if (arg == "--") {
-      positional_only = true;
-      tokens.emplace_back(token{token_kind::option_terminator, arg});
-    } else if (arg.starts_with("--")) {
-      std::string body = arg.substr(2);
-      if (auto pos = body.find("="); pos != std::string::npos) {
-        tokens.emplace_back(
-            token{token_kind::long_option, body.substr(0, pos)});
-        tokens.emplace_back(token{token_kind::text, body.substr(pos + 1)});
-      } else {
-        tokens.emplace_back(token{token_kind::long_option, body});
-      }
-    } else if (arg.starts_with("-") && arg.length() > 1) {
-      std::transform(
-          arg.begin() + 1, arg.end(), back_inserter(tokens), [](char c) {
-            return token{token_kind::short_option, std::string(1, c)};
-          });
-    } else if (Command* subcmd = current_command->get_subcommand(arg); subcmd) {
-      tokens.emplace_back(token{token_kind::command, arg});
-      current_command = subcmd;
-    } else {
-      tokens.emplace_back(token{token_kind::text, arg});
-    }
-  }
-
-  return tokens;
-}
 
 class ArgParser : public Command {
  public:
@@ -3444,7 +3577,8 @@ class ArgParser : public Command {
     return *this;
   }
   Command& parse(std::vector<std::string> const& args) {
-    std::vector<const char*> args_cstr(args.size() + 1, nullptr);  // NOLINT>
+    std::vector<const char*> args_cstr(args.size() + 1,
+                                       nullptr);  // NOLINT>
 
     std::transform(args.begin(), args.end(), args_cstr.begin(),
                    [](const std::string& s) { return s.data(); });
