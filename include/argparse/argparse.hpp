@@ -512,6 +512,342 @@ class expected : private expected_storage<T, E> {
   }
 };
 
+template <typename T, typename E>
+class expected<T&, E> {
+ public:
+  using value_type = T&;
+  using error_type = E;
+
+  // Constructors
+  constexpr expected(T& value) : ptr_(&value), has_value_(true) {}
+  constexpr expected(unexpected<E> const& e) : has_value_(false) {
+    new (&error_) E(e.error());
+  }
+  constexpr expected(unexpected<E>&& e) : has_value_(false) {
+    new (&error_) E(std::move(e).error());
+  }
+  template <typename U>
+    requires std::is_convertible_v<U, E>
+  constexpr expected(unexpected<U> const& e) : has_value_(false) {
+    new (&error_) E(e.error());
+  }
+  template <typename U>
+    requires std::is_convertible_v<U, E>
+  constexpr expected(unexpected<U>&& e) : has_value_(false) {
+    new (&error_) E(std::move(e).error());
+  }
+
+  constexpr expected(expected const& other) : has_value_(other.has_value_) {
+    if (has_value_) {
+      ptr_ = other.ptr_;
+    } else {
+      new (&error_) E(other.error_);
+    }
+  }
+
+  constexpr expected(expected&& other) : has_value_(other.has_value_) {
+    if (has_value_) {
+      ptr_ = other.ptr_;
+    } else {
+      new (&error_) E(std::move(other.error_));
+    }
+  }
+
+  // Destructor
+  constexpr ~expected() {
+    if (!has_value_) {
+      error_.~E();
+    }
+  }
+
+  // Assignment
+  constexpr expected& operator=(expected const& other) {
+    if (this == &other) {
+      return *this;
+    }
+    if (!has_value_) {
+      error_.~E();
+    }
+    has_value_ = other.has_value_;
+    if (has_value_) {
+      ptr_ = other.ptr_;
+    } else {
+      new (&error_) E(other.error_);
+    }
+    return *this;
+  }
+
+  constexpr expected& operator=(expected&& other) {
+    if (this == &other) {
+      return *this;
+    }
+    if (!has_value_) {
+      error_.~E();
+    }
+    has_value_ = other.has_value_;
+    if (has_value_) {
+      ptr_ = other.ptr_;
+    } else {
+      new (&error_) E(std::move(other.error_));
+    }
+    return *this;
+  }
+
+  // Observer
+  constexpr bool has_value() const noexcept { return has_value_; }
+
+  constexpr explicit operator bool() const noexcept { return has_value_; }
+
+  constexpr T& value() & { return check_value(), *ptr_; }
+  constexpr T const& value() const& { return check_value(), *ptr_; }
+  constexpr T&& value() && { return check_value(), std::move(*ptr_); }
+  constexpr const T&& value() const&& {
+    return check_value(), std::move(*ptr_);
+  }
+
+  constexpr E& error() & { return error_; }
+  constexpr E const& error() const& { return error_; }
+  constexpr E&& error() && { return std::move(error_); }
+  constexpr const E&& error() const&& { return std::move(error_); }
+
+  // Operators
+  constexpr T& operator*() & { return value(); }
+  constexpr T const& operator*() const& { return value(); }
+  constexpr T&& operator*() && { return std::move(value()); }
+  constexpr T* operator->() { return ptr_; }
+  constexpr T const* operator->() const { return ptr_; }
+
+  // Modifiers — rebind the reference
+  constexpr T& emplace(T& value) {
+    if (!has_value_) {
+      error_.~E();
+    }
+    ptr_ = &value;
+    has_value_ = true;
+    return *ptr_;
+  }
+
+  // value_or
+  template <typename U>
+  constexpr T value_or(U&& default_value) const& {
+    if (has_value_) {
+      return *ptr_;
+    }
+    return static_cast<T>(std::forward<U>(default_value));
+  }
+
+  template <typename U>
+  constexpr T value_or(U&& default_value) && {
+    if (has_value_) {
+      return std::move(*ptr_);
+    }
+    return static_cast<T>(std::forward<U>(default_value));
+  }
+
+  // monadic api
+  template <typename F>
+  constexpr auto and_then(F&& f) & {
+    using result_type = std::invoke_result_t<F, T&>;
+    static_assert(is_expected_v<result_type>, "and_then must return expected");
+    if (has_value_) {
+      return std::invoke(std::forward<F>(f), *ptr_);
+    }
+    return result_type(make_unexpected(error_));
+  }
+
+  template <typename F>
+  constexpr auto and_then(F&& f) const& {
+    using result_type = std::invoke_result_t<F, const T&>;
+    static_assert(is_expected_v<result_type>, "and_then must return expected");
+    if (has_value_) {
+      return std::invoke(std::forward<F>(f), *ptr_);
+    }
+    return result_type(make_unexpected(error_));
+  }
+
+  template <typename F>
+  constexpr auto and_then(F&& f) && {
+    using result_type = std::invoke_result_t<F, T&&>;
+    static_assert(is_expected_v<result_type>, "and_then must return expected");
+    if (has_value_) {
+      return std::invoke(std::forward<F>(f), std::move(*ptr_));
+    }
+    return result_type(make_unexpected(std::move(*this).error()));
+  }
+
+  template <typename F>
+  constexpr auto and_then(F&& f) const&& {
+    using result_type = std::invoke_result_t<F, const T&&>;
+    static_assert(is_expected_v<result_type>, "and_then must return expected");
+    if (has_value_) {
+      return std::invoke(std::forward<F>(f), std::move(*ptr_));
+    }
+    return result_type(make_unexpected(std::move(*this).error()));
+  }
+
+  template <typename F>
+  constexpr auto transform(
+      F&& f) & -> expected<std::invoke_result_t<F, T&>, E> {
+    using result_type = expected<std::invoke_result_t<F, T&>, E>;
+    if (has_value_) {
+      return result_type(std::invoke(std::forward<F>(f), *ptr_));
+    }
+    return result_type(make_unexpected(error_));
+  }
+
+  template <typename F>
+  constexpr auto transform(
+      F&& f) const& -> expected<std::invoke_result_t<F, const T&>, E> {
+    using result_type = expected<std::invoke_result_t<F, const T&>, E>;
+    if (has_value_) {
+      return result_type(std::invoke(std::forward<F>(f), *ptr_));
+    }
+    return result_type(make_unexpected(error_));
+  }
+
+  template <typename F>
+  constexpr auto transform(
+      F&& f) && -> expected<std::invoke_result_t<F, T&&>, E> {
+    using result_type = expected<std::invoke_result_t<F, T&&>, E>;
+    if (has_value_) {
+      return result_type(std::invoke(std::forward<F>(f), std::move(*ptr_)));
+    }
+    return result_type(make_unexpected(std::move(*this).error()));
+  }
+
+  template <typename F>
+  constexpr auto transform(
+      F&& f) const&& -> expected<std::invoke_result_t<F, const T&&>, E> {
+    using result_type = expected<std::invoke_result_t<F, const T&&>, E>;
+    if (has_value_) {
+      return result_type(std::invoke(std::forward<F>(f), std::move(*ptr_)));
+    }
+    return result_type(make_unexpected(std::move(*this).error()));
+  }
+
+  template <typename F>
+  constexpr auto transform_error(
+      F&& f) & -> expected<T&, std::invoke_result_t<F, E&>> {
+    using result_type = expected<T&, std::invoke_result_t<F, E&>>;
+    if (has_value_) {
+      return result_type(*ptr_);
+    }
+    return result_type(
+        make_unexpected(std::invoke(std::forward<F>(f), error_)));
+  }
+
+  template <typename F>
+  constexpr auto transform_error(
+      F&& f) const& -> expected<T&, std::invoke_result_t<F, const E&>> {
+    using result_type = expected<T&, std::invoke_result_t<F, const E&>>;
+    if (has_value_) {
+      return result_type(*ptr_);
+    }
+    return result_type(
+        make_unexpected(std::invoke(std::forward<F>(f), error_)));
+  }
+
+  template <typename F>
+  constexpr auto transform_error(
+      F&& f) && -> expected<T&, std::invoke_result_t<F, E&&>> {
+    using result_type = expected<T&, std::invoke_result_t<F, E&&>>;
+    if (has_value_) {
+      return result_type(*ptr_);
+    }
+    return result_type(make_unexpected(
+        std::invoke(std::forward<F>(f), std::move(*this).error())));
+  }
+
+  template <typename F>
+  constexpr auto transform_error(
+      F&& f) const&& -> expected<T&, std::invoke_result_t<F, const E&&>> {
+    using result_type = expected<T&, std::invoke_result_t<F, const E&&>>;
+    if (has_value_) {
+      return result_type(*ptr_);
+    }
+    return result_type(make_unexpected(
+        std::invoke(std::forward<F>(f), std::move(*this).error())));
+  }
+
+  template <typename F>
+  constexpr expected or_else(F&& f) & {
+    if (has_value_) {
+      return *this;
+    }
+    return std::invoke(std::forward<F>(f), error_);
+  }
+
+  template <typename F>
+  constexpr expected or_else(F&& f) const& {
+    if (has_value_) {
+      return *this;
+    }
+    return std::invoke(std::forward<F>(f), error_);
+  }
+
+  template <typename F>
+  constexpr expected or_else(F&& f) && {
+    if (has_value_) {
+      return std::move(*this);
+    }
+    return std::invoke(std::forward<F>(f), std::move(*this).error());
+  }
+
+  template <typename F>
+  constexpr expected or_else(F&& f) const&& {
+    if (has_value_) {
+      return std::move(*this);
+    }
+    return std::invoke(std::forward<F>(f), std::move(*this).error());
+  }
+
+  // swap
+  constexpr void swap(expected& other) {
+    using std::swap;
+    if (has_value_ && other.has_value_) {
+      swap(ptr_, other.ptr_);
+      return;
+    }
+    if (!has_value_ && !other.has_value_) {
+      swap(error_, other.error_);
+      return;
+    }
+    expected tmp(std::move(other));
+    other = std::move(*this);
+    *this = std::move(tmp);
+  }
+
+  bool operator==(expected const& other) const {
+    if (has_value_ && other.has_value_) {
+      return *ptr_ == *other.ptr_;
+    }
+    if (!has_value_ && !other.has_value_) {
+      return error_ == other.error_;
+    }
+    return false;
+  }
+
+  bool operator==(T const& value) const { return has_value_ && *ptr_ == value; }
+
+ private:
+  constexpr void check_value() const {
+#ifdef __cpp_exceptions
+    if (!has_value_) {
+      throw bad_expected_access<E>(error_);
+    }
+#else
+    assert(has_value_);
+#endif
+  }
+
+  union {
+    T* ptr_;
+    E error_;
+  };
+
+  bool has_value_;
+};
+
 template <typename E>
 class expected<void, E> {
  public:
