@@ -335,6 +335,10 @@ class expected : private expected_storage<T, E> {
   // value_or
   template <typename U = std::remove_cv_t<T>>
   constexpr T value_or(U&& default_value) const& {
+    static_assert(std::is_move_constructible_v<T>,
+                  "value_type has to be move constructible");
+    static_assert(std::is_convertible_v<U, T>,
+                  "argument has to be convertible to value_type");
     if (has_value()) {
       return this->storage_.value;
     }
@@ -342,6 +346,10 @@ class expected : private expected_storage<T, E> {
   }
   template <typename U = std::remove_cv_t<T>>
   constexpr T value_or(U&& default_value) && {
+    static_assert(std::is_move_constructible_v<T>,
+                  "value_type has to be move constructible");
+    static_assert(std::is_convertible_v<U, T>,
+                  "argument has to be convertible to value_type");
     if (has_value()) {
       return std::move(this->storage_.value);
     }
@@ -351,6 +359,10 @@ class expected : private expected_storage<T, E> {
   // error_or
   template <typename G = E>
   constexpr E error_or(G&& default_value) const& {
+    static_assert(std::is_copy_constructible_v<E>,
+                  "error_type has to be copy constructible");
+    static_assert(std::is_convertible_v<G, E>,
+                  "argument has to be convertible to error_type");
     if (has_value()) {
       return std::forward<G>(default_value);
     }
@@ -358,6 +370,10 @@ class expected : private expected_storage<T, E> {
   }
   template <typename G = E>
   constexpr E error_or(G&& default_value) && {
+    static_assert(std::is_copy_constructible_v<E>,
+                  "error_type has to be copy constructible");
+    static_assert(std::is_convertible_v<G, E>,
+                  "argument has to be convertible to error_type");
     if (has_value()) {
       return std::forward<G>(default_value);
     }
@@ -368,45 +384,62 @@ class expected : private expected_storage<T, E> {
   template <typename F>
   constexpr auto and_then(F&& f) & {
     using result_type = std::remove_cvref_t<std::invoke_result_t<F, T&>>;
-    static_assert(is_expected_v<result_type>, "and_then must return expected");
+    static_assert(
+        is_expected_v<result_type>,
+        "The result of f(value()) must be a specialization of expected");
+    static_assert(std::is_same_v<typename result_type::error_type, E>,
+                  "The result of f(value()) must have the same error_type as "
+                  "this expected");
     if (has_value()) {
       return std::invoke(std::forward<F>(f), this->storage_.value);
     }
     static_assert(std::is_same_v<typename result_type::error_type, E>, "");
-    return result_type(make_unexpected(error()));
+    return result_type(unexpect, error());
   }
 
   template <typename F>
   constexpr auto and_then(F&& f) const& {
     using result_type = std::remove_cvref_t<std::invoke_result_t<F, const T&>>;
-    static_assert(is_expected_v<result_type>, "and_then must return expected");
+    static_assert(
+        is_expected_v<result_type>,
+        "The result of f(value()) must be a specialization of expected");
+    static_assert(std::is_same_v<typename result_type::error_type, E>,
+                  "The result of f(value()) must have the same error_type as "
+                  "this expected");
     if (has_value()) {
       return std::invoke(std::forward<F>(f), this->storage_.value);
     }
-    static_assert(std::is_same_v<typename result_type::error_type, E>, "");
-    return result_type(make_unexpected(error()));
+    return result_type(unexpect, error());
   }
 
   template <typename F>
   constexpr auto and_then(F&& f) && {
     using result_type = std::remove_cvref_t<std::invoke_result_t<F, T&&>>;
-    static_assert(is_expected_v<result_type>, "and_then must return expected");
+    static_assert(
+        is_expected_v<result_type>,
+        "The result of f(value()) must be a specialization of expected");
+    static_assert(std::is_same_v<typename result_type::error_type, E>,
+                  "The result of f(value()) must have the same error_type as "
+                  "this expected");
     if (has_value()) {
       return std::invoke(std::forward<F>(f), std::move(this->storage_.value));
     }
-    static_assert(std::is_same_v<typename result_type::error_type, E>, "");
-    return result_type(make_unexpected(std::move(error())));
+    return result_type(unexpect, std::move(error()));
   }
 
   template <typename F>
   constexpr auto and_then(F&& f) const&& {
     using result_type = std::remove_cvref_t<std::invoke_result_t<F, const T&&>>;
-    static_assert(is_expected_v<result_type>, "and_then must return expected");
+    static_assert(
+        is_expected_v<result_type>,
+        "The result of f(value()) must be a specialization of expected");
+    static_assert(std::is_same_v<typename result_type::error_type, E>,
+                  "The result of f(value()) must have the same error_type as "
+                  "this expected");
     if (has_value()) {
       return std::invoke(std::forward<F>(f), std::move(this->storage_.value));
     }
-    static_assert(std::is_same_v<typename result_type::error_type, E>, "");
-    return result_type(make_unexpected(std::move(error())));
+    return result_type(unexpect, std::move(error()));
   }
 
   template <typename F>
@@ -524,35 +557,63 @@ class expected : private expected_storage<T, E> {
   }
 
   template <typename F>
-  constexpr expected or_else(F&& f) & {
+  constexpr auto or_else(F&& f) & {
+    using result_type = std::remove_cvref_t<std::invoke_result_t<F, E&>>;
+    static_assert(
+        is_expected_v<result_type>,
+        "The result of f(error()) must be a specialization of expected");
+    static_assert(std::is_same_v<typename result_type::value_type, T>,
+                  "The result of f(error()) must have the same value_type as "
+                  "this expected");
     if (has_value()) {
-      return *this;
+      return result_type(std::in_place, this->value());
     }
     return std::invoke(std::forward<F>(f), error());
   }
 
   template <typename F>
-  constexpr expected or_else(F&& f) const& {
+  constexpr auto or_else(F&& f) const& {
+    using result_type = std::remove_cvref_t<std::invoke_result_t<F, E const&>>;
+    static_assert(
+        is_expected_v<result_type>,
+        "The result of f(error()) must be a specialization of expected");
+    static_assert(std::is_same_v<typename result_type::value_type, T>,
+                  "The result of f(error()) must have the same value_type as "
+                  "this expected");
     if (has_value()) {
-      return *this;
+      return result_type(std::in_place, this->value());
     }
     return std::invoke(std::forward<F>(f), error());
   }
 
   template <typename F>
-  constexpr expected or_else(F&& f) && {
+  constexpr auto or_else(F&& f) && {
+    using result_type = std::remove_cvref_t<std::invoke_result_t<F, E&&>>;
+    static_assert(
+        is_expected_v<result_type>,
+        "The result of f(error()) must be a specialization of expected");
+    static_assert(std::is_same_v<typename result_type::value_type, T>,
+                  "The result of f(error()) must have the same value_type as "
+                  "this expected");
     if (has_value()) {
-      return std::move(*this);
+      return result_type(std::in_place, std::move(value()));
     }
-    return std::invoke(std::forward<F>(f), std::move(*this).error());
+    return std::invoke(std::forward<F>(f), std::move(error()));
   }
 
   template <typename F>
-  constexpr expected or_else(F&& f) const&& {
+  constexpr auto or_else(F&& f) const&& {
+    using result_type = std::remove_cvref_t<std::invoke_result_t<F, E const&&>>;
+    static_assert(
+        is_expected_v<result_type>,
+        "The result of f(error()) must be a specialization of expected");
+    static_assert(std::is_same_v<typename result_type::value_type, T>,
+                  "The result of f(error()) must have the same value_type as "
+                  "this expected");
     if (has_value()) {
-      return std::move(*this);
+      return result_type(std::in_place, std::move(value()));
     }
-    return std::invoke(std::forward<F>(f), std::move(*this).error());
+    return std::invoke(std::forward<F>(f), std::move(error()));
   }
 
   // swap
@@ -827,6 +888,10 @@ class expected<T&, E> : private expected_storage<T*, E> {
   // error_or
   template <typename G = E>
   constexpr E error_or(G&& default_value) const& {
+    static_assert(std::is_copy_constructible_v<E>,
+                  "error_type has to be copy constructible");
+    static_assert(std::is_convertible_v<G, E>,
+                  "argument has to be convertible to error_type");
     if (has_value()) {
       return std::forward<G>(default_value);
     }
@@ -834,6 +899,10 @@ class expected<T&, E> : private expected_storage<T*, E> {
   }
   template <typename G = E>
   constexpr E error_or(G&& default_value) && {
+    static_assert(std::is_copy_constructible_v<E>,
+                  "error_type has to be copy constructible");
+    static_assert(std::is_convertible_v<G, E>,
+                  "argument has to be convertible to error_type");
     if (has_value()) {
       return std::forward<G>(default_value);
     }
@@ -844,44 +913,60 @@ class expected<T&, E> : private expected_storage<T*, E> {
   template <typename F>
   constexpr auto and_then(F&& f) & {
     using result_type = std::remove_cvref_t<std::invoke_result_t<F, T&>>;
-    static_assert(is_expected_v<result_type>, "and_then must return expected");
+    static_assert(
+        is_expected_v<result_type>,
+        "The result of f(value()) must be a specialization of expected");
+    static_assert(std::is_same_v<typename result_type::error_type, E>,
+                  "The result of f(value()) must have the same error_type as "
+                  "this expected");
     if (has_value()) {
       return std::invoke(std::forward<F>(f), *this->storage_.value);
     }
-    static_assert(std::is_same_v<typename result_type::error_type, E>, "");
     return result_type(make_unexpected(error()));
   }
 
   template <typename F>
   constexpr auto and_then(F&& f) const& {
     using result_type = std::remove_cvref_t<std::invoke_result_t<F, const T&>>;
-    static_assert(is_expected_v<result_type>, "and_then must return expected");
+    static_assert(
+        is_expected_v<result_type>,
+        "The result of f(value()) must be a specialization of expected");
+    static_assert(std::is_same_v<typename result_type::error_type, E>,
+                  "The result of f(value()) must have the same error_type as "
+                  "this expected");
     if (has_value()) {
       return std::invoke(std::forward<F>(f), *this->storage_.value);
     }
-    static_assert(std::is_same_v<typename result_type::error_type, E>, "");
     return result_type(make_unexpected(error()));
   }
 
   template <typename F>
   constexpr auto and_then(F&& f) && {
     using result_type = std::remove_cvref_t<std::invoke_result_t<F, T&>>;
-    static_assert(is_expected_v<result_type>, "and_then must return expected");
+    static_assert(
+        is_expected_v<result_type>,
+        "The result of f(value()) must be a specialization of expected");
+    static_assert(std::is_same_v<typename result_type::error_type, E>,
+                  "The result of f(value()) must have the same error_type as "
+                  "this expected");
     if (has_value()) {
       return std::invoke(std::forward<F>(f), *this->storage_.value);
     }
-    static_assert(std::is_same_v<typename result_type::error_type, E>, "");
     return result_type(make_unexpected(std::move(error())));
   }
 
   template <typename F>
   constexpr auto and_then(F&& f) const&& {
     using result_type = std::remove_cvref_t<std::invoke_result_t<F, const T&>>;
-    static_assert(is_expected_v<result_type>, "and_then must return expected");
+    static_assert(
+        is_expected_v<result_type>,
+        "The result of f(value()) must be a specialization of expected");
+    static_assert(std::is_same_v<typename result_type::error_type, E>,
+                  "The result of f(value()) must have the same error_type as "
+                  "this expected");
     if (has_value()) {
       return std::invoke(std::forward<F>(f), *this->storage_.value);
     }
-    static_assert(std::is_same_v<typename result_type::error_type, E>, "");
     return result_type(make_unexpected(std::move(error())));
   }
 
@@ -995,34 +1080,62 @@ class expected<T&, E> : private expected_storage<T*, E> {
 
   template <typename F>
   constexpr expected or_else(F&& f) & {
+    using result_type = std::remove_cvref_t<std::invoke_result_t<F, E&>>;
+    static_assert(
+        is_expected_v<result_type>,
+        "The result of f(error()) must be a specialization of expected");
+    static_assert(std::is_same_v<typename result_type::value_type, T&>,
+                  "The result of f(error()) must have the same value_type as "
+                  "this expected");
     if (has_value()) {
-      return *this;
+      return result_type(value());
     }
     return std::invoke(std::forward<F>(f), error());
   }
 
   template <typename F>
   constexpr expected or_else(F&& f) const& {
+    using result_type = std::remove_cvref_t<std::invoke_result_t<F, E const&>>;
+    static_assert(
+        is_expected_v<result_type>,
+        "The result of f(error()) must be a specialization of expected");
+    static_assert(std::is_same_v<typename result_type::value_type, T&>,
+                  "The result of f(error()) must have the same value_type as "
+                  "this expected");
     if (has_value()) {
-      return *this;
+      return result_type(value());
     }
     return std::invoke(std::forward<F>(f), error());
   }
 
   template <typename F>
   constexpr expected or_else(F&& f) && {
+    using result_type = std::remove_cvref_t<std::invoke_result_t<F, E&&>>;
+    static_assert(
+        is_expected_v<result_type>,
+        "The result of f(error()) must be a specialization of expected");
+    static_assert(std::is_same_v<typename result_type::value_type, T&>,
+                  "The result of f(error()) must have the same value_type as "
+                  "this expected");
     if (has_value()) {
-      return std::move(*this);
+      return result_type(value());
     }
-    return std::invoke(std::forward<F>(f), std::move(*this).error());
+    return std::invoke(std::forward<F>(f), std::move(error()));
   }
 
   template <typename F>
   constexpr expected or_else(F&& f) const&& {
+    using result_type = std::remove_cvref_t<std::invoke_result_t<F, E const&&>>;
+    static_assert(
+        is_expected_v<result_type>,
+        "The result of f(error()) must be a specialization of expected");
+    static_assert(std::is_same_v<typename result_type::value_type, T&>,
+                  "The result of f(error()) must have the same value_type as "
+                  "this expected");
     if (has_value()) {
-      return std::move(*this);
+      return result_type(value());
     }
-    return std::invoke(std::forward<F>(f), std::move(*this).error());
+    return std::invoke(std::forward<F>(f), std::move(error()));
   }
 
   // swap
@@ -1099,6 +1212,7 @@ template <typename E>
 class expected<void, E> {
  public:
   using error_type = E;
+  using value_type = void;
 
   constexpr expected() noexcept : has_value_(true) {}
   constexpr expected(std::in_place_t) noexcept : has_value_(true) {}
@@ -1357,34 +1471,62 @@ class expected<void, E> {
 
   template <typename F>
   constexpr expected or_else(F&& f) & {
+    using result_type = std::remove_cvref_t<std::invoke_result_t<F, E&>>;
+    static_assert(
+        is_expected_v<result_type>,
+        "The result of f(error()) must be a specialization of expected");
+    static_assert(std::is_same_v<typename result_type::value_type, void>,
+                  "The result of f(error()) must have the same value_type as "
+                  "this expected");
     if (has_value_) {
-      return *this;
+      return result_type{};
     }
     return std::invoke(std::forward<F>(f), error_);
   }
 
   template <typename F>
   constexpr expected or_else(F&& f) const& {
+    using result_type = std::remove_cvref_t<std::invoke_result_t<F, E const&>>;
+    static_assert(
+        is_expected_v<result_type>,
+        "The result of f(error()) must be a specialization of expected");
+    static_assert(std::is_same_v<typename result_type::value_type, void>,
+                  "The result of f(error()) must have the same value_type as "
+                  "this expected");
     if (has_value_) {
-      return *this;
+      return result_type{};
     }
     return std::invoke(std::forward<F>(f), error_);
   }
 
   template <typename F>
   constexpr expected or_else(F&& f) && {
+    using result_type = std::remove_cvref_t<std::invoke_result_t<F, E&&>>;
+    static_assert(
+        is_expected_v<result_type>,
+        "The result of f(error()) must be a specialization of expected");
+    static_assert(std::is_same_v<typename result_type::value_type, void>,
+                  "The result of f(error()) must have the same value_type as "
+                  "this expected");
     if (has_value_) {
-      return std::move(*this);
+      return result_type{};
     }
-    return std::invoke(std::forward<F>(f), std::move(*this).error());
+    return std::invoke(std::forward<F>(f), std::move(error()));
   }
 
   template <typename F>
   constexpr expected or_else(F&& f) const&& {
+    using result_type = std::remove_cvref_t<std::invoke_result_t<F, E const&&>>;
+    static_assert(
+        is_expected_v<result_type>,
+        "The result of f(error()) must be a specialization of expected");
+    static_assert(std::is_same_v<typename result_type::value_type, void>,
+                  "The result of f(error()) must have the same value_type as "
+                  "this expected");
     if (has_value_) {
-      return std::move(*this);
+      return result_type{};
     }
-    return std::invoke(std::forward<F>(f), std::move(*this).error());
+    return std::invoke(std::forward<F>(f), std::move(error()));
   }
 
   // swap
@@ -2001,20 +2143,20 @@ inline std::wstring to_wstring(T const& value)
 template <is_container T>
 void push_back(T& t, typename T::value_type&& value) {
   if constexpr (requires(T t) {
-                  t.emplace_back(std::declval<typename T::value_type &&>());
+                  t.emplace_back(std::declval<typename T::value_type&&>());
                 }) {
     t.emplace_back(std::move(value));
   } else if constexpr (requires(T t) {
-                         t.push_back(std::declval<typename T::value_type &&>());
+                         t.push_back(std::declval<typename T::value_type&&>());
                        }) {
     t.push_back(std::move(value));
   } else if constexpr (requires(T t) {
                          t.insert(t.end(),
-                                  std::declval<typename T::value_type &&>());
+                                  std::declval<typename T::value_type&&>());
                        }) {
     t.insert(t.end(), std::move(value));
   } else if constexpr (requires(T t) {
-                         t.push(std::declval<typename T::value_type &&>());
+                         t.push(std::declval<typename T::value_type&&>());
                        }) {
     t.push(std::move(value));
   } else {
