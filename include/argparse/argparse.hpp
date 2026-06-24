@@ -526,19 +526,43 @@ class expected : private expected_storage<T, E> {
   }
 
   // swap
-  constexpr void swap(expected& other) {
+  constexpr void swap(expected& other) noexcept(
+      std::is_nothrow_move_constructible_v<T> &&
+      std::is_nothrow_swappable_v<T> &&
+      std::is_nothrow_move_constructible_v<E> &&
+      std::is_nothrow_swappable_v<E>) {
     using std::swap;
     if (base::has_value_impl() && other.base::has_value_impl()) {
       swap(this->storage_.value, other.storage_.value);
-      return;
-    }
-    if (base::has_error_impl() && other.base::has_error_impl()) {
+    } else if (base::has_error_impl() && other.base::has_error_impl()) {
       swap(this->storage_.error, other.storage_.error);
-      return;
+    } else if (base::has_value_impl() && !other.base::has_value_impl()) {
+      if constexpr (std::is_nothrow_move_constructible_v<E>) {
+        E temp{std::move(other.storage_.error)};
+        other.base::destroy();
+        try {
+          other.base::construct_value(std::move(this->storage_.value));
+          base::destroy();
+          base::construct_error(std::move(temp));
+        } catch (...) {
+          other.base::construct_error(std::move(temp));
+          throw;
+        }
+      } else {
+        T temp{std::move(this->storage_.value)};
+        base::destroy();
+        try {
+          base::construct_error(std::move(other.storage_.error));
+          other.base::destroy();
+          other.base::construct_value(std::move(temp));
+        } catch (...) {
+          base::construct_value(std::move(temp));
+          throw;
+        }
+      }
+    } else {
+      other.swap(*this);
     }
-    expected tmp(std::move(other));
-    other = std::move(*this);
-    *this = std::move(tmp);
   }
 
   // Destructor
@@ -948,19 +972,41 @@ class expected<T&, E> : private expected_storage<T*, E> {
   }
 
   // swap
-  constexpr void swap(expected& other) {
+  constexpr void swap(expected& other) noexcept(
+      std::is_nothrow_move_constructible_v<E> &&
+      std::is_nothrow_swappable_v<E>) {
     using std::swap;
     if (has_value() && other.has_value()) {
       swap(this->storage_.value, other.storage_.value);
-      return;
-    }
-    if (!has_value() && !other.has_value()) {
+    } else if (!has_value() && !other.has_value()) {
       swap(this->storage_.error, other.storage_.error);
-      return;
+    } else if (has_value() && !other.has_value()) {
+      if constexpr (std::is_nothrow_move_constructible_v<E>) {
+        E temp{std::move(other.storage_.error)};
+        other.base::destroy();
+        try {
+          other.base::construct_value(std::move(this->storage_.value));
+          base::destroy();
+          base::construct_error(std::move(temp));
+        } catch (...) {
+          other.base::construct_error(std::move(temp));
+          throw;
+        }
+      } else {
+        auto* temp = this->storage_.value;
+        base::destroy();
+        try {
+          base::construct_error(std::move(other.storage_.error));
+          other.base::destroy();
+          other.base::construct_value(temp);
+        } catch (...) {
+          base::construct_value(temp);
+          throw;
+        }
+      }
+    } else {
+      other.swap(*this);
     }
-    expected tmp(std::move(other));
-    other = std::move(*this);
-    *this = std::move(tmp);
   }
 
   bool operator==(expected const& other) const {
@@ -1252,18 +1298,36 @@ class expected<void, E> {
   }
 
   // swap
-  constexpr void swap(expected& other) {
+  constexpr void swap(expected& other) noexcept(
+      std::is_nothrow_move_constructible_v<E> &&
+      std::is_nothrow_swappable_v<E>) {
     using std::swap;
-    if (has_value_ && other.has_value_) {
-      return;  // both void, nothing to swap
+    if (has_value() && other.has_value()) {
+    } else if (!has_value() && !other.has_value()) {
+      swap(this->error_, other.error_);
+    } else if (has_value() && !other.has_value()) {
+      if constexpr (std::is_nothrow_move_constructible_v<E>) {
+        E temp{std::move(other.error_)};
+        std::destroy_at(&(other.error_));
+        try {
+          std::construct_at(&(this->error_), std::move(temp));
+        } catch (...) {
+          std::construct_at(&(other.error_), std::move(temp));
+          throw;
+        }
+      } else {
+        try {
+          std::construct_at(&(this->error_), std::move(other.error_));
+          std::destroy_at(&(other.error_));
+        } catch (...) {
+          throw;
+        }
+      }
+      this->has_value_ = false;
+      other.has_value_ = true;
+    } else {
+      other.swap(*this);
     }
-    if (!has_value_ && !other.has_value_) {
-      swap(error_, other.error_);
-      return;
-    }
-    expected tmp(std::move(other));
-    other = std::move(*this);
-    *this = std::move(tmp);
   }
 
  private:

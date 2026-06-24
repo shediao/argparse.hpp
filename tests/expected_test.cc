@@ -2069,3 +2069,534 @@ TEST(ExpectedVoidTest, TransformErrorChainWithUnexpect) {
   EXPECT_FALSE(result.has_value());
   EXPECT_EQ(result.error(), "300");
 }
+
+// ============================================================================
+// Swap — cross-state with non-nothrow-move-constructible error type
+// Exercises the else branch (non-nothrow path) for all three specializations.
+// ============================================================================
+
+namespace {
+struct NoNothrowMoveError {
+  int val;
+  bool moved_from = false;
+  explicit NoNothrowMoveError(int v) : val(v) {}
+  NoNothrowMoveError(const NoNothrowMoveError&) : val(0) {}
+  NoNothrowMoveError(NoNothrowMoveError&& o) noexcept(false) : val(o.val) {
+    o.moved_from = true;
+  }
+  NoNothrowMoveError& operator=(NoNothrowMoveError&& o) {
+    val = o.val;
+    o.moved_from = true;
+    return *this;
+  }
+  NoNothrowMoveError& operator=(const NoNothrowMoveError&) = default;
+  ~NoNothrowMoveError() {}
+  bool operator==(const NoNothrowMoveError& o) const { return val == o.val; }
+};
+static_assert(!std::is_nothrow_move_constructible_v<NoNothrowMoveError>);
+}  // namespace
+
+TEST(ExpectedSwapNonNothrowTest, ValueTypeCrossState) {
+  expected<int, NoNothrowMoveError> a(42);
+  expected<int, NoNothrowMoveError> b(make_unexpected(NoNothrowMoveError(99)));
+  EXPECT_TRUE(a.has_value());
+  EXPECT_FALSE(b.has_value());
+  a.swap(b);
+  EXPECT_FALSE(a.has_value());
+  EXPECT_TRUE(b.has_value());
+  EXPECT_EQ(b.value(), 42);
+}
+
+TEST(ExpectedSwapNonNothrowTest, ValueTypeCrossStateReverse) {
+  // This has error, other has value — exercises the else branch that
+  // calls other.swap(*this)
+  expected<int, NoNothrowMoveError> a(make_unexpected(NoNothrowMoveError(99)));
+  expected<int, NoNothrowMoveError> b(42);
+  a.swap(b);
+  EXPECT_TRUE(a.has_value());
+  EXPECT_EQ(a.value(), 42);
+  EXPECT_FALSE(b.has_value());
+}
+
+TEST(ExpectedSwapNonNothrowTest, ValueTypeBothHaveError) {
+  expected<int, NoNothrowMoveError> a(make_unexpected(NoNothrowMoveError(1)));
+  expected<int, NoNothrowMoveError> b(make_unexpected(NoNothrowMoveError(2)));
+  a.swap(b);
+  EXPECT_FALSE(a.has_value());
+  EXPECT_FALSE(b.has_value());
+  EXPECT_EQ(a.error().val, 2);
+  EXPECT_EQ(b.error().val, 1);
+}
+
+TEST(ExpectedSwapNonNothrowTest, RefTypeCrossState) {
+  int val = 42;
+  expected<int&, NoNothrowMoveError> a(val);
+  expected<int&, NoNothrowMoveError> b(make_unexpected(NoNothrowMoveError(99)));
+  a.swap(b);
+  EXPECT_FALSE(a.has_value());
+  EXPECT_TRUE(b.has_value());
+  EXPECT_EQ(&b.value(), &val);
+}
+
+TEST(ExpectedSwapNonNothrowTest, RefTypeCrossStateReverse) {
+  int val = 42;
+  expected<int&, NoNothrowMoveError> a(make_unexpected(NoNothrowMoveError(99)));
+  expected<int&, NoNothrowMoveError> b(val);
+  a.swap(b);
+  EXPECT_TRUE(a.has_value());
+  EXPECT_EQ(&a.value(), &val);
+  EXPECT_FALSE(b.has_value());
+}
+
+TEST(ExpectedSwapNonNothrowTest, VoidTypeCrossState) {
+  expected<void, NoNothrowMoveError> a;
+  expected<void, NoNothrowMoveError> b(make_unexpected(NoNothrowMoveError(99)));
+  EXPECT_TRUE(a.has_value());
+  EXPECT_FALSE(b.has_value());
+  a.swap(b);
+  EXPECT_FALSE(a.has_value());
+  EXPECT_TRUE(b.has_value());
+}
+
+TEST(ExpectedSwapNonNothrowTest, VoidTypeCrossStateReverse) {
+  expected<void, NoNothrowMoveError> a(make_unexpected(NoNothrowMoveError(99)));
+  expected<void, NoNothrowMoveError> b;
+  a.swap(b);
+  EXPECT_TRUE(a.has_value());
+  EXPECT_FALSE(b.has_value());
+}
+
+TEST(ExpectedSwapNonNothrowTest, VoidTypeBothHaveError) {
+  expected<void, NoNothrowMoveError> a(make_unexpected(NoNothrowMoveError(1)));
+  expected<void, NoNothrowMoveError> b(make_unexpected(NoNothrowMoveError(2)));
+  a.swap(b);
+  EXPECT_FALSE(a.has_value());
+  EXPECT_FALSE(b.has_value());
+  EXPECT_EQ(a.error().val, 2);
+  EXPECT_EQ(b.error().val, 1);
+}
+
+// ============================================================================
+// Swap — round-trip (swap twice) for ref and void specializations
+// ============================================================================
+
+TEST(ExpectedSwapRoundTripTest, RefType) {
+  int v1 = 1, v2 = 2;
+  expected<int&, std::string> a(v1);
+  expected<int&, std::string> b(v2);
+  a.swap(b);
+  EXPECT_EQ(&a.value(), &v2);
+  EXPECT_EQ(&b.value(), &v1);
+  a.swap(b);
+  EXPECT_EQ(&a.value(), &v1);
+  EXPECT_EQ(&b.value(), &v2);
+}
+
+TEST(ExpectedSwapRoundTripTest, RefTypeCrossState) {
+  int val = 42;
+  expected<int&, std::string> a(val);
+  expected<int&, std::string> b(make_unexpected(std::string("err")));
+  a.swap(b);
+  EXPECT_FALSE(a.has_value());
+  EXPECT_EQ(a.error(), "err");
+  EXPECT_TRUE(b.has_value());
+  EXPECT_EQ(&b.value(), &val);
+  // Swap back
+  a.swap(b);
+  EXPECT_TRUE(a.has_value());
+  EXPECT_EQ(&a.value(), &val);
+  EXPECT_FALSE(b.has_value());
+  EXPECT_EQ(b.error(), "err");
+}
+
+TEST(ExpectedSwapRoundTripTest, VoidTypeCrossState) {
+  expected<void, std::string> a;
+  expected<void, std::string> b(make_unexpected(std::string("err")));
+  a.swap(b);
+  EXPECT_FALSE(a.has_value());
+  EXPECT_EQ(a.error(), "err");
+  EXPECT_TRUE(b.has_value());
+  // Swap back
+  a.swap(b);
+  EXPECT_TRUE(a.has_value());
+  EXPECT_FALSE(b.has_value());
+  EXPECT_EQ(b.error(), "err");
+}
+
+TEST(ExpectedSwapRoundTripTest, VoidTypeBothError) {
+  expected<void, std::string> a(make_unexpected(std::string("a")));
+  expected<void, std::string> b(make_unexpected(std::string("b")));
+  a.swap(b);
+  EXPECT_EQ(a.error(), "b");
+  EXPECT_EQ(b.error(), "a");
+  a.swap(b);
+  EXPECT_EQ(a.error(), "a");
+  EXPECT_EQ(b.error(), "b");
+}
+
+// ============================================================================
+// Swap — move-only types
+// ============================================================================
+
+TEST(ExpectedSwapMoveOnlyTest, ValueTypeMoveOnlyError) {
+  // Note: can't call value() because bad_expected_access copies the error,
+  // and unique_ptr is move-only. Use has_value() + error().
+  expected<int, std::unique_ptr<int>> a(42);
+  expected<int, std::unique_ptr<int>> b(
+      make_unexpected(std::make_unique<int>(99)));
+  EXPECT_TRUE(a.has_value());
+  EXPECT_FALSE(b.has_value());
+  a.swap(b);
+  EXPECT_FALSE(a.has_value());
+  EXPECT_EQ(*a.error(), 99);
+  EXPECT_TRUE(b.has_value());
+  // b has value, but can't call value() with move-only error type
+}
+
+TEST(ExpectedSwapMoveOnlyTest, ValueTypeMoveOnlyErrorReverse) {
+  expected<int, std::unique_ptr<int>> a(
+      make_unexpected(std::make_unique<int>(99)));
+  expected<int, std::unique_ptr<int>> b(42);
+  a.swap(b);
+  EXPECT_TRUE(a.has_value());
+  EXPECT_FALSE(b.has_value());
+  EXPECT_EQ(*b.error(), 99);
+}
+
+TEST(ExpectedSwapMoveOnlyTest, VoidTypeMoveOnlyError) {
+  expected<void, std::unique_ptr<int>> a;
+  expected<void, std::unique_ptr<int>> b(
+      make_unexpected(std::make_unique<int>(99)));
+  EXPECT_TRUE(a.has_value());
+  EXPECT_FALSE(b.has_value());
+  a.swap(b);
+  EXPECT_FALSE(a.has_value());
+  EXPECT_EQ(*a.error(), 99);
+  EXPECT_TRUE(b.has_value());
+}
+
+TEST(ExpectedSwapMoveOnlyTest, VoidTypeMoveOnlyErrorReverse) {
+  expected<void, std::unique_ptr<int>> a(
+      make_unexpected(std::make_unique<int>(99)));
+  expected<void, std::unique_ptr<int>> b;
+  a.swap(b);
+  EXPECT_TRUE(a.has_value());
+  EXPECT_FALSE(b.has_value());
+  EXPECT_EQ(*b.error(), 99);
+}
+
+// ============================================================================
+// Swap — noexcept specification verification
+// ============================================================================
+
+TEST(ExpectedSwapNoexceptTest, NothrowTypesAreNothrowSwappable) {
+  // int and std::string are nothrow move constructible and swappable
+  static_assert(noexcept(std::declval<expected<int, std::string>&>().swap(
+      std::declval<expected<int, std::string>&>())));
+  static_assert(noexcept(std::declval<expected<int&, std::string>&>().swap(
+      std::declval<expected<int&, std::string>&>())));
+  static_assert(noexcept(std::declval<expected<void, std::string>&>().swap(
+      std::declval<expected<void, std::string>&>())));
+}
+
+TEST(ExpectedSwapNoexceptTest, NonNothrowMoveErrorIsNotNothrowSwappable) {
+  // NoNothrowMoveError is NOT nothrow move constructible
+  static_assert(
+      !noexcept(std::declval<expected<int, NoNothrowMoveError>&>().swap(
+          std::declval<expected<int, NoNothrowMoveError>&>())));
+  static_assert(
+      !noexcept(std::declval<expected<int&, NoNothrowMoveError>&>().swap(
+          std::declval<expected<int&, NoNothrowMoveError>&>())));
+  static_assert(
+      !noexcept(std::declval<expected<void, NoNothrowMoveError>&>().swap(
+          std::declval<expected<void, NoNothrowMoveError>&>())));
+}
+
+// ============================================================================
+// Swap — exception safety: verify that if an exception is thrown during
+// swap, both objects are left in a usable state (basic guarantee).
+// ============================================================================
+
+#ifdef __cpp_exceptions
+
+namespace {
+// A value type that throws during move construction
+struct ThrowingMoveValue {
+  int val;
+  bool move_throws = false;
+  explicit ThrowingMoveValue(int v, bool throws = false)
+      : val(v), move_throws(throws) {}
+  ThrowingMoveValue(const ThrowingMoveValue&) = default;
+  ThrowingMoveValue(ThrowingMoveValue&& o) noexcept(false)
+      : val(o.val), move_throws(o.move_throws) {
+    if (o.move_throws) {
+      throw std::runtime_error("value_move_throws");
+    }
+    o.val = -1;
+  }
+  ThrowingMoveValue& operator=(const ThrowingMoveValue&) = default;
+  ThrowingMoveValue& operator=(ThrowingMoveValue&&) = default;
+  bool operator==(const ThrowingMoveValue& o) const { return val == o.val; }
+};
+
+// An error type that throws during move construction
+struct ThrowingMoveError {
+  int val;
+  bool move_throws = false;
+  explicit ThrowingMoveError(int v, bool throws = false)
+      : val(v), move_throws(throws) {}
+  ThrowingMoveError(const ThrowingMoveError&) : val(0) {}
+  ThrowingMoveError(ThrowingMoveError&& o) noexcept(false)
+      : val(o.val), move_throws(o.move_throws) {
+    if (o.move_throws) {
+      throw std::runtime_error("error_move_throws");
+    }
+    o.val = -1;
+  }
+  ThrowingMoveError& operator=(const ThrowingMoveError&) = default;
+  ThrowingMoveError& operator=(ThrowingMoveError&& o) {
+    val = o.val;
+    o.val = -1;
+    return *this;
+  }
+  ~ThrowingMoveError() {}
+  bool operator==(const ThrowingMoveError& o) const { return val == o.val; }
+};
+
+}  // namespace
+
+TEST(ExpectedSwapExceptionTest, ValueTypeThrowingValueMove) {
+  // When E is nothrow move constructible but T's move constructor may throw,
+  // swap uses the nothrow-E path. If constructing value in other throws,
+  // other's error should be restored.
+  // Use in_place to avoid moving during construction.
+  expected<ThrowingMoveValue, std::string> a(std::in_place, 42, true);
+  expected<ThrowingMoveValue, std::string> b(
+      make_unexpected(std::string("original_error")));
+  // a has a value with move_throws=true, b has an error.
+  // During swap, E is nothrow, so the nothrow path is taken:
+  // 1. Move b's error to temp
+  // 2. Destroy b
+  // 3. Try to move a's value into b → throws!
+  // 4. Catch: restore b's error from temp, rethrow
+  EXPECT_THROW(a.swap(b), std::runtime_error);
+  // After failed swap: a should still have its value (we never destroyed a)
+  // b should have its original error restored
+  EXPECT_TRUE(a.has_value());
+  EXPECT_TRUE(b.has_value() == false);
+  EXPECT_EQ(b.error(), "original_error");
+}
+
+TEST(ExpectedSwapExceptionTest, ValueTypeNonNothrowErrorPath) {
+  // When E is not nothrow move constructible, swap uses the non-nothrow-E
+  // path. If constructing error in this throws, this's value should be
+  // restored.
+  // Use in_place to avoid moving during construction.
+  expected<int, ThrowingMoveError> a(42);
+  expected<int, ThrowingMoveError> b(unexpected_t{}, 99, true);
+  // a has value 42, b has error with move_throws=true.
+  // During swap, non-nothrow path:
+  // 1. Save a's value (42) to temp, destroy a
+  // 2. Try to construct error in a from b's error → throws!
+  // 3. Catch: restore a's value from temp, rethrow
+  EXPECT_THROW(a.swap(b), std::runtime_error);
+  // After failed swap: a's value should be restored
+  EXPECT_TRUE(a.has_value());
+  EXPECT_EQ(a.value(), 42);
+  // b is in a valid but unspecified state (move was attempted)
+}
+
+TEST(ExpectedSwapExceptionTest, VoidTypeNothrowPath) {
+  // For expected<void, E>: when E is nothrow move constructible, the swap
+  // moves other.error_ to temp, destroys other.error_, then constructs
+  // this->error_ from temp. Construction shouldn't throw (E is nothrow).
+  expected<void, std::string> a;
+  expected<void, std::string> b(make_unexpected(std::string("err")));
+  EXPECT_NO_THROW(a.swap(b));
+  EXPECT_FALSE(a.has_value());
+  EXPECT_EQ(a.error(), "err");
+  EXPECT_TRUE(b.has_value());
+}
+
+TEST(ExpectedSwapExceptionTest, VoidTypeNonNothrowErrorPath) {
+  // expected<void, E> with non-nothrow error: this has value, other has error
+  // The non-nothrow path constructs this->error_ from other's error.
+  // If that throws, this should remain with value, other with error
+  // (in a valid but unspecified state).
+  expected<void, ThrowingMoveError> a;
+  expected<void, ThrowingMoveError> b(unexpected_t{}, 99, true);
+  EXPECT_THROW(a.swap(b), std::runtime_error);
+  // a should still have value (construction into this->error_ threw)
+  EXPECT_TRUE(a.has_value());
+}
+
+TEST(ExpectedSwapExceptionTest, RefTypeNothrowPath) {
+  // expected<T&, E> with nothrow error: this has value, other has error.
+  // The nothrow path moves other's error to temp, destroys other,
+  // then tries to construct value in other from this->storage_.value.
+  // For references, value is a pointer, so move is just copying a pointer —
+  // it won't throw.
+  int val = 42;
+  expected<int&, std::string> a(val);
+  expected<int&, std::string> b(make_unexpected(std::string("err")));
+  EXPECT_NO_THROW(a.swap(b));
+  EXPECT_FALSE(a.has_value());
+  EXPECT_EQ(a.error(), "err");
+  EXPECT_TRUE(b.has_value());
+  EXPECT_EQ(&b.value(), &val);
+}
+
+TEST(ExpectedSwapExceptionTest, RefTypeNonNothrowErrorPath) {
+  // expected<T&, E> with non-nothrow error: this has value, other has error.
+  // The non-nothrow path saves this->storage_.value (pointer), destroys this,
+  // then tries to construct error from other's error. If that throws,
+  // this's value should be restored.
+  int val = 42;
+  expected<int&, ThrowingMoveError> a(val);
+  expected<int&, ThrowingMoveError> b(unexpected_t{}, 99, true);
+  EXPECT_THROW(a.swap(b), std::runtime_error);
+  // a should still have value and refer to the same object
+  EXPECT_TRUE(a.has_value());
+  EXPECT_EQ(&a.value(), &val);
+  EXPECT_EQ(a.value(), 42);
+}
+
+#endif  // __cpp_exceptions
+
+// ============================================================================
+// Swap — std::swap free-function integration
+// ============================================================================
+
+TEST(ExpectedSwapFreeFunctionTest, ValueType) {
+  expected<int, std::string> a(1);
+  expected<int, std::string> b(2);
+  using std::swap;
+  swap(a, b);
+  EXPECT_EQ(a.value(), 2);
+  EXPECT_EQ(b.value(), 1);
+}
+
+TEST(ExpectedSwapFreeFunctionTest, RefType) {
+  int v1 = 1, v2 = 2;
+  expected<int&, std::string> a(v1);
+  expected<int&, std::string> b(v2);
+  using std::swap;
+  swap(a, b);
+  EXPECT_EQ(&a.value(), &v2);
+  EXPECT_EQ(&b.value(), &v1);
+}
+
+TEST(ExpectedSwapFreeFunctionTest, VoidType) {
+  expected<void, std::string> a;
+  expected<void, std::string> b(make_unexpected(std::string("err")));
+  using std::swap;
+  swap(a, b);
+  EXPECT_FALSE(a.has_value());
+  EXPECT_EQ(a.error(), "err");
+  EXPECT_TRUE(b.has_value());
+}
+
+TEST(ExpectedSwapFreeFunctionTest, CrossState) {
+  expected<int, std::string> a(42);
+  expected<int, std::string> b(make_unexpected(std::string("err")));
+  using std::swap;
+  swap(a, b);
+  EXPECT_FALSE(a.has_value());
+  EXPECT_EQ(a.error(), "err");
+  EXPECT_TRUE(b.has_value());
+  EXPECT_EQ(b.value(), 42);
+}
+
+// ============================================================================
+// Swap — edge case: both void (has_value()) — nothing to swap, state unchanged
+// ============================================================================
+
+TEST(ExpectedSwapVoidEdgeTest, BothHaveValue) {
+  expected<void, std::string> a;
+  expected<void, std::string> b;
+  EXPECT_TRUE(a.has_value());
+  EXPECT_TRUE(b.has_value());
+  a.swap(b);
+  EXPECT_TRUE(a.has_value());
+  EXPECT_TRUE(b.has_value());
+}
+
+// ============================================================================
+// Swap — the "else" branch (this has error, other has value) for value type
+// ============================================================================
+
+TEST(ExpectedSwapElseBranchTest, ValueTypeThisErrorOtherValue) {
+  expected<std::string, std::string> a(make_unexpected(std::string("error")));
+  expected<std::string, std::string> b(std::string("value"));
+  a.swap(b);
+  EXPECT_TRUE(a.has_value());
+  EXPECT_EQ(a.value(), "value");
+  EXPECT_FALSE(b.has_value());
+  EXPECT_EQ(b.error(), "error");
+}
+
+TEST(ExpectedSwapElseBranchTest, ValueTypeSwapTwice) {
+  expected<std::string, std::string> a(make_unexpected(std::string("error")));
+  expected<std::string, std::string> b(std::string("value"));
+  a.swap(b);
+  a.swap(b);
+  EXPECT_FALSE(a.has_value());
+  EXPECT_EQ(a.error(), "error");
+  EXPECT_TRUE(b.has_value());
+  EXPECT_EQ(b.value(), "value");
+}
+
+// ============================================================================
+// Swap — same-type value and error cross-state with non-trivial types
+// ============================================================================
+
+TEST(ExpectedSwapSameTypeTest, CrossStateBackAndForth) {
+  expected<std::string, std::string> a(std::string("hello"));
+  expected<std::string, std::string> b(make_unexpected(std::string("world")));
+
+  a.swap(b);
+  EXPECT_FALSE(a.has_value());
+  EXPECT_EQ(a.error(), "world");
+  EXPECT_TRUE(b.has_value());
+  EXPECT_EQ(b.value(), "hello");
+
+  a.swap(b);
+  EXPECT_TRUE(a.has_value());
+  EXPECT_EQ(a.value(), "hello");
+  EXPECT_FALSE(b.has_value());
+  EXPECT_EQ(b.error(), "world");
+}
+
+// ============================================================================
+// Swap — cross-state with both being move-only (unique_ptr)
+// ============================================================================
+
+TEST(ExpectedSwapMoveOnlyBothTest, CrossState) {
+  // Note: cannot call value()/operator* when exceptions are enabled because
+  // bad_expected_access copies the error and unique_ptr is move-only.
+  expected<std::unique_ptr<int>, std::unique_ptr<int>> a(std::in_place,
+                                                         new int(42));
+  expected<std::unique_ptr<int>, std::unique_ptr<int>> b(unexpected_t{},
+                                                         new int(99));
+  EXPECT_TRUE(a.has_value());
+  EXPECT_FALSE(b.has_value());
+  a.swap(b);
+  EXPECT_FALSE(a.has_value());
+  EXPECT_TRUE(b.has_value());
+  EXPECT_EQ(*a.error(), 99);
+  // b has a value, but can't call value() because bad_expected_access
+  // would need to copy the error type. Just verify has_value().
+  SUCCEED();
+}
+
+TEST(ExpectedSwapMoveOnlyBothTest, CrossStateReverse) {
+  expected<std::unique_ptr<int>, std::unique_ptr<int>> a(unexpected_t{},
+                                                         new int(99));
+  expected<std::unique_ptr<int>, std::unique_ptr<int>> b(std::in_place,
+                                                         new int(42));
+  a.swap(b);
+  EXPECT_TRUE(a.has_value());
+  EXPECT_FALSE(b.has_value());
+  EXPECT_EQ(*b.error(), 99);
+  SUCCEED();
+}
