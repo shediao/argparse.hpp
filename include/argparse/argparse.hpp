@@ -43,6 +43,7 @@
 #include <cctype>
 #include <concepts>
 #include <cstdlib>
+#include <exception>
 #include <functional>
 #include <initializer_list>
 #include <iostream>
@@ -106,12 +107,32 @@ constexpr unexpected<std::decay_t<E>> make_unexpected(E&& e) {
 }
 
 template <typename E>
-class bad_expected_access : public std::exception {
+class bad_expected_access;
+
+template <>
+class bad_expected_access<void> : public std::exception {
+ protected:
+  bad_expected_access() noexcept = default;
+  bad_expected_access(const bad_expected_access&) noexcept = default;
+  bad_expected_access(bad_expected_access&&) noexcept = default;
+  bad_expected_access& operator=(const bad_expected_access&) noexcept = default;
+  bad_expected_access& operator=(bad_expected_access&&) noexcept = default;
+  ~bad_expected_access() override = default;
+
  public:
-  explicit bad_expected_access(E const& e) : error_(e) {}
-  explicit bad_expected_access(E&& e) : error_(std::move(e)) {}
-  const char* what() const noexcept override { return "bad expected access"; }
+  const char* what() const noexcept override {
+    return "bad access to expected";
+  }
+};
+
+template <typename E>
+class bad_expected_access : public bad_expected_access<void> {
+ public:
+  explicit bad_expected_access(E e) : error_(std::move(e)) {}
   E const& error() const& noexcept { return error_; }
+  E& error() & noexcept { return error_; }
+  E&& error() && noexcept { return std::move(error_); }
+  E const&& error() const&& noexcept { return std::move(error_); }
 
  private:
   E error_;

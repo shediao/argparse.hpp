@@ -1092,7 +1092,7 @@ TEST(ExpectedTraitsTest, IsExpected) {
 
 TEST(BadExpectedAccessTest, What) {
   bad_expected_access<std::string> ex(std::string("test error"));
-  EXPECT_STREQ(ex.what(), "bad expected access");
+  EXPECT_STREQ(ex.what(), "bad access to expected");
   EXPECT_EQ(ex.error(), "test error");
 }
 
