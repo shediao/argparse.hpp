@@ -42,6 +42,7 @@
 #include <cassert>
 #include <cctype>
 #include <concepts>
+#include <cstdint>
 #include <cstdlib>
 #include <exception>
 #include <functional>
@@ -210,6 +211,10 @@ inline constexpr unexpected_t unexpect{};
 
 template <typename T, typename E>
 class expected : private expected_storage<T, E> {
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
   using base = expected_storage<T, E>;
 
  public:
@@ -560,13 +565,19 @@ class expected : private expected_storage<T, E> {
       if constexpr (std::is_nothrow_move_constructible_v<E>) {
         E temp{std::move(other.storage_.error)};
         other.base::destroy();
-        try {
+        if constexpr (std::is_nothrow_move_constructible_v<T>) {
           other.base::construct_value(std::move(this->storage_.value));
           base::destroy();
           base::construct_error(std::move(temp));
-        } catch (...) {
-          other.base::construct_error(std::move(temp));
-          throw;
+        } else {
+          try {
+            other.base::construct_value(std::move(this->storage_.value));
+            base::destroy();
+            base::construct_error(std::move(temp));
+          } catch (...) {
+            other.base::construct_error(std::move(temp));
+            throw;
+          }
         }
       } else {
         T temp{std::move(this->storage_.value)};
@@ -662,10 +673,17 @@ class expected : private expected_storage<T, E> {
       base::destroy();
     }
   }
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 };
 
 template <typename T, typename E>
 class expected<T&, E> : private expected_storage<T*, E> {
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
   using base = expected_storage<T*, E>;
 
  public:
@@ -1022,13 +1040,19 @@ class expected<T&, E> : private expected_storage<T*, E> {
       if constexpr (std::is_nothrow_move_constructible_v<E>) {
         E temp{std::move(other.storage_.error)};
         other.base::destroy();
-        try {
+        if constexpr (std::is_nothrow_move_constructible_v<T*>) {
           other.base::construct_value(std::move(this->storage_.value));
           base::destroy();
           base::construct_error(std::move(temp));
-        } catch (...) {
-          other.base::construct_error(std::move(temp));
-          throw;
+        } else {
+          try {
+            other.base::construct_value(std::move(this->storage_.value));
+            base::destroy();
+            base::construct_error(std::move(temp));
+          } catch (...) {
+            other.base::construct_error(std::move(temp));
+            throw;
+          }
         }
       } else {
         auto* temp = this->storage_.value;
@@ -1071,10 +1095,17 @@ class expected<T&, E> : private expected_storage<T*, E> {
     assert(has_value());
 #endif
   }
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 };
 
 template <typename E>
 class expected<void, E> {
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
  public:
   using error_type = E;
 
@@ -1371,12 +1402,7 @@ class expected<void, E> {
       if constexpr (std::is_nothrow_move_constructible_v<E>) {
         E temp{std::move(other.error_)};
         std::destroy_at(&(other.error_));
-        try {
-          std::construct_at(&(this->error_), std::move(temp));
-        } catch (...) {
-          std::construct_at(&(other.error_), std::move(temp));
-          throw;
-        }
+        std::construct_at(&(this->error_), std::move(temp));
       } else {
         try {
           std::construct_at(&(this->error_), std::move(other.error_));
@@ -1408,6 +1434,9 @@ class expected<void, E> {
   };
 
   bool has_value_;
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 };
 
 template <typename T, typename E>
