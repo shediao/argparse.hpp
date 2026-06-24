@@ -187,12 +187,6 @@ class expected : private expected_storage<T, E> {
   constexpr expected(unexpected<U>&& e) {
     construct_error(std::move(e).error());
   }
-  // GCC's -Wmaybe-uninitialized produces false positives on the union
-  // storage used by copy/move operations; suppress it for these members.
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-#endif
   constexpr expected(expected const& other) { copy_from(other); }
   constexpr expected(expected&& other) noexcept(
       std::is_nothrow_move_constructible_v<T> &&
@@ -220,9 +214,6 @@ class expected : private expected_storage<T, E> {
     move_from(std::move(other));
     return *this;
   }
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
 
   // Observer
   constexpr bool has_value() const noexcept { return this->base::has_value; }
@@ -546,12 +537,6 @@ class expected<T&, E> {
     new (&error_) E(std::move(e).error());
   }
 
-  // GCC's -Wmaybe-uninitialized produces false positives on the union
-  // storage used by copy/move operations; suppress it for these members.
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-#endif
   constexpr expected(expected const& other) : has_value_(other.has_value_) {
     if (has_value_) {
       ptr_ = other.ptr_;
@@ -607,9 +592,6 @@ class expected<T&, E> {
     }
     return *this;
   }
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
 
   // Observer
   constexpr bool has_value() const noexcept { return has_value_; }
@@ -893,12 +875,6 @@ class expected<void, E> {
     new (&error_) E(std::move(e.error()));
   }
 
-  // GCC's -Wmaybe-uninitialized produces false positives on the union
-  // storage used by copy/move operations; suppress it for these members.
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-#endif
   constexpr expected(expected const& other) : has_value_(other.has_value_) {
     if (!has_value_) {
       new (&error_) E(other.error_);
@@ -970,9 +946,6 @@ class expected<void, E> {
     }
     return *this;
   }
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
 
   template <typename F>
   constexpr auto and_then(F&& f) & {
