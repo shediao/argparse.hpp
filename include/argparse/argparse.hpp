@@ -263,19 +263,19 @@ class expected : private expected_storage<T, E> {
     return check_value(), std::move(this->storage_.value);
   }
 
-  constexpr E& error() & {
+  constexpr E& error() & noexcept {
     assert(!has_value());
     return this->storage_.error;
   }
-  constexpr E const& error() const& {
+  constexpr E const& error() const& noexcept {
     assert(!has_value());
     return this->storage_.error;
   }
-  constexpr E&& error() && {
+  constexpr E&& error() && noexcept {
     assert(!has_value());
     return std::move(this->storage_.error);
   }
-  constexpr const E&& error() const&& {
+  constexpr const E&& error() const&& noexcept {
     assert(!has_value());
     return std::move(this->storage_.error);
   }
@@ -662,19 +662,19 @@ class expected<T&, E> : private expected_storage<T*, E> {
     return check_value(), std::move(*this->storage_.value);
   }
 
-  constexpr E& error() & {
+  constexpr E& error() & noexcept {
     assert(!has_value());
     return this->storage_.error;
   }
-  constexpr E const& error() const& {
+  constexpr E const& error() const& noexcept {
     assert(!has_value());
     return this->storage_.error;
   }
-  constexpr E&& error() && {
+  constexpr E&& error() && noexcept {
     assert(!has_value());
     return std::move(this->storage_.error);
   }
-  constexpr const E&& error() const&& {
+  constexpr const E&& error() const&& noexcept {
     assert(!has_value());
     return std::move(this->storage_.error);
   }
@@ -959,23 +959,24 @@ class expected<void, E> {
 
   constexpr explicit operator bool() const noexcept { return has_value_; }
 
-  constexpr void value() const { check_value(); }
+  constexpr void value() const& { check_value(); }
+  constexpr void value() && { check_value(); }
 
-  constexpr E& error() & {
+  constexpr E& error() & noexcept {
     assert(!has_value_);
     return error_;
   }
 
-  constexpr E const& error() const& {
+  constexpr E const& error() const& noexcept {
     assert(!has_value_);
     return error_;
   }
 
-  constexpr E&& error() && {
+  constexpr E&& error() && noexcept {
     assert(!has_value_);
     return std::move(error_);
   }
-  constexpr const E&& error() const&& {
+  constexpr const E&& error() const&& noexcept {
     assert(!has_value_);
     return std::move(error_);
   }
