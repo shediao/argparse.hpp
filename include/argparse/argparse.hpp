@@ -204,30 +204,33 @@ struct is_expected<expected<T, E>> : std::true_type {};
 template <typename T>
 constexpr bool is_expected_v = is_expected<T>::value;
 
-struct unexpected_t {
-  explicit unexpected_t() = default;
+struct unexpect_t {
+  explicit unexpect_t() = default;
 };
-inline constexpr unexpected_t unexpect{};
+inline constexpr unexpect_t unexpect{};
 
 template <typename T, typename E>
 class expected : private expected_storage<T, E> {
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-#endif
   using base = expected_storage<T, E>;
 
  public:
   using value_type = T;
   using error_type = E;
+  using unexpected_type = unexpected<E>;
+  template <typename U>
+  using rebind = expected<U, error_type>;
 
   // Constructors
+  constexpr expected() {
+    static_assert(std::is_default_constructible_v<T>);
+    base::construct_value();
+  };
   template <typename... Args>
   constexpr expected(std::in_place_t, Args&&... args) {
     base::construct_value(std::forward<Args>(args)...);
   }
   template <typename... Args>
-  constexpr expected(unexpected_t, Args&&... args) {
+  constexpr expected(unexpect_t, Args&&... args) {
     base::construct_error(std::forward<Args>(args)...);
   }
   constexpr expected(T const& value) { construct_value(value); }
@@ -675,17 +678,10 @@ class expected : private expected_storage<T, E> {
       base::destroy();
     }
   }
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
 };
 
 template <typename T, typename E>
 class expected<T&, E> : private expected_storage<T*, E> {
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-#endif
   using base = expected_storage<T*, E>;
 
  public:
@@ -695,7 +691,7 @@ class expected<T&, E> : private expected_storage<T*, E> {
   // Constructors
   constexpr expected(T& value) { base::construct_value(&value); }
   template <typename... Args>
-  constexpr expected(unexpected_t, Args&&... args) {
+  constexpr expected(unexpect_t, Args&&... args) {
     base::construct_error(std::forward<Args>(args)...);
   }
   constexpr expected(unexpected<E> const& e) {
@@ -1097,17 +1093,10 @@ class expected<T&, E> : private expected_storage<T*, E> {
     assert(has_value());
 #endif
   }
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
 };
 
 template <typename E>
 class expected<void, E> {
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-#endif
  public:
   using error_type = E;
 
@@ -1115,7 +1104,7 @@ class expected<void, E> {
   constexpr expected(std::in_place_t) noexcept : has_value_(true) {}
 
   template <typename... Args>
-  constexpr expected(unexpected_t, Args&&... args) : has_value_(false) {
+  constexpr expected(unexpect_t, Args&&... args) : has_value_(false) {
     new (&error_) E(std::forward<Args>(args)...);
   }
 
@@ -1436,9 +1425,6 @@ class expected<void, E> {
   };
 
   bool has_value_;
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
 };
 
 template <typename T, typename E>
