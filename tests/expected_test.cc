@@ -162,6 +162,36 @@ TEST(ExpectedValueTest, ValueOrRvalueMoveSemantics) {
   EXPECT_EQ(result.value, 42);
 }
 
+TEST(ExpectedValueTest, ErrorOr) {
+  // On value: returns the provided default
+  expected<int, std::string> e(42);
+  EXPECT_EQ(e.error_or(std::string("no_error")), "no_error");
+
+  // On error: returns the contained error
+  expected<int, std::string> f(make_unexpected(std::string("real_error")));
+  EXPECT_EQ(f.error_or(std::string("default")), "real_error");
+}
+
+TEST(ExpectedValueTest, ErrorOrRvalue) {
+  // rvalue expected with value: returns default
+  auto e = expected<int, std::string>(42).error_or(std::string("no_error"));
+  EXPECT_EQ(e, "no_error");
+
+  // rvalue expected with error: moves the error out
+  auto f = expected<int, std::string>(make_unexpected(std::string("moved_err")))
+               .error_or(std::string("default"));
+  EXPECT_EQ(f, "moved_err");
+}
+
+TEST(ExpectedValueTest, ErrorOrWithConversion) {
+  // G != E: implicit conversion from const char* to std::string
+  expected<int, std::string> e(42);
+  EXPECT_EQ(e.error_or("no_error"), "no_error");
+
+  expected<int, std::string> f(make_unexpected(std::string("real_error")));
+  EXPECT_EQ(f.error_or("default"), "real_error");
+}
+
 TEST(ExpectedValueTest, Emplace) {
   expected<int, std::string> e(make_unexpected(std::string("err")));
   e.emplace(99);
@@ -522,6 +552,26 @@ TEST(ExpectedRefTest, MoveAssignment) {
   EXPECT_EQ(&b.value(), &v1);
 }
 
+TEST(ExpectedRefTest, ErrorOr) {
+  int val = 42;
+  expected<int&, std::string> e(val);
+  EXPECT_EQ(e.error_or(std::string("no_error")), "no_error");
+
+  expected<int&, std::string> f(make_unexpected(std::string("real_error")));
+  EXPECT_EQ(f.error_or(std::string("default")), "real_error");
+}
+
+TEST(ExpectedRefTest, ErrorOrRvalue) {
+  int val = 42;
+  auto e = expected<int&, std::string>(val).error_or(std::string("no_error"));
+  EXPECT_EQ(e, "no_error");
+
+  auto f =
+      expected<int&, std::string>(make_unexpected(std::string("moved_err")))
+          .error_or(std::string("default"));
+  EXPECT_EQ(f, "moved_err");
+}
+
 TEST(ExpectedRefTest, Emplace) {
   int v1 = 1, v2 = 2;
   expected<int&, std::string> e(v1);
@@ -708,6 +758,24 @@ TEST(ExpectedVoidTest, MoveAssignment) {
   expected<void, std::string> b(make_unexpected(std::string("e")));
   b = std::move(a);
   EXPECT_TRUE(b.has_value());
+}
+
+TEST(ExpectedVoidTest, ErrorOr) {
+  expected<void, std::string> e;
+  EXPECT_EQ(e.error_or(std::string("no_error")), "no_error");
+
+  expected<void, std::string> f(make_unexpected(std::string("real_error")));
+  EXPECT_EQ(f.error_or(std::string("default")), "real_error");
+}
+
+TEST(ExpectedVoidTest, ErrorOrRvalue) {
+  auto e = expected<void, std::string>().error_or(std::string("no_error"));
+  EXPECT_EQ(e, "no_error");
+
+  auto f =
+      expected<void, std::string>(make_unexpected(std::string("moved_err")))
+          .error_or(std::string("default"));
+  EXPECT_EQ(f, "moved_err");
 }
 
 TEST(ExpectedVoidTest, AndThenOnValue) {

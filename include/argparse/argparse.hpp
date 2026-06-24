@@ -311,6 +311,22 @@ class expected : private expected_storage<T, E> {
     return static_cast<T>(std::forward<U>(default_value));
   }
 
+  // error_or
+  template <typename G = E>
+  constexpr E error_or(G&& default_value) const& {
+    if (has_value()) {
+      return std::forward<G>(default_value);
+    }
+    return error();
+  }
+  template <typename G = E>
+  constexpr E error_or(G&& default_value) && {
+    if (has_value()) {
+      return std::forward<G>(default_value);
+    }
+    return std::move(error());
+  }
+
   // monadic api
   template <typename F>
   constexpr auto and_then(F&& f) & {
@@ -710,6 +726,22 @@ class expected<T&, E> : private expected_storage<T*, E> {
     return static_cast<T>(std::forward<U>(default_value));
   }
 
+  // error_or
+  template <typename G = E>
+  constexpr E error_or(G&& default_value) const& {
+    if (has_value()) {
+      return std::forward<G>(default_value);
+    }
+    return error();
+  }
+  template <typename G = E>
+  constexpr E error_or(G&& default_value) && {
+    if (has_value()) {
+      return std::forward<G>(default_value);
+    }
+    return std::move(error());
+  }
+
   // monadic api
   template <typename F>
   constexpr auto and_then(F&& f) & {
@@ -979,6 +1011,22 @@ class expected<void, E> {
   constexpr const E&& error() const&& noexcept {
     assert(!has_value_);
     return std::move(error_);
+  }
+
+  // error_or
+  template <typename G = E>
+  constexpr E error_or(G&& default_value) const& {
+    if (has_value()) {
+      return std::forward<G>(default_value);
+    }
+    return error();
+  }
+  template <typename G = E>
+  constexpr E error_or(G&& default_value) && {
+    if (has_value()) {
+      return std::forward<G>(default_value);
+    }
+    return std::move(error());
   }
 
   // Assignment
