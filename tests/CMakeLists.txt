@@ -40,11 +40,6 @@ function(add_argparse_test test_name test_files)
      OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
     if(NOT MSVC)
       target_compile_options(${test_name} PRIVATE -Wall -Wextra -Werror)
-      # GCC 15+ produces false-positive -Wmaybe-uninitialized on the union-based
-      # expected<T,E> storage when inlining copy/move ops.
-      if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        target_compile_options(${test_name} PRIVATE -Wno-maybe-uninitialized)
-      endif()
     endif()
   endif()
   if(MSVC)
