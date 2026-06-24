@@ -374,6 +374,51 @@ TEST(ExpectedMonadicTest, TransformRvalue) {
   EXPECT_EQ(result.value(), "hello!");
 }
 
+// transform with callback returning const-qualified type — exercises
+// std::remove_cv_t in the result type
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wignored-qualifiers"
+#elif defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wignored-qualifiers"
+#endif
+TEST(ExpectedMonadicTest, TransformReturnsConst) {
+  expected<int, std::string> e(5);
+  auto result = e.transform([](int v) -> const int { return v * 2; });
+  // remove_cv_t strips const, so result type is expected<int, std::string>
+  static_assert(std::is_same_v<decltype(result), expected<int, std::string>>);
+  EXPECT_TRUE(result.has_value());
+  EXPECT_EQ(result.value(), 10);
+}
+
+TEST(ExpectedMonadicTest, TransformConstLvalueReturnsConst) {
+  const expected<int, std::string> e(5);
+  auto result = e.transform([](const int& v) -> const int { return v + 1; });
+  static_assert(std::is_same_v<decltype(result), expected<int, std::string>>);
+  EXPECT_EQ(result.value(), 6);
+}
+
+TEST(ExpectedMonadicTest, TransformRvalueReturnsConst) {
+  auto result = expected<int, std::string>(7).transform(
+      [](int&& v) -> const int { return v * 2; });
+  static_assert(std::is_same_v<decltype(result), expected<int, std::string>>);
+  EXPECT_EQ(result.value(), 14);
+}
+
+TEST(ExpectedMonadicTest, TransformConstRvalueReturnsConst) {
+  const expected<int, std::string> e(9);
+  auto result =
+      std::move(e).transform([](const int&& v) -> const int { return v * 2; });
+  static_assert(std::is_same_v<decltype(result), expected<int, std::string>>);
+  EXPECT_EQ(result.value(), 18);
+}
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#elif defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
+
 TEST(ExpectedMonadicTest, TransformErrorOnValue) {
   expected<int, std::string> e(42);
   auto result = e.transform_error(
@@ -663,6 +708,55 @@ TEST(ExpectedRefTest, MonadicTransform) {
   EXPECT_EQ(result.value(), 15);
 }
 
+// transform with callback returning const-qualified type — exercises
+// std::remove_cv_t in the result type for expected<T&,E> specialization
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wignored-qualifiers"
+#elif defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wignored-qualifiers"
+#endif
+TEST(ExpectedRefTest, MonadicTransformReturnsConst) {
+  int val = 5;
+  expected<int&, std::string> e(val);
+  auto result = e.transform([](int& v) -> const int { return v * 3; });
+  // remove_cv_t strips const, so result type is expected<int, std::string>
+  static_assert(std::is_same_v<decltype(result), expected<int, std::string>>);
+  EXPECT_EQ(result.value(), 15);
+}
+
+TEST(ExpectedRefTest, MonadicTransformConstLvalueReturnsConst) {
+  int val = 5;
+  const expected<int&, std::string> e(val);
+  auto result = e.transform([](const int& v) -> const int { return v + 1; });
+  static_assert(std::is_same_v<decltype(result), expected<int, std::string>>);
+  EXPECT_EQ(result.value(), 6);
+}
+
+TEST(ExpectedRefTest, MonadicTransformRvalueReturnsConst) {
+  int val = 7;
+  expected<int&, std::string> e(val);
+  auto result =
+      std::move(e).transform([](int&& v) -> const int { return v * 2; });
+  static_assert(std::is_same_v<decltype(result), expected<int, std::string>>);
+  EXPECT_EQ(result.value(), 14);
+}
+
+TEST(ExpectedRefTest, MonadicTransformConstRvalueReturnsConst) {
+  int val = 9;
+  const expected<int&, std::string> e(val);
+  auto result =
+      std::move(e).transform([](const int&& v) -> const int { return v * 2; });
+  static_assert(std::is_same_v<decltype(result), expected<int, std::string>>);
+  EXPECT_EQ(result.value(), 18);
+}
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#elif defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
+
 TEST(ExpectedRefTest, MonadicTransformError) {
   int val = 42;
   expected<int&, std::string> e(val);
@@ -805,6 +899,50 @@ TEST(ExpectedVoidTest, TransformOnError) {
   EXPECT_FALSE(result.has_value());
   EXPECT_EQ(result.error(), "fail");
 }
+
+// transform with callback returning const-qualified type — exercises
+// std::remove_cv_t in the result type for expected<void,E> specialization
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wignored-qualifiers"
+#elif defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wignored-qualifiers"
+#endif
+TEST(ExpectedVoidTest, TransformReturnsConst) {
+  expected<void, std::string> e;
+  auto result = e.transform([]() -> const int { return 42; });
+  // remove_cv_t strips const, so result type is expected<int, std::string>
+  static_assert(std::is_same_v<decltype(result), expected<int, std::string>>);
+  EXPECT_TRUE(result.has_value());
+  EXPECT_EQ(result.value(), 42);
+}
+
+TEST(ExpectedVoidTest, TransformConstLvalueReturnsConst) {
+  const expected<void, std::string> e;
+  auto result = e.transform([]() -> const int { return 99; });
+  static_assert(std::is_same_v<decltype(result), expected<int, std::string>>);
+  EXPECT_EQ(result.value(), 99);
+}
+
+TEST(ExpectedVoidTest, TransformRvalueReturnsConst) {
+  auto result =
+      expected<void, std::string>().transform([]() -> const int { return 7; });
+  static_assert(std::is_same_v<decltype(result), expected<int, std::string>>);
+  EXPECT_EQ(result.value(), 7);
+}
+
+TEST(ExpectedVoidTest, TransformConstRvalueReturnsConst) {
+  const expected<void, std::string> e;
+  auto result = std::move(e).transform([]() -> const int { return 11; });
+  static_assert(std::is_same_v<decltype(result), expected<int, std::string>>);
+  EXPECT_EQ(result.value(), 11);
+}
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#elif defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 TEST(ExpectedVoidTest, TransformErrorOnValue) {
   expected<void, std::string> e;
