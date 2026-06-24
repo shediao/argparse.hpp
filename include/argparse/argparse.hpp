@@ -403,46 +403,66 @@ class expected : private expected_storage<T, E> {
 
   template <typename F>
   constexpr auto transform(F&& f) & {
-    using result_type = expected<
-        std::remove_cv_t<std::invoke_result_t<F, decltype(operator*())>>, E>;
+    using R = std::remove_cv_t<std::invoke_result_t<F, decltype(operator*())>>;
+    using result_type = expected<R, E>;
     if (has_value()) {
-      return result_type(std::invoke(std::forward<F>(f), this->storage_.value));
+      if constexpr (std::is_void_v<R>) {
+        std::invoke(std::forward<F>(f), this->storage_.value);
+        return result_type{};
+      } else {
+        return result_type(
+            std::invoke(std::forward<F>(f), this->storage_.value));
+      }
     }
     return result_type(make_unexpected(error()));
   }
 
   template <typename F>
   constexpr auto transform(F&& f) const& {
-    using result_type = expected<
-        std::remove_cv_t<std::invoke_result_t<F, decltype(operator*())>>, E>;
+    using R = std::remove_cv_t<std::invoke_result_t<F, decltype(operator*())>>;
+    using result_type = expected<R, E>;
     if (has_value()) {
-      return result_type(std::invoke(std::forward<F>(f), this->storage_.value));
+      if constexpr (std::is_void_v<R>) {
+        std::invoke(std::forward<F>(f), this->storage_.value);
+        return result_type{};
+      } else {
+        return result_type(
+            std::invoke(std::forward<F>(f), this->storage_.value));
+      }
     }
     return result_type(make_unexpected(error()));
   }
 
   template <typename F>
   constexpr auto transform(F&& f) && {
-    using result_type =
-        expected<std::remove_cv_t<
-                     std::invoke_result_t<F, decltype(std::move(operator*()))>>,
-                 E>;
+    using R = std::remove_cv_t<
+        std::invoke_result_t<F, decltype(std::move(operator*()))>>;
+    using result_type = expected<R, E>;
     if (has_value()) {
-      return result_type(
-          std::invoke(std::forward<F>(f), std::move(this->storage_.value)));
+      if constexpr (std::is_void_v<R>) {
+        std::invoke(std::forward<F>(f), std::move(this->storage_.value));
+        return result_type{};
+      } else {
+        return result_type(
+            std::invoke(std::forward<F>(f), std::move(this->storage_.value)));
+      }
     }
     return result_type(make_unexpected(std::move(*this).error()));
   }
 
   template <typename F>
   constexpr auto transform(F&& f) const&& {
-    using result_type =
-        expected<std::remove_cv_t<
-                     std::invoke_result_t<F, decltype(std::move(operator*()))>>,
-                 E>;
+    using R = std::remove_cv_t<
+        std::invoke_result_t<F, decltype(std::move(operator*()))>>;
+    using result_type = expected<R, E>;
     if (has_value()) {
-      return result_type(
-          std::invoke(std::forward<F>(f), std::move(this->storage_.value)));
+      if constexpr (std::is_void_v<R>) {
+        std::invoke(std::forward<F>(f), std::move(this->storage_.value));
+        return result_type{};
+      } else {
+        return result_type(
+            std::invoke(std::forward<F>(f), std::move(this->storage_.value)));
+      }
     }
     return result_type(make_unexpected(std::move(*this).error()));
   }
@@ -851,44 +871,64 @@ class expected<T&, E> : private expected_storage<T*, E> {
 
   template <typename F>
   constexpr auto transform(F&& f) & {
-    using result_type =
-        expected<std::remove_cv_t<std::invoke_result_t<F, T&>>, E>;
+    using R = std::remove_cv_t<std::invoke_result_t<F, T&>>;
+    using result_type = expected<R, E>;
     if (has_value()) {
-      return result_type(
-          std::invoke(std::forward<F>(f), *this->storage_.value));
+      if constexpr (std::is_void_v<R>) {
+        std::invoke(std::forward<F>(f), *this->storage_.value);
+        return result_type{};
+      } else {
+        return result_type(
+            std::invoke(std::forward<F>(f), *this->storage_.value));
+      }
     }
     return result_type(make_unexpected(error()));
   }
 
   template <typename F>
   constexpr auto transform(F&& f) const& {
-    using result_type =
-        expected<std::remove_cv_t<std::invoke_result_t<F, const T&>>, E>;
+    using R = std::remove_cv_t<std::invoke_result_t<F, const T&>>;
+    using result_type = expected<R, E>;
     if (has_value()) {
-      return result_type(
-          std::invoke(std::forward<F>(f), *this->storage_.value));
+      if constexpr (std::is_void_v<R>) {
+        std::invoke(std::forward<F>(f), *this->storage_.value);
+        return result_type{};
+      } else {
+        return result_type(
+            std::invoke(std::forward<F>(f), *this->storage_.value));
+      }
     }
     return result_type(make_unexpected(error()));
   }
 
   template <typename F>
   constexpr auto transform(F&& f) && {
-    using result_type =
-        expected<std::remove_cv_t<std::invoke_result_t<F, T&>>, E>;
+    using R = std::remove_cv_t<std::invoke_result_t<F, T&>>;
+    using result_type = expected<R, E>;
     if (has_value()) {
-      return result_type(
-          std::invoke(std::forward<F>(f), *this->storage_.value));
+      if constexpr (std::is_void_v<R>) {
+        std::invoke(std::forward<F>(f), *this->storage_.value);
+        return result_type{};
+      } else {
+        return result_type(
+            std::invoke(std::forward<F>(f), *this->storage_.value));
+      }
     }
     return result_type(make_unexpected(std::move(*this).error()));
   }
 
   template <typename F>
   constexpr auto transform(F&& f) const&& {
-    using result_type =
-        expected<std::remove_cv_t<std::invoke_result_t<F, const T&>>, E>;
+    using R = std::remove_cv_t<std::invoke_result_t<F, const T&>>;
+    using result_type = expected<R, E>;
     if (has_value()) {
-      return result_type(
-          std::invoke(std::forward<F>(f), *this->storage_.value));
+      if constexpr (std::is_void_v<R>) {
+        std::invoke(std::forward<F>(f), *this->storage_.value);
+        return result_type{};
+      } else {
+        return result_type(
+            std::invoke(std::forward<F>(f), *this->storage_.value));
+      }
     }
     return result_type(make_unexpected(std::move(*this).error()));
   }
@@ -1185,36 +1225,60 @@ class expected<void, E> {
 
   template <typename F>
   constexpr auto transform(F&& f) & {
-    using result_type = expected<std::remove_cv_t<std::invoke_result_t<F>>, E>;
+    using R = std::remove_cv_t<std::invoke_result_t<F>>;
+    using result_type = expected<R, E>;
     if (has_value_) {
-      return result_type(std::invoke(std::forward<F>(f)));
+      if constexpr (std::is_void_v<R>) {
+        std::invoke(std::forward<F>(f));
+        return result_type{};
+      } else {
+        return result_type(std::invoke(std::forward<F>(f)));
+      }
     }
     return result_type(make_unexpected(error_));
   }
 
   template <typename F>
   constexpr auto transform(F&& f) const& {
-    using result_type = expected<std::remove_cv_t<std::invoke_result_t<F>>, E>;
+    using R = std::remove_cv_t<std::invoke_result_t<F>>;
+    using result_type = expected<R, E>;
     if (has_value_) {
-      return result_type(std::invoke(std::forward<F>(f)));
+      if constexpr (std::is_void_v<R>) {
+        std::invoke(std::forward<F>(f));
+        return result_type{};
+      } else {
+        return result_type(std::invoke(std::forward<F>(f)));
+      }
     }
     return result_type(make_unexpected(error_));
   }
 
   template <typename F>
   constexpr auto transform(F&& f) && {
-    using result_type = expected<std::remove_cv_t<std::invoke_result_t<F>>, E>;
+    using R = std::remove_cv_t<std::invoke_result_t<F>>;
+    using result_type = expected<R, E>;
     if (has_value_) {
-      return result_type(std::invoke(std::forward<F>(f)));
+      if constexpr (std::is_void_v<R>) {
+        std::invoke(std::forward<F>(f));
+        return result_type{};
+      } else {
+        return result_type(std::invoke(std::forward<F>(f)));
+      }
     }
     return result_type(make_unexpected(std::move(*this).error()));
   }
 
   template <typename F>
   constexpr auto transform(F&& f) const&& {
-    using result_type = expected<std::remove_cv_t<std::invoke_result_t<F>>, E>;
+    using R = std::remove_cv_t<std::invoke_result_t<F>>;
+    using result_type = expected<R, E>;
     if (has_value_) {
-      return result_type(std::invoke(std::forward<F>(f)));
+      if constexpr (std::is_void_v<R>) {
+        std::invoke(std::forward<F>(f));
+        return result_type{};
+      } else {
+        return result_type(std::invoke(std::forward<F>(f)));
+      }
     }
     return result_type(make_unexpected(std::move(*this).error()));
   }

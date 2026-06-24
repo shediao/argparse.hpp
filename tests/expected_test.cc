@@ -419,6 +419,77 @@ TEST(ExpectedMonadicTest, TransformConstRvalueReturnsConst) {
 #pragma GCC diagnostic pop
 #endif
 
+// ============================================================================
+// expected<T, E> — transform with void-returning callback
+// ============================================================================
+
+TEST(ExpectedMonadicTest, TransformVoidReturnOnValue) {
+  expected<int, std::string> e(5);
+  bool called = false;
+  auto result = e.transform([&called](int v) {
+    called = true;
+    EXPECT_EQ(v, 5);
+  });
+  static_assert(std::is_same_v<decltype(result), expected<void, std::string>>);
+  EXPECT_TRUE(called);
+  EXPECT_TRUE(result.has_value());
+}
+
+TEST(ExpectedMonadicTest, TransformVoidReturnOnError) {
+  expected<int, std::string> e(make_unexpected(std::string("fail")));
+  bool called = false;
+  auto result = e.transform([&called](int /*v*/) { called = true; });
+  static_assert(std::is_same_v<decltype(result), expected<void, std::string>>);
+  EXPECT_FALSE(called);
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), "fail");
+}
+
+TEST(ExpectedMonadicTest, TransformVoidReturnConstLvalue) {
+  const expected<int, std::string> e(5);
+  bool called = false;
+  auto result = e.transform([&called](const int& v) {
+    called = true;
+    EXPECT_EQ(v, 5);
+  });
+  static_assert(std::is_same_v<decltype(result), expected<void, std::string>>);
+  EXPECT_TRUE(called);
+  EXPECT_TRUE(result.has_value());
+}
+
+TEST(ExpectedMonadicTest, TransformVoidReturnRvalue) {
+  bool called = false;
+  auto result = expected<int, std::string>(7).transform([&called](int&& v) {
+    called = true;
+    EXPECT_EQ(v, 7);
+  });
+  static_assert(std::is_same_v<decltype(result), expected<void, std::string>>);
+  EXPECT_TRUE(called);
+  EXPECT_TRUE(result.has_value());
+}
+
+TEST(ExpectedMonadicTest, TransformVoidReturnConstRvalue) {
+  const expected<int, std::string> e(9);
+  bool called = false;
+  auto result = std::move(e).transform([&called](const int&& v) {
+    called = true;
+    EXPECT_EQ(v, 9);
+  });
+  static_assert(std::is_same_v<decltype(result), expected<void, std::string>>);
+  EXPECT_TRUE(called);
+  EXPECT_TRUE(result.has_value());
+}
+
+TEST(ExpectedMonadicTest, TransformVoidReturnRvalueErrorPath) {
+  bool called = false;
+  auto result = expected<int, std::string>(make_unexpected(std::string("rerr")))
+                    .transform([&called](int&& /*v*/) { called = true; });
+  static_assert(std::is_same_v<decltype(result), expected<void, std::string>>);
+  EXPECT_FALSE(called);
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), "rerr");
+}
+
 TEST(ExpectedMonadicTest, TransformErrorOnValue) {
   expected<int, std::string> e(42);
   auto result = e.transform_error(
@@ -757,6 +828,82 @@ TEST(ExpectedRefTest, MonadicTransformConstRvalueReturnsConst) {
 #pragma GCC diagnostic pop
 #endif
 
+// ============================================================================
+// expected<T&, E> — transform with void-returning callback
+// ============================================================================
+
+TEST(ExpectedRefTest, TransformVoidReturnOnValue) {
+  int val = 5;
+  expected<int&, std::string> e(val);
+  bool called = false;
+  auto result = e.transform([&called](int& v) {
+    called = true;
+    EXPECT_EQ(v, 5);
+  });
+  static_assert(std::is_same_v<decltype(result), expected<void, std::string>>);
+  EXPECT_TRUE(called);
+  EXPECT_TRUE(result.has_value());
+}
+
+TEST(ExpectedRefTest, TransformVoidReturnOnError) {
+  expected<int&, std::string> e(make_unexpected(std::string("ref_fail")));
+  bool called = false;
+  auto result = e.transform([&called](int& /*v*/) { called = true; });
+  static_assert(std::is_same_v<decltype(result), expected<void, std::string>>);
+  EXPECT_FALSE(called);
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), "ref_fail");
+}
+
+TEST(ExpectedRefTest, TransformVoidReturnConstLvalue) {
+  int val = 5;
+  const expected<int&, std::string> e(val);
+  bool called = false;
+  auto result = e.transform([&called](const int& v) {
+    called = true;
+    EXPECT_EQ(v, 5);
+  });
+  static_assert(std::is_same_v<decltype(result), expected<void, std::string>>);
+  EXPECT_TRUE(called);
+  EXPECT_TRUE(result.has_value());
+}
+
+TEST(ExpectedRefTest, TransformVoidReturnRvalue) {
+  int val = 7;
+  bool called = false;
+  auto result = expected<int&, std::string>(val).transform([&called](int& v) {
+    called = true;
+    EXPECT_EQ(v, 7);
+  });
+  static_assert(std::is_same_v<decltype(result), expected<void, std::string>>);
+  EXPECT_TRUE(called);
+  EXPECT_TRUE(result.has_value());
+}
+
+TEST(ExpectedRefTest, TransformVoidReturnConstRvalue) {
+  int val = 9;
+  const expected<int&, std::string> e(val);
+  bool called = false;
+  auto result = std::move(e).transform([&called](const int& v) {
+    called = true;
+    EXPECT_EQ(v, 9);
+  });
+  static_assert(std::is_same_v<decltype(result), expected<void, std::string>>);
+  EXPECT_TRUE(called);
+  EXPECT_TRUE(result.has_value());
+}
+
+TEST(ExpectedRefTest, TransformVoidReturnRvalueErrorPath) {
+  bool called = false;
+  auto result =
+      expected<int&, std::string>(make_unexpected(std::string("rerr")))
+          .transform([&called](int& /*v*/) { called = true; });
+  static_assert(std::is_same_v<decltype(result), expected<void, std::string>>);
+  EXPECT_FALSE(called);
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), "rerr");
+}
+
 TEST(ExpectedRefTest, MonadicTransformError) {
   int val = 42;
   expected<int&, std::string> e(val);
@@ -943,6 +1090,67 @@ TEST(ExpectedVoidTest, TransformConstRvalueReturnsConst) {
 #elif defined(__GNUC__)
 #pragma GCC diagnostic pop
 #endif
+
+// ============================================================================
+// expected<void, E> — transform with void-returning callback
+// ============================================================================
+
+TEST(ExpectedVoidTest, TransformVoidReturnOnValue) {
+  expected<void, std::string> e;
+  bool called = false;
+  auto result = e.transform([&called]() { called = true; });
+  static_assert(std::is_same_v<decltype(result), expected<void, std::string>>);
+  EXPECT_TRUE(called);
+  EXPECT_TRUE(result.has_value());
+}
+
+TEST(ExpectedVoidTest, TransformVoidReturnOnError) {
+  expected<void, std::string> e(make_unexpected(std::string("fail")));
+  bool called = false;
+  auto result = e.transform([&called]() { called = true; });
+  static_assert(std::is_same_v<decltype(result), expected<void, std::string>>);
+  EXPECT_FALSE(called);
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), "fail");
+}
+
+TEST(ExpectedVoidTest, TransformVoidReturnConstLvalue) {
+  const expected<void, std::string> e;
+  bool called = false;
+  auto result = e.transform([&called]() { called = true; });
+  static_assert(std::is_same_v<decltype(result), expected<void, std::string>>);
+  EXPECT_TRUE(called);
+  EXPECT_TRUE(result.has_value());
+}
+
+TEST(ExpectedVoidTest, TransformVoidReturnRvalue) {
+  bool called = false;
+  auto result =
+      expected<void, std::string>().transform([&called]() { called = true; });
+  static_assert(std::is_same_v<decltype(result), expected<void, std::string>>);
+  EXPECT_TRUE(called);
+  EXPECT_TRUE(result.has_value());
+}
+
+TEST(ExpectedVoidTest, TransformVoidReturnConstRvalue) {
+  const expected<void, std::string> e;
+  bool called = false;
+  auto result = std::move(e).transform([&called]() { called = true; });
+  static_assert(std::is_same_v<decltype(result), expected<void, std::string>>);
+  EXPECT_TRUE(called);
+  EXPECT_TRUE(result.has_value());
+}
+
+TEST(ExpectedVoidTest, TransformVoidReturnRvalueErrorPath) {
+  bool called = false;
+  auto result =
+      expected<void, std::string>(make_unexpected(std::string("rerr")))
+          .transform([&called]() { called = true; });
+  static_assert(std::is_same_v<decltype(result), expected<void, std::string>>);
+  EXPECT_FALSE(called);
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), "rerr");
+}
 
 TEST(ExpectedVoidTest, TransformErrorOnValue) {
   expected<void, std::string> e;
