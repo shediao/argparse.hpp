@@ -281,11 +281,18 @@ class expected : private expected_storage<T, E> {
   }
 
   // Operators
-  constexpr T& operator*() & { return value(); }
-  constexpr T const& operator*() const& { return value(); }
-  constexpr T&& operator*() && { return std::move(value()); }
-  constexpr T* operator->() { return &value(); }
-  constexpr T const* operator->() const { return &value(); }
+  constexpr T& operator*() & noexcept { return value(); }
+  constexpr T const& operator*() const& noexcept { return value(); }
+  constexpr T&& operator*() && noexcept { return std::move(value()); }
+  constexpr const T&& operator*() const&& noexcept {
+    return std::move(value());
+  }
+  constexpr T* operator->() noexcept {
+    return std::addressof(this->storage_.value);
+  }
+  constexpr T const* operator->() const noexcept {
+    return std::addressof(this->storage_.value);
+  }
 
   // Modifiers
   template <typename... Args>
@@ -696,11 +703,16 @@ class expected<T&, E> : private expected_storage<T*, E> {
   }
 
   // Operators
-  constexpr T& operator*() & { return value(); }
-  constexpr T const& operator*() const& { return value(); }
-  constexpr T&& operator*() && { return std::move(value()); }
-  constexpr T* operator->() { return this->storage_.value; }
-  constexpr T const* operator->() const { return this->storage_.value; }
+  constexpr T& operator*() & noexcept { return value(); }
+  constexpr T const& operator*() const& noexcept { return value(); }
+  constexpr T&& operator*() && noexcept { return std::move(value()); }
+  constexpr const T&& operator*() const&& noexcept {
+    return std::move(value());
+  }
+  constexpr T* operator->() noexcept { return this->storage_.value; }
+  constexpr T const* operator->() const noexcept {
+    return this->storage_.value;
+  }
 
   // Modifiers — rebind the reference
   constexpr T& emplace(T& value) {
@@ -1012,6 +1024,8 @@ class expected<void, E> {
     assert(!has_value_);
     return std::move(error_);
   }
+
+  constexpr void operator*() const { check_value(); }
 
   // error_or
   template <typename G = E>
