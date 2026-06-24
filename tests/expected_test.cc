@@ -685,7 +685,7 @@ TEST(ExpectedRefTest, MonadicAndThenCallbackReturnsRef) {
 TEST(ExpectedRefTest, MonadicAndThenRvalueError) {
   auto result =
       expected<int&, std::string>(make_unexpected(std::string("rerr")))
-          .and_then([](int&& v) -> expected<double, std::string> {
+          .and_then([](int& v) -> expected<double, std::string> {
             return static_cast<double>(v);
           });
   EXPECT_FALSE(result.has_value());
@@ -696,7 +696,7 @@ TEST(ExpectedRefTest, MonadicAndThenRvalueError) {
 TEST(ExpectedRefTest, MonadicAndThenConstRvalueError) {
   const expected<int&, std::string> e(make_unexpected(std::string("cerr")));
   auto result = std::move(e).and_then(
-      [](const int&& /*v*/) -> expected<double, std::string> { return 0.0; });
+      [](const int& /*v*/) -> expected<double, std::string> { return 0.0; });
   EXPECT_FALSE(result.has_value());
   EXPECT_EQ(result.error(), "cerr");
 }
@@ -738,7 +738,7 @@ TEST(ExpectedRefTest, MonadicTransformRvalueReturnsConst) {
   int val = 7;
   expected<int&, std::string> e(val);
   auto result =
-      std::move(e).transform([](int&& v) -> const int { return v * 2; });
+      std::move(e).transform([](int& v) -> const int { return v * 2; });
   static_assert(std::is_same_v<decltype(result), expected<int, std::string>>);
   EXPECT_EQ(result.value(), 14);
 }
@@ -747,7 +747,7 @@ TEST(ExpectedRefTest, MonadicTransformConstRvalueReturnsConst) {
   int val = 9;
   const expected<int&, std::string> e(val);
   auto result =
-      std::move(e).transform([](const int&& v) -> const int { return v * 2; });
+      std::move(e).transform([](const int& v) -> const int { return v * 2; });
   static_assert(std::is_same_v<decltype(result), expected<int, std::string>>);
   EXPECT_EQ(result.value(), 18);
 }

@@ -722,7 +722,7 @@ class expected<T&, E> : private expected_storage<T*, E> {
   }
 
   // Observer
-  constexpr bool has_value() const noexcept { return this->has_value_impl(); }
+  constexpr bool has_value() const noexcept { return base::has_value_impl(); }
 
   constexpr explicit operator bool() const noexcept { return has_value(); }
 
@@ -730,10 +730,10 @@ class expected<T&, E> : private expected_storage<T*, E> {
   constexpr T const& value() const& {
     return check_value(), *this->storage_.value;
   }
-  constexpr T&& value() && {
+  constexpr T& value() && {
     return check_value(), std::move(*this->storage_.value);
   }
-  constexpr const T&& value() const&& {
+  constexpr const T& value() const&& {
     return check_value(), std::move(*this->storage_.value);
   }
 
@@ -757,10 +757,8 @@ class expected<T&, E> : private expected_storage<T*, E> {
   // Operators
   constexpr T& operator*() & noexcept { return value(); }
   constexpr T const& operator*() const& noexcept { return value(); }
-  constexpr T&& operator*() && noexcept { return std::move(value()); }
-  constexpr const T&& operator*() const&& noexcept {
-    return std::move(value());
-  }
+  constexpr T& operator*() && noexcept { return value(); }
+  constexpr const T& operator*() const&& noexcept { return std::move(value()); }
   constexpr T* operator->() noexcept { return this->storage_.value; }
   constexpr T const* operator->() const noexcept {
     return this->storage_.value;
@@ -831,10 +829,10 @@ class expected<T&, E> : private expected_storage<T*, E> {
 
   template <typename F>
   constexpr auto and_then(F&& f) && {
-    using result_type = std::remove_cvref_t<std::invoke_result_t<F, T&&>>;
+    using result_type = std::remove_cvref_t<std::invoke_result_t<F, T&>>;
     static_assert(is_expected_v<result_type>, "and_then must return expected");
     if (has_value()) {
-      return std::invoke(std::forward<F>(f), std::move(*this->storage_.value));
+      return std::invoke(std::forward<F>(f), *this->storage_.value);
     }
     static_assert(std::is_same_v<typename result_type::error_type, E>, "");
     return result_type(make_unexpected(std::move(error())));
@@ -842,10 +840,10 @@ class expected<T&, E> : private expected_storage<T*, E> {
 
   template <typename F>
   constexpr auto and_then(F&& f) const&& {
-    using result_type = std::remove_cvref_t<std::invoke_result_t<F, const T&&>>;
+    using result_type = std::remove_cvref_t<std::invoke_result_t<F, const T&>>;
     static_assert(is_expected_v<result_type>, "and_then must return expected");
     if (has_value()) {
-      return std::invoke(std::forward<F>(f), std::move(*this->storage_.value));
+      return std::invoke(std::forward<F>(f), *this->storage_.value);
     }
     static_assert(std::is_same_v<typename result_type::error_type, E>, "");
     return result_type(make_unexpected(std::move(error())));
@@ -876,10 +874,10 @@ class expected<T&, E> : private expected_storage<T*, E> {
   template <typename F>
   constexpr auto transform(F&& f) && {
     using result_type =
-        expected<std::remove_cv_t<std::invoke_result_t<F, T&&>>, E>;
+        expected<std::remove_cv_t<std::invoke_result_t<F, T&>>, E>;
     if (has_value()) {
       return result_type(
-          std::invoke(std::forward<F>(f), std::move(*this->storage_.value)));
+          std::invoke(std::forward<F>(f), *this->storage_.value));
     }
     return result_type(make_unexpected(std::move(*this).error()));
   }
@@ -887,10 +885,10 @@ class expected<T&, E> : private expected_storage<T*, E> {
   template <typename F>
   constexpr auto transform(F&& f) const&& {
     using result_type =
-        expected<std::remove_cv_t<std::invoke_result_t<F, const T&&>>, E>;
+        expected<std::remove_cv_t<std::invoke_result_t<F, const T&>>, E>;
     if (has_value()) {
       return result_type(
-          std::invoke(std::forward<F>(f), std::move(*this->storage_.value)));
+          std::invoke(std::forward<F>(f), *this->storage_.value));
     }
     return result_type(make_unexpected(std::move(*this).error()));
   }
