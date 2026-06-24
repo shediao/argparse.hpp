@@ -185,6 +185,7 @@ constexpr bool is_expected_v = is_expected<T>::value;
 struct unexpected_t {
   explicit unexpected_t() = default;
 };
+inline constexpr unexpected_t unexpect{};
 
 template <typename T, typename E>
 class expected : private expected_storage<T, E> {
@@ -426,47 +427,49 @@ class expected : private expected_storage<T, E> {
   }
 
   template <typename F>
-  constexpr auto transform_error(
-      F&& f) & -> expected<T, std::invoke_result_t<F, E&>> {
-    using result_type = expected<T, std::invoke_result_t<F, E&>>;
+  constexpr auto transform_error(F&& f) & {
+    using result_type =
+        expected<T,
+                 std::remove_cv_t<std::invoke_result_t<F, decltype(error())>>>;
     if (has_value()) {
-      return result_type(this->storage_.value);
+      return result_type(std::in_place, value());
     }
-    return result_type(
-        make_unexpected(std::invoke(std::forward<F>(f), error())));
+    return result_type(unexpect, std::invoke(std::forward<F>(f), error()));
   }
 
   template <typename F>
-  constexpr auto transform_error(
-      F&& f) const& -> expected<T, std::invoke_result_t<F, const E&>> {
-    using result_type = expected<T, std::invoke_result_t<F, const E&>>;
+  constexpr auto transform_error(F&& f) const& {
+    using result_type =
+        expected<T,
+                 std::remove_cv_t<std::invoke_result_t<F, decltype(error())>>>;
     if (has_value()) {
-      return result_type(this->storage_.value);
+      return result_type(std::in_place, value());
     }
-    return result_type(
-        make_unexpected(std::invoke(std::forward<F>(f), error())));
+    return result_type(unexpect, std::invoke(std::forward<F>(f), error()));
   }
 
   template <typename F>
-  constexpr auto transform_error(
-      F&& f) && -> expected<T, std::invoke_result_t<F, E&&>> {
-    using result_type = expected<T, std::invoke_result_t<F, E&&>>;
+  constexpr auto transform_error(F&& f) && {
+    using result_type =
+        expected<T, std::remove_cv_t<
+                        std::invoke_result_t<F, decltype(std::move(error()))>>>;
     if (has_value()) {
-      return result_type(std::move(this->storage_.value));
+      return result_type(std::in_place, std::move(value()));
     }
-    return result_type(make_unexpected(
-        std::invoke(std::forward<F>(f), std::move(*this).error())));
+    return result_type(unexpect,
+                       std::invoke(std::forward<F>(f), std::move(error())));
   }
 
   template <typename F>
-  constexpr auto transform_error(
-      F&& f) const&& -> expected<T, std::invoke_result_t<F, const E&&>> {
-    using result_type = expected<T, std::invoke_result_t<F, const E&&>>;
+  constexpr auto transform_error(F&& f) const&& {
+    using result_type =
+        expected<T, std::remove_cv_t<
+                        std::invoke_result_t<F, decltype(std::move(error()))>>>;
     if (has_value()) {
-      return result_type(this->storage_.value);
+      return result_type(std::in_place, std::move(value()));
     }
-    return result_type(make_unexpected(
-        std::invoke(std::forward<F>(f), std::move(*this).error())));
+    return result_type(unexpect,
+                       std::invoke(std::forward<F>(f), std::move(error())));
   }
 
   template <typename F>
@@ -719,7 +722,7 @@ class expected<T&, E> : private expected_storage<T*, E> {
   }
 
   // Modifiers — rebind the reference
-  constexpr T& emplace(T& value) {
+  constexpr T& emplace(T& value) noexcept {
     base::destroy();
     base::construct_value(&value);
     return *this->storage_.value;
@@ -848,47 +851,47 @@ class expected<T&, E> : private expected_storage<T*, E> {
   }
 
   template <typename F>
-  constexpr auto transform_error(
-      F&& f) & -> expected<T&, std::invoke_result_t<F, E&>> {
-    using result_type = expected<T&, std::invoke_result_t<F, E&>>;
+  constexpr auto transform_error(F&& f) & {
+    using result_type =
+        expected<T&,
+                 std::remove_cv_t<std::invoke_result_t<F, decltype(error())>>>;
     if (has_value()) {
       return result_type(*this->storage_.value);
     }
-    return result_type(
-        make_unexpected(std::invoke(std::forward<F>(f), error())));
+    return result_type(unexpect, std::invoke(std::forward<F>(f), error()));
   }
 
   template <typename F>
-  constexpr auto transform_error(
-      F&& f) const& -> expected<T&, std::invoke_result_t<F, const E&>> {
-    using result_type = expected<T&, std::invoke_result_t<F, const E&>>;
+  constexpr auto transform_error(F&& f) const& {
+    using result_type =
+        expected<T&,
+                 std::remove_cv_t<std::invoke_result_t<F, decltype(error())>>>;
     if (has_value()) {
       return result_type(*this->storage_.value);
     }
-    return result_type(
-        make_unexpected(std::invoke(std::forward<F>(f), error())));
+    return result_type(unexpect, std::invoke(std::forward<F>(f), error()));
   }
 
   template <typename F>
-  constexpr auto transform_error(
-      F&& f) && -> expected<T&, std::invoke_result_t<F, E&&>> {
-    using result_type = expected<T&, std::invoke_result_t<F, E&&>>;
+  constexpr auto transform_error(F&& f) && {
+    using result_type = expected<T&, std::remove_cv_t<std::invoke_result_t<
+                                         F, decltype(std::move(error()))>>>;
     if (has_value()) {
       return result_type(*this->storage_.value);
     }
-    return result_type(make_unexpected(
-        std::invoke(std::forward<F>(f), std::move(*this).error())));
+    return result_type(unexpect,
+                       std::invoke(std::forward<F>(f), std::move(error())));
   }
 
   template <typename F>
-  constexpr auto transform_error(
-      F&& f) const&& -> expected<T&, std::invoke_result_t<F, const E&&>> {
-    using result_type = expected<T&, std::invoke_result_t<F, const E&&>>;
+  constexpr auto transform_error(F&& f) const&& {
+    using result_type = expected<T&, std::remove_cv_t<std::invoke_result_t<
+                                         F, decltype(std::move(error()))>>>;
     if (has_value()) {
       return result_type(*this->storage_.value);
     }
-    return result_type(make_unexpected(
-        std::invoke(std::forward<F>(f), std::move(*this).error())));
+    return result_type(unexpect,
+                       std::invoke(std::forward<F>(f), std::move(error())));
   }
 
   template <typename F>
@@ -971,6 +974,7 @@ class expected<void, E> {
   using error_type = E;
 
   constexpr expected() noexcept : has_value_(true) {}
+  constexpr expected(std::in_place_t) noexcept : has_value_(true) {}
 
   template <typename... Args>
   constexpr expected(unexpected_t, Args&&... args) : has_value_(false) {
@@ -1030,6 +1034,8 @@ class expected<void, E> {
   }
 
   constexpr void operator*() const { check_value(); }
+
+  constexpr void emplace() noexcept { has_value_ = true; }
 
   // error_or
   template <typename G = E>
@@ -1149,47 +1155,47 @@ class expected<void, E> {
   }
 
   template <typename F>
-  constexpr auto transform_error(
-      F&& f) & -> expected<void, std::invoke_result_t<F, E&>> {
-    using result_type = expected<void, std::invoke_result_t<F, E&>>;
-    if (has_value_) {
+  constexpr auto transform_error(F&& f) & {
+    using result_type =
+        expected<void,
+                 std::remove_cv_t<std::invoke_result_t<F, decltype(error())>>>;
+    if (has_value()) {
       return result_type();
     }
-    return result_type(
-        make_unexpected(std::invoke(std::forward<F>(f), error_)));
+    return result_type(unexpect, std::invoke(std::forward<F>(f), error()));
   }
 
   template <typename F>
-  constexpr auto transform_error(
-      F&& f) const& -> expected<void, std::invoke_result_t<F, const E&>> {
-    using result_type = expected<void, std::invoke_result_t<F, const E&>>;
-    if (has_value_) {
+  constexpr auto transform_error(F&& f) const& {
+    using result_type =
+        expected<void,
+                 std::remove_cv_t<std::invoke_result_t<F, decltype(error())>>>;
+    if (has_value()) {
       return result_type();
     }
-    return result_type(
-        make_unexpected(std::invoke(std::forward<F>(f), error_)));
+    return result_type(unexpect, std::invoke(std::forward<F>(f), error()));
   }
 
   template <typename F>
-  constexpr auto transform_error(
-      F&& f) && -> expected<void, std::invoke_result_t<F, E&&>> {
-    using result_type = expected<void, std::invoke_result_t<F, E&&>>;
-    if (has_value_) {
+  constexpr auto transform_error(F&& f) && {
+    using result_type = expected<void, std::remove_cv_t<std::invoke_result_t<
+                                           F, decltype(std::move(error()))>>>;
+    if (has_value()) {
       return result_type();
     }
-    return result_type(make_unexpected(
-        std::invoke(std::forward<F>(f), std::move(*this).error())));
+    return result_type(unexpect,
+                       std::invoke(std::forward<F>(f), std::move(error())));
   }
 
   template <typename F>
-  constexpr auto transform_error(
-      F&& f) const&& -> expected<void, std::invoke_result_t<F, const E&&>> {
-    using result_type = expected<void, std::invoke_result_t<F, const E&&>>;
-    if (has_value_) {
+  constexpr auto transform_error(F&& f) const&& {
+    using result_type = expected<void, std::remove_cv_t<std::invoke_result_t<
+                                           F, decltype(std::move(error()))>>>;
+    if (has_value()) {
       return result_type();
     }
-    return result_type(make_unexpected(
-        std::invoke(std::forward<F>(f), std::move(*this).error())));
+    return result_type(unexpect,
+                       std::invoke(std::forward<F>(f), std::move(error())));
   }
 
   template <typename F>

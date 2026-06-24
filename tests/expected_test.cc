@@ -1624,3 +1624,448 @@ TEST(ExpectedInPlaceZeroArgTest, ConstructErrorZeroArgs) {
   EXPECT_FALSE(e.has_value());
   EXPECT_EQ(e.error(), "");  // std::string{} is ""
 }
+
+// ============================================================================
+// unexpect — global inline constexpr tag
+// ============================================================================
+
+TEST(UnexpectTest, ConstructErrorWithUnexpect) {
+  // unexpect is a global constexpr unexpected_t, like std::unexpect
+  expected<int, std::string> e(argparse::unexpect, "error message");
+  EXPECT_FALSE(e.has_value());
+  EXPECT_EQ(e.error(), "error message");
+}
+
+TEST(UnexpectTest, ConstructErrorMultiArgWithUnexpect) {
+  expected<int, std::string> e(argparse::unexpect, 5, 'x');
+  EXPECT_FALSE(e.has_value());
+  EXPECT_EQ(e.error(), "xxxxx");
+}
+
+TEST(UnexpectTest, SameAsUnexpectedT) {
+  // Verify unexpect has the same type as unexpected_t{}
+  static_assert(std::is_same_v<decltype(argparse::unexpect),
+                               const argparse::unexpected_t>);
+  // Both can be used interchangeably
+  expected<int, std::string> e1(argparse::unexpect, "a");
+  expected<int, std::string> e2(unexpected_t{}, "a");
+  EXPECT_EQ(e1.error(), e2.error());
+}
+
+// ============================================================================
+// expected<T, E> — transform_error const& and const&& overloads
+// ============================================================================
+
+TEST(ExpectedMonadicTest, TransformErrorConstLvalue) {
+  const expected<int, std::string> e(make_unexpected(std::string("hello")));
+  auto result = e.transform_error([](const std::string& err) -> int {
+    return static_cast<int>(err.size());
+  });
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), 5);
+}
+
+TEST(ExpectedMonadicTest, TransformErrorConstLvalueOnValue) {
+  const expected<int, std::string> e(42);
+  auto result = e.transform_error([](const std::string& err) -> int {
+    return static_cast<int>(err.size());
+  });
+  EXPECT_TRUE(result.has_value());
+  EXPECT_EQ(result.value(), 42);
+}
+
+TEST(ExpectedMonadicTest, TransformErrorConstRvalue) {
+  const expected<int, std::string> e(make_unexpected(std::string("world")));
+  auto result =
+      std::move(e).transform_error([](const std::string&& err) -> int {
+        return static_cast<int>(err.size());
+      });
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), 5);
+}
+
+TEST(ExpectedMonadicTest, TransformErrorConstRvalueOnValue) {
+  const expected<int, std::string> e(99);
+  auto result =
+      std::move(e).transform_error([](const std::string&& err) -> int {
+        return static_cast<int>(err.size());
+      });
+  EXPECT_TRUE(result.has_value());
+  EXPECT_EQ(result.value(), 99);
+}
+
+// ============================================================================
+// expected<T, E> — transform_error with cv-qualified return type (remove_cv_t)
+// ============================================================================
+
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wignored-qualifiers"
+#elif defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wignored-qualifiers"
+#endif
+
+TEST(ExpectedMonadicTest, TransformErrorReturnsConst) {
+  expected<int, std::string> e(make_unexpected(std::string("abc")));
+  auto result = e.transform_error([](std::string& err) -> const int {
+    return static_cast<int>(err.size());
+  });
+  // remove_cv_t strips const, so result type is expected<int, int>
+  static_assert(std::is_same_v<decltype(result), expected<int, int>>);
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), 3);
+}
+
+TEST(ExpectedMonadicTest, TransformErrorConstLvalueReturnsConst) {
+  const expected<int, std::string> e(make_unexpected(std::string("abcd")));
+  auto result = e.transform_error([](const std::string& err) -> const int {
+    return static_cast<int>(err.size());
+  });
+  static_assert(std::is_same_v<decltype(result), expected<int, int>>);
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), 4);
+}
+
+TEST(ExpectedMonadicTest, TransformErrorRvalueReturnsConst) {
+  auto result = expected<int, std::string>(make_unexpected(std::string("xyz")))
+                    .transform_error([](std::string&& err) -> const int {
+                      return static_cast<int>(err.size());
+                    });
+  static_assert(std::is_same_v<decltype(result), expected<int, int>>);
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), 3);
+}
+
+TEST(ExpectedMonadicTest, TransformErrorConstRvalueReturnsConst) {
+  const expected<int, std::string> e(make_unexpected(std::string("xy")));
+  auto result =
+      std::move(e).transform_error([](const std::string&& err) -> const int {
+        return static_cast<int>(err.size());
+      });
+  static_assert(std::is_same_v<decltype(result), expected<int, int>>);
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), 2);
+}
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#elif defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
+
+// ============================================================================
+// expected<T&, E> — transform_error error path & reference preservation
+// ============================================================================
+
+TEST(ExpectedRefTest, MonadicTransformErrorOnError) {
+  expected<int&, std::string> e(make_unexpected(std::string("hello")));
+  auto result = e.transform_error(
+      [](std::string& err) -> int { return static_cast<int>(err.size()); });
+  // Must preserve reference: result type is expected<int&, int>
+  static_assert(std::is_same_v<decltype(result), expected<int&, int>>);
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), 5);
+}
+
+TEST(ExpectedRefTest, MonadicTransformErrorConstLvalue) {
+  int val = 42;
+  const expected<int&, std::string> e(val);
+  auto result = e.transform_error([](const std::string& err) -> int {
+    return static_cast<int>(err.size());
+  });
+  static_assert(std::is_same_v<decltype(result), expected<int&, int>>);
+  EXPECT_TRUE(result.has_value());
+}
+
+TEST(ExpectedRefTest, MonadicTransformErrorConstLvalueOnError) {
+  const expected<int&, std::string> e(make_unexpected(std::string("world")));
+  auto result = e.transform_error([](const std::string& err) -> int {
+    return static_cast<int>(err.size());
+  });
+  static_assert(std::is_same_v<decltype(result), expected<int&, int>>);
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), 5);
+}
+
+TEST(ExpectedRefTest, MonadicTransformErrorRvalue) {
+  auto result = expected<int&, std::string>(make_unexpected(std::string("xyz")))
+                    .transform_error([](std::string&& err) -> int {
+                      return static_cast<int>(err.size());
+                    });
+  static_assert(std::is_same_v<decltype(result), expected<int&, int>>);
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), 3);
+}
+
+TEST(ExpectedRefTest, MonadicTransformErrorRvalueOnValue) {
+  int val = 7;
+  auto result = expected<int&, std::string>(val).transform_error(
+      [](std::string&& err) -> int { return static_cast<int>(err.size()); });
+  static_assert(std::is_same_v<decltype(result), expected<int&, int>>);
+  EXPECT_TRUE(result.has_value());
+}
+
+TEST(ExpectedRefTest, MonadicTransformErrorConstRvalueOnError) {
+  const expected<int&, std::string> e(make_unexpected(std::string("abcd")));
+  auto result =
+      std::move(e).transform_error([](const std::string&& err) -> int {
+        return static_cast<int>(err.size());
+      });
+  static_assert(std::is_same_v<decltype(result), expected<int&, int>>);
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), 4);
+}
+
+TEST(ExpectedRefTest, MonadicTransformErrorConstRvalueOnValue) {
+  int val = 99;
+  const expected<int&, std::string> e(val);
+  auto result =
+      std::move(e).transform_error([](const std::string&& err) -> int {
+        return static_cast<int>(err.size());
+      });
+  static_assert(std::is_same_v<decltype(result), expected<int&, int>>);
+  EXPECT_TRUE(result.has_value());
+}
+
+// ============================================================================
+// expected<T&, E> — transform_error with cv-qualified return (remove_cv_t)
+// ============================================================================
+
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wignored-qualifiers"
+#elif defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wignored-qualifiers"
+#endif
+
+TEST(ExpectedRefTest, MonadicTransformErrorReturnsConst) {
+  expected<int&, std::string> e(make_unexpected(std::string("err")));
+  auto result = e.transform_error([](std::string& err) -> const int {
+    return static_cast<int>(err.size());
+  });
+  // remove_cv_t strips const, so result type is expected<int&, int>
+  static_assert(std::is_same_v<decltype(result), expected<int&, int>>);
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), 3);
+}
+
+TEST(ExpectedRefTest, MonadicTransformErrorConstLvalueReturnsConst) {
+  const expected<int&, std::string> e(make_unexpected(std::string("abcd")));
+  auto result = e.transform_error([](const std::string& err) -> const int {
+    return static_cast<int>(err.size());
+  });
+  static_assert(std::is_same_v<decltype(result), expected<int&, int>>);
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), 4);
+}
+
+TEST(ExpectedRefTest, MonadicTransformErrorRvalueReturnsConst) {
+  auto result = expected<int&, std::string>(make_unexpected(std::string("xy")))
+                    .transform_error([](std::string&& err) -> const int {
+                      return static_cast<int>(err.size());
+                    });
+  static_assert(std::is_same_v<decltype(result), expected<int&, int>>);
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), 2);
+}
+
+TEST(ExpectedRefTest, MonadicTransformErrorConstRvalueReturnsConst) {
+  const expected<int&, std::string> e(make_unexpected(std::string("xyz")));
+  auto result =
+      std::move(e).transform_error([](const std::string&& err) -> const int {
+        return static_cast<int>(err.size());
+      });
+  static_assert(std::is_same_v<decltype(result), expected<int&, int>>);
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), 3);
+}
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#elif defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
+
+// ============================================================================
+// expected<void, E> — transform_error const& and const&& overloads
+// ============================================================================
+
+TEST(ExpectedVoidTest, TransformErrorConstLvalue) {
+  const expected<void, std::string> e(make_unexpected(std::string("hello")));
+  auto result = e.transform_error([](const std::string& err) -> int {
+    return static_cast<int>(err.size());
+  });
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), 5);
+}
+
+TEST(ExpectedVoidTest, TransformErrorConstLvalueOnValue) {
+  const expected<void, std::string> e;
+  auto result = e.transform_error([](const std::string& err) -> int {
+    return static_cast<int>(err.size());
+  });
+  EXPECT_TRUE(result.has_value());
+}
+
+TEST(ExpectedVoidTest, TransformErrorRvalue) {
+  auto result = expected<void, std::string>(make_unexpected(std::string("xyz")))
+                    .transform_error([](std::string&& err) -> int {
+                      return static_cast<int>(err.size());
+                    });
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), 3);
+}
+
+TEST(ExpectedVoidTest, TransformErrorRvalueOnValue) {
+  auto result = expected<void, std::string>().transform_error(
+      [](std::string&& err) -> int { return static_cast<int>(err.size()); });
+  EXPECT_TRUE(result.has_value());
+}
+
+TEST(ExpectedVoidTest, TransformErrorConstRvalueOnError) {
+  const expected<void, std::string> e(make_unexpected(std::string("abcd")));
+  auto result =
+      std::move(e).transform_error([](const std::string&& err) -> int {
+        return static_cast<int>(err.size());
+      });
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), 4);
+}
+
+TEST(ExpectedVoidTest, TransformErrorConstRvalueOnValue) {
+  const expected<void, std::string> e;
+  auto result =
+      std::move(e).transform_error([](const std::string&& err) -> int {
+        return static_cast<int>(err.size());
+      });
+  EXPECT_TRUE(result.has_value());
+}
+
+// ============================================================================
+// expected<void, E> — transform_error with cv-qualified return (remove_cv_t)
+// ============================================================================
+
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wignored-qualifiers"
+#elif defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wignored-qualifiers"
+#endif
+
+TEST(ExpectedVoidTest, TransformErrorReturnsConst) {
+  expected<void, std::string> e(make_unexpected(std::string("err")));
+  auto result = e.transform_error([](std::string& err) -> const int {
+    return static_cast<int>(err.size());
+  });
+  // remove_cv_t strips const, so result type is expected<void, int>
+  static_assert(std::is_same_v<decltype(result), expected<void, int>>);
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), 3);
+}
+
+TEST(ExpectedVoidTest, TransformErrorConstLvalueReturnsConst) {
+  const expected<void, std::string> e(make_unexpected(std::string("abcd")));
+  auto result = e.transform_error([](const std::string& err) -> const int {
+    return static_cast<int>(err.size());
+  });
+  static_assert(std::is_same_v<decltype(result), expected<void, int>>);
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), 4);
+}
+
+TEST(ExpectedVoidTest, TransformErrorRvalueReturnsConst) {
+  auto result = expected<void, std::string>(make_unexpected(std::string("xy")))
+                    .transform_error([](std::string&& err) -> const int {
+                      return static_cast<int>(err.size());
+                    });
+  static_assert(std::is_same_v<decltype(result), expected<void, int>>);
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), 2);
+}
+
+TEST(ExpectedVoidTest, TransformErrorConstRvalueReturnsConst) {
+  const expected<void, std::string> e(make_unexpected(std::string("xyz")));
+  auto result =
+      std::move(e).transform_error([](const std::string&& err) -> const int {
+        return static_cast<int>(err.size());
+      });
+  static_assert(std::is_same_v<decltype(result), expected<void, int>>);
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), 3);
+}
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#elif defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
+
+// ============================================================================
+// expected<void, E> — in-place value construction (std::in_place_t)
+// ============================================================================
+
+TEST(ExpectedVoidTest, ConstructInPlace) {
+  expected<void, std::string> e(std::in_place);
+  EXPECT_TRUE(e.has_value());
+  // value() on void expected should not throw/assert
+  e.value();
+  SUCCEED();
+}
+
+TEST(ExpectedVoidTest, ConstructInPlaceThenAssign) {
+  expected<void, std::string> e(std::in_place);
+  EXPECT_TRUE(e.has_value());
+
+  // Assign an error
+  e = expected<void, std::string>(make_unexpected(std::string("fail")));
+  EXPECT_FALSE(e.has_value());
+  EXPECT_EQ(e.error(), "fail");
+
+  // Assign back to value via copy from a default-constructed one
+  e = expected<void, std::string>();
+  EXPECT_TRUE(e.has_value());
+}
+
+// ============================================================================
+// transform_error — chained use with unexpect construction style
+// ============================================================================
+
+TEST(ExpectedMonadicTest, TransformErrorChainWithUnexpect) {
+  // Verify that transform_error produces a result that can use unexpect
+  // in subsequent operations (validates the unexpect + error construction path)
+  expected<int, std::string> e(make_unexpected(std::string("hello")));
+  auto result = e.transform_error([](std::string& err) -> int {
+                   return static_cast<int>(err.size());
+                 }).transform_error([](int err_code) -> std::string {
+    return std::to_string(err_code * 2);
+  });
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), "10");
+}
+
+TEST(ExpectedRefTest, TransformErrorChainWithUnexpect) {
+  expected<int&, std::string> e(make_unexpected(std::string("abc")));
+  auto result = e.transform_error([](std::string& err) -> int {
+                   return static_cast<int>(err.size());
+                 }).transform_error([](int err_code) -> std::string {
+    return std::to_string(err_code * 10);
+  });
+  static_assert(std::is_same_v<decltype(result), expected<int&, std::string>>);
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), "30");
+}
+
+TEST(ExpectedVoidTest, TransformErrorChainWithUnexpect) {
+  expected<void, std::string> e(make_unexpected(std::string("xyz")));
+  auto result = e.transform_error([](std::string& err) -> int {
+                   return static_cast<int>(err.size());
+                 }).transform_error([](int err_code) -> std::string {
+    return std::to_string(err_code * 100);
+  });
+  static_assert(std::is_same_v<decltype(result), expected<void, std::string>>);
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), "300");
+}
