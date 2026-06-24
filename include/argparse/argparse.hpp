@@ -296,10 +296,17 @@ class expected : private expected_storage<T, E> {
   }
 
   // value_or
-  template <typename U>
+  template <typename U = std::remove_cv_t<T>>
   constexpr T value_or(U&& default_value) const& {
     if (has_value()) {
       return this->storage_.value;
+    }
+    return static_cast<T>(std::forward<U>(default_value));
+  }
+  template <typename U = std::remove_cv_t<T>>
+  constexpr T value_or(U&& default_value) && {
+    if (has_value()) {
+      return std::move(this->storage_.value);
     }
     return static_cast<T>(std::forward<U>(default_value));
   }

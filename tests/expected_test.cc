@@ -125,6 +125,43 @@ TEST(ExpectedValueTest, ValueOr) {
   EXPECT_EQ(f.value_or(0), 0);
 }
 
+TEST(ExpectedValueTest, ValueOrRvalue) {
+  // rvalue expected with value: moves the value out
+  auto v = expected<int, std::string>(42).value_or(0);
+  EXPECT_EQ(v, 42);
+
+  // rvalue expected with error: returns the default
+  auto e = expected<int, std::string>(make_unexpected(std::string("err")))
+               .value_or(0);
+  EXPECT_EQ(e, 0);
+}
+
+TEST(ExpectedValueTest, ValueOrRvalueMoveOnly) {
+  // rvalue value_or moves the value from a move-only type
+  auto ptr =
+      expected<std::unique_ptr<int>, std::string>(std::make_unique<int>(99))
+          .value_or(std::make_unique<int>(0));
+  EXPECT_NE(ptr, nullptr);
+  EXPECT_EQ(*ptr, 99);
+}
+
+TEST(ExpectedValueTest, ValueOrRvalueMoveSemantics) {
+  // Verify that rvalue value_or moves (not copies) the contained value.
+  struct Tracker {
+    int value;
+    bool moved_from = false;
+    Tracker(int v) : value(v) {}
+    Tracker(const Tracker& other) : value(other.value) {}
+    Tracker(Tracker&& other) noexcept : value(other.value) {
+      other.moved_from = true;
+    }
+  };
+
+  expected<Tracker, std::string> e(Tracker(42));
+  auto result = std::move(e).value_or(Tracker(0));
+  EXPECT_EQ(result.value, 42);
+}
+
 TEST(ExpectedValueTest, Emplace) {
   expected<int, std::string> e(make_unexpected(std::string("err")));
   e.emplace(99);
@@ -436,6 +473,18 @@ TEST(ExpectedRefTest, ValueOr) {
 
   expected<int&, std::string> f(make_unexpected(std::string("err")));
   EXPECT_EQ(f.value_or(0), 0);
+}
+
+TEST(ExpectedRefTest, ValueOrRvalue) {
+  // rvalue expected<T&,E> with a value: returns the referred-to value by move
+  int val = 42;
+  auto v = expected<int&, std::string>(val).value_or(0);
+  EXPECT_EQ(v, 42);
+
+  // rvalue expected<T&,E> with an error: returns the default
+  auto e = expected<int&, std::string>(make_unexpected(std::string("err")))
+               .value_or(0);
+  EXPECT_EQ(e, 0);
 }
 
 TEST(ExpectedRefTest, MonadicAndThen) {
