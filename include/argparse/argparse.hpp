@@ -408,7 +408,8 @@ class expected : private expected_storage<T, E> {
 
   template <typename F>
   constexpr auto transform(F&& f) & {
-    using R = std::remove_cv_t<std::invoke_result_t<F, decltype(operator*())>>;
+    using R =
+        std::remove_cv_t<std::invoke_result_t<F, decltype(this->operator*())>>;
     using result_type = expected<R, E>;
     if (has_value()) {
       if constexpr (std::is_void_v<R>) {
@@ -424,7 +425,8 @@ class expected : private expected_storage<T, E> {
 
   template <typename F>
   constexpr auto transform(F&& f) const& {
-    using R = std::remove_cv_t<std::invoke_result_t<F, decltype(operator*())>>;
+    using R =
+        std::remove_cv_t<std::invoke_result_t<F, decltype(this->operator*())>>;
     using result_type = expected<R, E>;
     if (has_value()) {
       if constexpr (std::is_void_v<R>) {
@@ -441,7 +443,7 @@ class expected : private expected_storage<T, E> {
   template <typename F>
   constexpr auto transform(F&& f) && {
     using R = std::remove_cv_t<
-        std::invoke_result_t<F, decltype(std::move(operator*()))>>;
+        std::invoke_result_t<F, decltype(std::move(this->operator*()))>>;
     using result_type = expected<R, E>;
     if (has_value()) {
       if constexpr (std::is_void_v<R>) {
@@ -458,7 +460,7 @@ class expected : private expected_storage<T, E> {
   template <typename F>
   constexpr auto transform(F&& f) const&& {
     using R = std::remove_cv_t<
-        std::invoke_result_t<F, decltype(std::move(operator*()))>>;
+        std::invoke_result_t<F, decltype(std::move(this->operator*()))>>;
     using result_type = expected<R, E>;
     if (has_value()) {
       if constexpr (std::is_void_v<R>) {
