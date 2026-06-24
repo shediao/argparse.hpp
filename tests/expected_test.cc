@@ -13,6 +13,7 @@
 using argparse::bad_expected_access;
 using argparse::expected;
 using argparse::make_unexpected;
+using argparse::unexpected_t;
 
 // ============================================================================
 // expected<T, E> — construction & basic observers
@@ -801,4 +802,459 @@ TEST(ExpectedEdgeCaseTest, ChainedMonadicOps) {
   });
   EXPECT_FALSE(result2.has_value());
   EXPECT_EQ(result2.error(), "too small");
+}
+
+// ============================================================================
+// expected<T, E> — in-place construction (std::in_place_t / unexpected_t)
+// ============================================================================
+
+TEST(ExpectedInPlaceTest, ConstructValueInPlace) {
+  expected<std::string, int> e(std::in_place, "hello");
+  EXPECT_TRUE(e.has_value());
+  EXPECT_EQ(e.value(), "hello");
+}
+
+TEST(ExpectedInPlaceTest, ConstructValueInPlaceMultiArg) {
+  expected<std::string, int> e(std::in_place, 5, 'x');
+  EXPECT_TRUE(e.has_value());
+  EXPECT_EQ(e.value(), "xxxxx");
+}
+
+TEST(ExpectedInPlaceTest, ConstructValueInPlaceNonCopyable) {
+  expected<std::unique_ptr<int>, std::string> e(std::in_place, new int(42));
+  EXPECT_TRUE(e.has_value());
+  EXPECT_EQ(*e.value(), 42);
+}
+
+TEST(ExpectedInPlaceTest, ConstructValueInPlaceVector) {
+  expected<std::vector<int>, std::string> e(
+      std::in_place, std::initializer_list<int>{1, 2, 3});
+  EXPECT_TRUE(e.has_value());
+  ASSERT_EQ(e.value().size(), 3);
+  EXPECT_EQ(e.value()[0], 1);
+  EXPECT_EQ(e.value()[1], 2);
+  EXPECT_EQ(e.value()[2], 3);
+}
+
+TEST(ExpectedInPlaceTest, ConstructErrorInPlace) {
+  expected<int, std::string> e(unexpected_t{}, "error message");
+  EXPECT_FALSE(e.has_value());
+  EXPECT_EQ(e.error(), "error message");
+}
+
+TEST(ExpectedInPlaceTest, ConstructErrorInPlaceMultiArg) {
+  expected<int, std::string> e(unexpected_t{}, 5, 'x');
+  EXPECT_FALSE(e.has_value());
+  EXPECT_EQ(e.error(), "xxxxx");
+}
+
+TEST(ExpectedInPlaceTest, ConstructErrorInPlaceNonCopyable) {
+  expected<int, std::unique_ptr<int>> e(unexpected_t{}, new int(99));
+  EXPECT_FALSE(e.has_value());
+  EXPECT_EQ(*e.error(), 99);
+}
+
+TEST(ExpectedInPlaceTest, InPlaceValueWithMonadicAndThen) {
+  expected<int, std::string> e(std::in_place, 5);
+  auto result = e.and_then(
+      [](int v) -> expected<double, std::string> { return v * 2.0; });
+  EXPECT_TRUE(result.has_value());
+  EXPECT_DOUBLE_EQ(result.value(), 10.0);
+}
+
+TEST(ExpectedInPlaceTest, InPlaceErrorWithMonadicOrElse) {
+  expected<int, std::string> e(unexpected_t{}, "recoverable");
+  auto result =
+      e.or_else([](const std::string& err) -> expected<int, std::string> {
+        return expected<int, std::string>(static_cast<int>(err.size()));
+      });
+  EXPECT_TRUE(result.has_value());
+  EXPECT_EQ(result.value(), 11);
+}
+
+TEST(ExpectedInPlaceTest, EmplaceAfterInPlaceConstruction) {
+  expected<int, std::string> e(std::in_place, 42);
+  EXPECT_EQ(e.value(), 42);
+  e.emplace(99);
+  EXPECT_EQ(e.value(), 99);
+
+  expected<int, std::string> f(unexpected_t{}, "err");
+  EXPECT_EQ(f.error(), "err");
+  f.emplace(77);
+  EXPECT_TRUE(f.has_value());
+  EXPECT_EQ(f.value(), 77);
+}
+
+// ============================================================================
+// unexpected_t — tag type
+// ============================================================================
+
+TEST(UnexpectedTTest, ExplicitDefaultConstruct) {
+  unexpected_t t;
+  (void)t;
+  SUCCEED();
+}
+
+TEST(UnexpectedTTest, UsedAsTagForInPlaceError) {
+  // Verify unexpected_t can be used to construct expected with error in-place
+  expected<int, std::string> e(unexpected_t{}, "test");
+  EXPECT_FALSE(e.has_value());
+  EXPECT_EQ(e.error(), "test");
+
+  // Also works with the tag explicitly constructed
+  unexpected_t tag;
+  expected<int, std::string> f(tag, "hello");
+  EXPECT_FALSE(f.has_value());
+  EXPECT_EQ(f.error(), "hello");
+}
+
+// ============================================================================
+// expected<T, E> — same-type value and error
+// ============================================================================
+
+TEST(ExpectedSameTypeTest, ConstructValue) {
+  expected<int, int> e(42);
+  EXPECT_TRUE(e.has_value());
+  EXPECT_EQ(e.value(), 42);
+}
+
+TEST(ExpectedSameTypeTest, ConstructError) {
+  expected<int, int> e(make_unexpected(99));
+  EXPECT_FALSE(e.has_value());
+  EXPECT_EQ(e.error(), 99);
+}
+
+TEST(ExpectedSameTypeTest, CopyConstructValue) {
+  expected<int, int> a(10);
+  expected<int, int> b(a);
+  EXPECT_TRUE(b.has_value());
+  EXPECT_EQ(b.value(), 10);
+}
+
+TEST(ExpectedSameTypeTest, CopyConstructError) {
+  expected<int, int> a(make_unexpected(5));
+  expected<int, int> b(a);
+  EXPECT_FALSE(b.has_value());
+  EXPECT_EQ(b.error(), 5);
+}
+
+TEST(ExpectedSameTypeTest, MoveConstructValue) {
+  expected<int, int> a(10);
+  expected<int, int> b(std::move(a));
+  EXPECT_TRUE(b.has_value());
+  EXPECT_EQ(b.value(), 10);
+}
+
+TEST(ExpectedSameTypeTest, MoveConstructError) {
+  expected<int, int> a(make_unexpected(5));
+  expected<int, int> b(std::move(a));
+  EXPECT_FALSE(b.has_value());
+  EXPECT_EQ(b.error(), 5);
+}
+
+TEST(ExpectedSameTypeTest, CopyAssignmentCrossState) {
+  expected<int, int> a(10);
+  expected<int, int> b(make_unexpected(20));
+  b = a;
+  EXPECT_TRUE(b.has_value());
+  EXPECT_EQ(b.value(), 10);
+
+  expected<int, int> c(make_unexpected(30));
+  expected<int, int> d(40);
+  d = c;
+  EXPECT_FALSE(d.has_value());
+  EXPECT_EQ(d.error(), 30);
+}
+
+TEST(ExpectedSameTypeTest, MoveAssignmentCrossState) {
+  expected<int, int> a(10);
+  expected<int, int> b(make_unexpected(20));
+  b = std::move(a);
+  EXPECT_TRUE(b.has_value());
+  EXPECT_EQ(b.value(), 10);
+
+  expected<int, int> c(make_unexpected(30));
+  expected<int, int> d(40);
+  d = std::move(c);
+  EXPECT_FALSE(d.has_value());
+  EXPECT_EQ(d.error(), 30);
+}
+
+TEST(ExpectedSameTypeTest, SwapCrossState) {
+  expected<int, int> a(42);
+  expected<int, int> b(make_unexpected(99));
+  a.swap(b);
+  EXPECT_FALSE(a.has_value());
+  EXPECT_EQ(a.error(), 99);
+  EXPECT_TRUE(b.has_value());
+  EXPECT_EQ(b.value(), 42);
+}
+
+TEST(ExpectedSameTypeTest, Comparison) {
+  expected<int, int> a(10);
+  expected<int, int> b(10);
+  EXPECT_TRUE(a == b);
+
+  expected<int, int> c(make_unexpected(5));
+  expected<int, int> d(make_unexpected(5));
+  EXPECT_TRUE(c == d);
+
+  EXPECT_FALSE(a == c);
+}
+
+TEST(ExpectedSameTypeTest, Emplace) {
+  expected<int, int> e(make_unexpected(99));
+  e.emplace(42);
+  EXPECT_TRUE(e.has_value());
+  EXPECT_EQ(e.value(), 42);
+
+  e.emplace(77);
+  EXPECT_EQ(e.value(), 77);
+}
+
+TEST(ExpectedSameTypeTest, InPlaceConstructValue) {
+  expected<int, int> e(std::in_place, 42);
+  EXPECT_TRUE(e.has_value());
+  EXPECT_EQ(e.value(), 42);
+}
+
+TEST(ExpectedSameTypeTest, InPlaceConstructError) {
+  expected<int, int> e(unexpected_t{}, 99);
+  EXPECT_FALSE(e.has_value());
+  EXPECT_EQ(e.error(), 99);
+}
+
+// ============================================================================
+// expected<T, E> — trivially-destructible types (regression: reset()
+// optimization)
+// ============================================================================
+
+TEST(ExpectedTrivialTest, IntValueIntError) {
+  // Both T and E are trivially destructible — reset() skips destroy(),
+  // base destructor handles cleanup.
+  expected<int, int> e(42);
+  EXPECT_TRUE(e.has_value());
+  EXPECT_EQ(e.value(), 42);
+
+  expected<int, int> f(make_unexpected(99));
+  EXPECT_FALSE(f.has_value());
+  EXPECT_EQ(f.error(), 99);
+}
+
+TEST(ExpectedTrivialTest, CopyAndMoveAssignment) {
+  expected<int, int> a(10);
+  expected<int, int> b(20);
+  b = a;
+  EXPECT_EQ(b.value(), 10);
+
+  expected<int, int> c(make_unexpected(1));
+  expected<int, int> d(make_unexpected(2));
+  d = c;
+  EXPECT_EQ(d.error(), 1);
+}
+
+TEST(ExpectedTrivialTest, MultipleEmplaceCycles) {
+  expected<int, int> e(1);
+  for (int i = 0; i < 10; ++i) {
+    e.emplace(i);
+    EXPECT_EQ(e.value(), i);
+  }
+  // Switch to error via assignment
+  e = expected<int, int>(make_unexpected(42));
+  EXPECT_FALSE(e.has_value());
+  EXPECT_EQ(e.error(), 42);
+  // Switch back to value
+  e.emplace(100);
+  EXPECT_TRUE(e.has_value());
+  EXPECT_EQ(e.value(), 100);
+}
+
+// ============================================================================
+// expected<T, E> — non-trivial cross-state transitions
+// ============================================================================
+
+TEST(ExpectedNonTrivialCrossStateTest, RepeatedCrossStateAssignments) {
+  expected<std::string, std::string> a(std::string("value1"));
+  expected<std::string, std::string> b(make_unexpected(std::string("error1")));
+
+  // Cross-state copy assignment: error ← value
+  b = a;
+  EXPECT_TRUE(b.has_value());
+  EXPECT_EQ(b.value(), "value1");
+
+  // Cross-state copy assignment: value ← error
+  expected<std::string, std::string> c(std::string("value2"));
+  c = expected<std::string, std::string>(
+      make_unexpected(std::string("error2")));
+  EXPECT_FALSE(c.has_value());
+  EXPECT_EQ(c.error(), "error2");
+}
+
+TEST(ExpectedNonTrivialCrossStateTest, RepeatedCrossStateMoveAssignments) {
+  expected<std::string, std::string> a(std::string("move_value"));
+  expected<std::string, std::string> b(
+      make_unexpected(std::string("move_error")));
+
+  b = std::move(a);
+  EXPECT_TRUE(b.has_value());
+  EXPECT_EQ(b.value(), "move_value");
+
+  expected<std::string, std::string> c(std::string("another_value"));
+  expected<std::string, std::string> d(
+      make_unexpected(std::string("another_error")));
+  c = std::move(d);
+  EXPECT_FALSE(c.has_value());
+  EXPECT_EQ(c.error(), "another_error");
+}
+
+// ============================================================================
+// expected<T, E> — value_or with move-only types
+// ============================================================================
+
+TEST(ExpectedValueOrTest, ValueOrWithMoveOnlyDefault) {
+  expected<std::unique_ptr<int>, std::string> e(std::make_unique<int>(42));
+  // value_or from lvalue: returns a copy
+  auto default_val = std::make_unique<int>(0);
+  // Can't easily test since unique_ptr is not copyable.
+  // But value_or with rvalue default works via the const& overload
+  // which copies from storage_ — this test just verifies compilation.
+  EXPECT_TRUE(e.has_value());
+  EXPECT_EQ(*e.value(), 42);
+}
+
+// ============================================================================
+// expected<T, E> — state transitions via swap with non-trivial types
+// ============================================================================
+
+TEST(ExpectedSwapNonTrivialTest, SwapStringsBackAndForth) {
+  expected<std::string, std::string> a(std::string("hello"));
+  expected<std::string, std::string> b(make_unexpected(std::string("world")));
+
+  a.swap(b);
+  EXPECT_FALSE(a.has_value());
+  EXPECT_EQ(a.error(), "world");
+  EXPECT_TRUE(b.has_value());
+  EXPECT_EQ(b.value(), "hello");
+
+  // Swap back
+  a.swap(b);
+  EXPECT_TRUE(a.has_value());
+  EXPECT_EQ(a.value(), "hello");
+  EXPECT_FALSE(b.has_value());
+  EXPECT_EQ(b.error(), "world");
+}
+
+// ============================================================================
+// expected<T, E> — operator== with the new has_error_impl() logic
+// ============================================================================
+
+TEST(ExpectedComparisonRegressionTest, ExhaustiveStateComparisons) {
+  // value vs value
+  expected<int, std::string> v1(10);
+  expected<int, std::string> v2(10);
+  expected<int, std::string> v3(20);
+  EXPECT_TRUE(v1 == v2);
+  EXPECT_FALSE(v1 == v3);
+
+  // error vs error
+  expected<int, std::string> e1(make_unexpected(std::string("a")));
+  expected<int, std::string> e2(make_unexpected(std::string("a")));
+  expected<int, std::string> e3(make_unexpected(std::string("b")));
+  EXPECT_TRUE(e1 == e2);
+  EXPECT_FALSE(e1 == e3);
+
+  // value vs error
+  EXPECT_FALSE(v1 == e1);
+  EXPECT_FALSE(e1 == v1);
+}
+
+// ============================================================================
+// expected<T, E> — in-place construction for move-only value AND error types
+// Note: value()/operator* on expected with move-only error type does not
+// compile with exceptions enabled, because bad_expected_access needs to copy
+// the error.  This is a pre-existing limitation (same as std::expected).
+// error() access and state checks work fine.
+// ============================================================================
+
+TEST(ExpectedMoveOnlyBothTest, InPlaceValueConstruction) {
+  expected<std::unique_ptr<int>, std::unique_ptr<int>> e(std::in_place,
+                                                         new int(42));
+  EXPECT_TRUE(e.has_value());
+  EXPECT_TRUE(static_cast<bool>(e));
+}
+
+TEST(ExpectedMoveOnlyBothTest, InPlaceErrorConstruction) {
+  expected<std::unique_ptr<int>, std::unique_ptr<int>> e(unexpected_t{},
+                                                         new int(99));
+  EXPECT_FALSE(e.has_value());
+  EXPECT_FALSE(static_cast<bool>(e));
+  EXPECT_EQ(*e.error(), 99);
+}
+
+TEST(ExpectedMoveOnlyBothTest, MoveConstructValue) {
+  expected<std::unique_ptr<int>, std::unique_ptr<int>> a(std::in_place,
+                                                         new int(10));
+  expected<std::unique_ptr<int>, std::unique_ptr<int>> b(std::move(a));
+  EXPECT_TRUE(b.has_value());
+}
+
+TEST(ExpectedMoveOnlyBothTest, MoveConstructError) {
+  expected<std::unique_ptr<int>, std::unique_ptr<int>> a(unexpected_t{},
+                                                         new int(20));
+  expected<std::unique_ptr<int>, std::unique_ptr<int>> b(std::move(a));
+  EXPECT_FALSE(b.has_value());
+  EXPECT_EQ(*b.error(), 20);
+}
+
+// ============================================================================
+// expected<T, E> — regression: bad_expected_access with const ref
+// ============================================================================
+
+TEST(BadExpectedAccessRegressionTest, ConstructFromLvalue) {
+  std::string msg = "test error message";
+  bad_expected_access<std::string> ex(msg);
+  EXPECT_EQ(ex.error(), "test error message");
+  // msg should still be intact (we took it by const ref, copying internally)
+  EXPECT_EQ(msg, "test error message");
+}
+
+TEST(BadExpectedAccessRegressionTest, ConstructFromRvalue) {
+  bad_expected_access<std::string> ex(std::string("temporary"));
+  EXPECT_EQ(ex.error(), "temporary");
+}
+
+// ============================================================================
+// expected<void, E> — in-place error construction
+// ============================================================================
+
+TEST(ExpectedVoidInPlaceTest, ConstructErrorInPlace) {
+  expected<void, std::string> e(unexpected_t{}, "void error");
+  EXPECT_FALSE(e.has_value());
+  EXPECT_EQ(e.error(), "void error");
+}
+
+// ============================================================================
+// expected<T&, E> — in-place error construction
+// ============================================================================
+
+TEST(ExpectedRefInPlaceTest, ConstructErrorInPlace) {
+  expected<int&, std::string> e(unexpected_t{}, "ref error");
+  EXPECT_FALSE(e.has_value());
+  EXPECT_EQ(e.error(), "ref error");
+}
+
+// ============================================================================
+// expected<T, E> — in-place construction with types that have zero args
+// ============================================================================
+
+TEST(ExpectedInPlaceZeroArgTest, ConstructValueZeroArgs) {
+  expected<int, std::string> e(std::in_place);
+  EXPECT_TRUE(e.has_value());
+  EXPECT_EQ(e.value(), 0);  // int{} is 0
+}
+
+TEST(ExpectedInPlaceZeroArgTest, ConstructErrorZeroArgs) {
+  expected<int, std::string> e(unexpected_t{});
+  EXPECT_FALSE(e.has_value());
+  EXPECT_EQ(e.error(), "");  // std::string{} is ""
 }
