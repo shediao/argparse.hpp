@@ -249,6 +249,75 @@ TEST(ExpectedMonadicTest, AndThenRvalue) {
   EXPECT_DOUBLE_EQ(result.value(), 14.0);
 }
 
+// and_then with callback returning a reference — exercises remove_cvref_t
+TEST(ExpectedMonadicTest, AndThenCallbackReturnsLvalueRef) {
+  expected<int, std::string> e(5);
+  expected<double, std::string> storage(0.0);
+  auto result =
+      e.and_then([&storage](int /*v*/) -> expected<double, std::string>& {
+        return storage;
+      });
+  static_assert(
+      std::is_same_v<decltype(result), expected<double, std::string>>);
+  EXPECT_TRUE(result.has_value());
+}
+
+// and_then with callback returning a const ref — exercises remove_cvref_t
+TEST(ExpectedMonadicTest, AndThenCallbackReturnsConstLvalueRef) {
+  const expected<int, std::string> e(5);
+  const expected<double, std::string> storage(99.0);
+  auto result = e.and_then(
+      [&storage](const int& /*v*/) -> const expected<double, std::string>& {
+        return storage;
+      });
+  static_assert(
+      std::is_same_v<decltype(result), expected<double, std::string>>);
+  EXPECT_DOUBLE_EQ(result.value(), 99.0);
+}
+
+// and_then on rvalue error path — exercises std::move(error())
+TEST(ExpectedMonadicTest, AndThenRvalueErrorPath) {
+  auto result = expected<int, std::string>(make_unexpected(std::string("rerr")))
+                    .and_then([](int&& v) -> expected<double, std::string> {
+                      return v * 2.0;
+                    });
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), "rerr");
+}
+
+// and_then on const rvalue error path — exercises const&& overload
+TEST(ExpectedMonadicTest, AndThenConstRvalueErrorPath) {
+  const expected<int, std::string> e(make_unexpected(std::string("cerr")));
+  auto result = std::move(e).and_then(
+      [](const int&& /*v*/) -> expected<double, std::string> { return 0.0; });
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), "cerr");
+}
+
+// and_then with move-only error type — exercises std::move(error())
+TEST(ExpectedMonadicTest, AndThenMoveOnlyError) {
+  auto result =
+      expected<int, std::unique_ptr<int>>(
+          make_unexpected(std::make_unique<int>(42)))
+          .and_then([](int&& v) -> expected<double, std::unique_ptr<int>> {
+            return v * 1.0;
+          });
+  EXPECT_FALSE(result.has_value());
+  ASSERT_NE(result.error(), nullptr);
+  EXPECT_EQ(*result.error(), 42);
+}
+
+// and_then preserves error type (static_assert ensures same error_type)
+TEST(ExpectedMonadicTest, AndThenPreservesErrorType) {
+  expected<int, std::string> e(make_unexpected(std::string("original")));
+  auto result = e.and_then(
+      [](int v) -> expected<double, std::string> { return v * 2.0; });
+  static_assert(
+      std::is_same_v<typename decltype(result)::error_type, std::string>);
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), "original");
+}
+
 TEST(ExpectedMonadicTest, TransformOnValue) {
   expected<int, std::string> e(5);
   auto result = e.transform([](int v) { return v * 2; });
@@ -493,6 +562,48 @@ TEST(ExpectedRefTest, MonadicAndThen) {
   auto result = e.and_then(
       [](int& v) -> expected<double, std::string> { return v * 2.0; });
   EXPECT_DOUBLE_EQ(result.value(), 10.0);
+}
+
+TEST(ExpectedRefTest, MonadicAndThenOnError) {
+  expected<int&, std::string> e(make_unexpected(std::string("ref_fail")));
+  auto result = e.and_then(
+      [](int& v) -> expected<double, std::string> { return v * 2.0; });
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), "ref_fail");
+}
+
+// and_then on expected<T&,E> with callback returning a ref — remove_cvref_t
+TEST(ExpectedRefTest, MonadicAndThenCallbackReturnsRef) {
+  int val = 3;
+  expected<int&, std::string> e(val);
+  expected<double, std::string> storage(0.0);
+  auto result =
+      e.and_then([&storage](int& /*v*/) -> expected<double, std::string>& {
+        return storage;
+      });
+  static_assert(
+      std::is_same_v<decltype(result), expected<double, std::string>>);
+  EXPECT_TRUE(result.has_value());
+}
+
+// and_then on rvalue expected<T&,E> error path — exercises std::move(error())
+TEST(ExpectedRefTest, MonadicAndThenRvalueError) {
+  auto result =
+      expected<int&, std::string>(make_unexpected(std::string("rerr")))
+          .and_then([](int&& v) -> expected<double, std::string> {
+            return static_cast<double>(v);
+          });
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), "rerr");
+}
+
+// and_then on const rvalue expected<T&,E> — exercises const&& overload
+TEST(ExpectedRefTest, MonadicAndThenConstRvalueError) {
+  const expected<int&, std::string> e(make_unexpected(std::string("cerr")));
+  auto result = std::move(e).and_then(
+      [](const int&& /*v*/) -> expected<double, std::string> { return 0.0; });
+  EXPECT_FALSE(result.has_value());
+  EXPECT_EQ(result.error(), "cerr");
 }
 
 TEST(ExpectedRefTest, MonadicTransform) {

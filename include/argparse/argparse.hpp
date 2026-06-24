@@ -314,42 +314,46 @@ class expected : private expected_storage<T, E> {
   // monadic api
   template <typename F>
   constexpr auto and_then(F&& f) & {
-    using result_type = std::invoke_result_t<F, T&>;
+    using result_type = std::remove_cvref_t<std::invoke_result_t<F, T&>>;
     static_assert(is_expected_v<result_type>, "and_then must return expected");
     if (has_value()) {
       return std::invoke(std::forward<F>(f), this->storage_.value);
     }
+    static_assert(std::is_same_v<typename result_type::error_type, E>, "");
     return result_type(make_unexpected(error()));
   }
 
   template <typename F>
   constexpr auto and_then(F&& f) const& {
-    using result_type = std::invoke_result_t<F, const T&>;
+    using result_type = std::remove_cvref_t<std::invoke_result_t<F, const T&>>;
     static_assert(is_expected_v<result_type>, "and_then must return expected");
     if (has_value()) {
       return std::invoke(std::forward<F>(f), this->storage_.value);
     }
+    static_assert(std::is_same_v<typename result_type::error_type, E>, "");
     return result_type(make_unexpected(error()));
   }
 
   template <typename F>
   constexpr auto and_then(F&& f) && {
-    using result_type = std::invoke_result_t<F, T&&>;
+    using result_type = std::remove_cvref_t<std::invoke_result_t<F, T&&>>;
     static_assert(is_expected_v<result_type>, "and_then must return expected");
     if (has_value()) {
       return std::invoke(std::forward<F>(f), std::move(this->storage_.value));
     }
-    return result_type(make_unexpected(std::move(*this).error()));
+    static_assert(std::is_same_v<typename result_type::error_type, E>, "");
+    return result_type(make_unexpected(std::move(error())));
   }
 
   template <typename F>
   constexpr auto and_then(F&& f) const&& {
-    using result_type = std::invoke_result_t<F, const T&&>;
+    using result_type = std::remove_cvref_t<std::invoke_result_t<F, const T&&>>;
     static_assert(is_expected_v<result_type>, "and_then must return expected");
     if (has_value()) {
       return std::invoke(std::forward<F>(f), std::move(this->storage_.value));
     }
-    return result_type(make_unexpected(std::move(*this).error()));
+    static_assert(std::is_same_v<typename result_type::error_type, E>, "");
+    return result_type(make_unexpected(std::move(error())));
   }
 
   template <typename F>
@@ -709,42 +713,46 @@ class expected<T&, E> : private expected_storage<T*, E> {
   // monadic api
   template <typename F>
   constexpr auto and_then(F&& f) & {
-    using result_type = std::invoke_result_t<F, T&>;
+    using result_type = std::remove_cvref_t<std::invoke_result_t<F, T&>>;
     static_assert(is_expected_v<result_type>, "and_then must return expected");
     if (has_value()) {
       return std::invoke(std::forward<F>(f), *this->storage_.value);
     }
+    static_assert(std::is_same_v<typename result_type::error_type, E>, "");
     return result_type(make_unexpected(error()));
   }
 
   template <typename F>
   constexpr auto and_then(F&& f) const& {
-    using result_type = std::invoke_result_t<F, const T&>;
+    using result_type = std::remove_cvref_t<std::invoke_result_t<F, const T&>>;
     static_assert(is_expected_v<result_type>, "and_then must return expected");
     if (has_value()) {
       return std::invoke(std::forward<F>(f), *this->storage_.value);
     }
+    static_assert(std::is_same_v<typename result_type::error_type, E>, "");
     return result_type(make_unexpected(error()));
   }
 
   template <typename F>
   constexpr auto and_then(F&& f) && {
-    using result_type = std::invoke_result_t<F, T&&>;
+    using result_type = std::remove_cvref_t<std::invoke_result_t<F, T&&>>;
     static_assert(is_expected_v<result_type>, "and_then must return expected");
     if (has_value()) {
       return std::invoke(std::forward<F>(f), std::move(*this->storage_.value));
     }
-    return result_type(make_unexpected(std::move(*this).error()));
+    static_assert(std::is_same_v<typename result_type::error_type, E>, "");
+    return result_type(make_unexpected(std::move(error())));
   }
 
   template <typename F>
   constexpr auto and_then(F&& f) const&& {
-    using result_type = std::invoke_result_t<F, const T&&>;
+    using result_type = std::remove_cvref_t<std::invoke_result_t<F, const T&&>>;
     static_assert(is_expected_v<result_type>, "and_then must return expected");
     if (has_value()) {
       return std::invoke(std::forward<F>(f), std::move(*this->storage_.value));
     }
-    return result_type(make_unexpected(std::move(*this).error()));
+    static_assert(std::is_same_v<typename result_type::error_type, E>, "");
+    return result_type(make_unexpected(std::move(error())));
   }
 
   template <typename F>
