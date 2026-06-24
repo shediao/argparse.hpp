@@ -1127,12 +1127,18 @@ class expected<void, E> {
       new (&error_) E(std::move(other.error_));
     }
   }
-
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
   constexpr ~expected() {
     if (!has_value_) {
       error_.~E();
     }
   }
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
   constexpr bool has_value() const noexcept { return has_value_; }
 
@@ -1995,20 +2001,20 @@ inline std::wstring to_wstring(T const& value)
 template <is_container T>
 void push_back(T& t, typename T::value_type&& value) {
   if constexpr (requires(T t) {
-                  t.emplace_back(std::declval<typename T::value_type&&>());
+                  t.emplace_back(std::declval<typename T::value_type &&>());
                 }) {
     t.emplace_back(std::move(value));
   } else if constexpr (requires(T t) {
-                         t.push_back(std::declval<typename T::value_type&&>());
+                         t.push_back(std::declval<typename T::value_type &&>());
                        }) {
     t.push_back(std::move(value));
   } else if constexpr (requires(T t) {
                          t.insert(t.end(),
-                                  std::declval<typename T::value_type&&>());
+                                  std::declval<typename T::value_type &&>());
                        }) {
     t.insert(t.end(), std::move(value));
   } else if constexpr (requires(T t) {
-                         t.push(std::declval<typename T::value_type&&>());
+                         t.push(std::declval<typename T::value_type &&>());
                        }) {
     t.push(std::move(value));
   } else {
