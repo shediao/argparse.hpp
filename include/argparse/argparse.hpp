@@ -87,7 +87,28 @@ using std::to_wstring;
 inline constexpr size_t TOTAL_WIDTH = 80;
 
 template <typename E>
+class unexpected;
+template <typename E>
+struct is_unexpected : std::false_type {};
+template <typename E>
+struct is_unexpected<unexpected<E>> : std::true_type {};
+template <typename E>
+constexpr bool is_unexpected_v = is_unexpected<E>::value;
+
+template <typename T>
+using is_valid_unexpected =
+    std::bool_constant<std::is_object_v<T> && !is_unexpected_v<T> &&
+                       !std::is_array_v<T> && !std::is_const_v<T> &&
+                       !std::is_volatile_v<T>>;
+
+template <typename E>
 class unexpected {
+  static_assert(is_valid_unexpected<E>::value,
+                "[expected.un.general] states a program that instantiates "
+                "std::unexpected for a non-object type, an "
+                "array type, a specialization of unexpected, or a cv-qualified "
+                "type is ill-formed.");
+
  public:
   using error_type = E;
 
@@ -211,6 +232,21 @@ inline constexpr unexpect_t unexpect{};
 
 template <typename T, typename E>
 class expected : private expected_storage<T, E> {
+  static_assert(!std::is_reference_v<T> && !std::is_function_v<T> &&
+                    !std::is_same_v<std::remove_cv_t<T>, std::in_place_t> &&
+                    !std::is_same_v<std::remove_cv_t<T>, unexpect_t> &&
+                    !is_unexpected<std::remove_cv_t<T>>::value &&
+                    is_valid_unexpected<E>::value,
+                "[expected.object.general] A program that instantiates the "
+                "definition of template expected<T, E> for a "
+                "reference type, a function type, or for possibly cv-qualified "
+                "types in_place_t, unexpect_t, or a "
+                "specialization of unexpected for the T parameter is "
+                "ill-formed. A program that instantiates the "
+                "definition of the template expected<T, E> with a type for the "
+                "E parameter that is not a valid "
+                "template argument for unexpected is ill-formed.");
+
   using base = expected_storage<T, E>;
 
  public:
@@ -512,9 +548,11 @@ class expected : private expected_storage<T, E> {
 
   template <typename F>
   constexpr auto transform_error(F&& f) & {
-    using result_type =
-        expected<T,
-                 std::remove_cv_t<std::invoke_result_t<F, decltype(error())>>>;
+    using R = std::remove_cv_t<std::invoke_result_t<F, decltype(error())>>;
+    using result_type = expected<T, R>;
+    static_assert(is_valid_unexpected<R>::value,
+                  "The result of f(error()) must be a valid template argument "
+                  "for unexpected");
     if (has_value()) {
       return result_type(std::in_place, value());
     }
@@ -523,9 +561,11 @@ class expected : private expected_storage<T, E> {
 
   template <typename F>
   constexpr auto transform_error(F&& f) const& {
-    using result_type =
-        expected<T,
-                 std::remove_cv_t<std::invoke_result_t<F, decltype(error())>>>;
+    using R = std::remove_cv_t<std::invoke_result_t<F, decltype(error())>>;
+    using result_type = expected<T, R>;
+    static_assert(is_valid_unexpected<R>::value,
+                  "The result of f(error()) must be a valid template argument "
+                  "for unexpected");
     if (has_value()) {
       return result_type(std::in_place, value());
     }
@@ -534,9 +574,12 @@ class expected : private expected_storage<T, E> {
 
   template <typename F>
   constexpr auto transform_error(F&& f) && {
-    using result_type =
-        expected<T, std::remove_cv_t<
-                        std::invoke_result_t<F, decltype(std::move(error()))>>>;
+    using R =
+        std::remove_cv_t<std::invoke_result_t<F, decltype(std::move(error()))>>;
+    using result_type = expected<T, R>;
+    static_assert(is_valid_unexpected<R>::value,
+                  "The result of f(error()) must be a valid template argument "
+                  "for unexpected");
     if (has_value()) {
       return result_type(std::in_place, std::move(value()));
     }
@@ -546,9 +589,12 @@ class expected : private expected_storage<T, E> {
 
   template <typename F>
   constexpr auto transform_error(F&& f) const&& {
-    using result_type =
-        expected<T, std::remove_cv_t<
-                        std::invoke_result_t<F, decltype(std::move(error()))>>>;
+    using R =
+        std::remove_cv_t<std::invoke_result_t<F, decltype(std::move(error()))>>;
+    using result_type = expected<T, R>;
+    static_assert(is_valid_unexpected<R>::value,
+                  "The result of f(error()) must be a valid template argument "
+                  "for unexpected");
     if (has_value()) {
       return result_type(std::in_place, std::move(value()));
     }
@@ -1036,9 +1082,11 @@ class expected<T&, E> : private expected_storage<T*, E> {
 
   template <typename F>
   constexpr auto transform_error(F&& f) & {
-    using result_type =
-        expected<T&,
-                 std::remove_cv_t<std::invoke_result_t<F, decltype(error())>>>;
+    using R = std::remove_cv_t<std::invoke_result_t<F, decltype(error())>>;
+    using result_type = expected<T&, R>;
+    static_assert(is_valid_unexpected<R>::value,
+                  "The result of f(error()) must be a valid template argument "
+                  "for unexpected");
     if (has_value()) {
       return result_type(*this->storage_.value);
     }
@@ -1047,9 +1095,11 @@ class expected<T&, E> : private expected_storage<T*, E> {
 
   template <typename F>
   constexpr auto transform_error(F&& f) const& {
-    using result_type =
-        expected<T&,
-                 std::remove_cv_t<std::invoke_result_t<F, decltype(error())>>>;
+    using R = std::remove_cv_t<std::invoke_result_t<F, decltype(error())>>;
+    using result_type = expected<T&, R>;
+    static_assert(is_valid_unexpected<R>::value,
+                  "The result of f(error()) must be a valid template argument "
+                  "for unexpected");
     if (has_value()) {
       return result_type(*this->storage_.value);
     }
@@ -1058,8 +1108,12 @@ class expected<T&, E> : private expected_storage<T*, E> {
 
   template <typename F>
   constexpr auto transform_error(F&& f) && {
-    using result_type = expected<T&, std::remove_cv_t<std::invoke_result_t<
-                                         F, decltype(std::move(error()))>>>;
+    using R =
+        std::remove_cv_t<std::invoke_result_t<F, decltype(std::move(error()))>>;
+    using result_type = expected<T&, R>;
+    static_assert(is_valid_unexpected<R>::value,
+                  "The result of f(error()) must be a valid template argument "
+                  "for unexpected");
     if (has_value()) {
       return result_type(*this->storage_.value);
     }
@@ -1069,8 +1123,12 @@ class expected<T&, E> : private expected_storage<T*, E> {
 
   template <typename F>
   constexpr auto transform_error(F&& f) const&& {
-    using result_type = expected<T&, std::remove_cv_t<std::invoke_result_t<
-                                         F, decltype(std::move(error()))>>>;
+    using R =
+        std::remove_cv_t<std::invoke_result_t<F, decltype(std::move(error()))>>;
+    using result_type = expected<T&, R>;
+    static_assert(is_valid_unexpected<R>::value,
+                  "The result of f(error()) must be a valid template argument "
+                  "for unexpected");
     if (has_value()) {
       return result_type(*this->storage_.value);
     }
@@ -1427,9 +1485,11 @@ class expected<void, E> {
 
   template <typename F>
   constexpr auto transform_error(F&& f) & {
-    using result_type =
-        expected<void,
-                 std::remove_cv_t<std::invoke_result_t<F, decltype(error())>>>;
+    using R = std::remove_cv_t<std::invoke_result_t<F, decltype(error())>>;
+    using result_type = expected<void, R>;
+    static_assert(is_valid_unexpected<R>::value,
+                  "The result of f(error()) must be a valid template argument "
+                  "for unexpected");
     if (has_value()) {
       return result_type();
     }
@@ -1438,9 +1498,11 @@ class expected<void, E> {
 
   template <typename F>
   constexpr auto transform_error(F&& f) const& {
-    using result_type =
-        expected<void,
-                 std::remove_cv_t<std::invoke_result_t<F, decltype(error())>>>;
+    using R = std::remove_cv_t<std::invoke_result_t<F, decltype(error())>>;
+    using result_type = expected<void, R>;
+    static_assert(is_valid_unexpected<R>::value,
+                  "The result of f(error()) must be a valid template argument "
+                  "for unexpected");
     if (has_value()) {
       return result_type();
     }
@@ -1449,8 +1511,12 @@ class expected<void, E> {
 
   template <typename F>
   constexpr auto transform_error(F&& f) && {
-    using result_type = expected<void, std::remove_cv_t<std::invoke_result_t<
-                                           F, decltype(std::move(error()))>>>;
+    using R =
+        std::remove_cv_t<std::invoke_result_t<F, decltype(std::move(error()))>>;
+    using result_type = expected<void, R>;
+    static_assert(is_valid_unexpected<R>::value,
+                  "The result of f(error()) must be a valid template argument "
+                  "for unexpected");
     if (has_value()) {
       return result_type();
     }
@@ -1460,8 +1526,12 @@ class expected<void, E> {
 
   template <typename F>
   constexpr auto transform_error(F&& f) const&& {
-    using result_type = expected<void, std::remove_cv_t<std::invoke_result_t<
-                                           F, decltype(std::move(error()))>>>;
+    using R =
+        std::remove_cv_t<std::invoke_result_t<F, decltype(std::move(error()))>>;
+    using result_type = expected<void, R>;
+    static_assert(is_valid_unexpected<R>::value,
+                  "The result of f(error()) must be a valid template argument "
+                  "for unexpected");
     if (has_value()) {
       return result_type();
     }

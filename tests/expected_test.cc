@@ -1282,6 +1282,35 @@ TEST(UnexpectedTest, ErrorAccess) {
   EXPECT_EQ(std::move(u).error(), 42);
 }
 
+TEST(UnexpectedTest, DirectConstructFromLvalue) {
+  std::string msg = "hello";
+  argparse::unexpected<std::string> u(msg);
+  EXPECT_EQ(u.error(), "hello");
+  // Verify error_type typedef
+  static_assert(std::is_same_v<typename decltype(u)::error_type, std::string>);
+}
+
+TEST(UnexpectedTest, DirectConstructFromRvalue) {
+  argparse::unexpected<std::string> u(std::string("world"));
+  EXPECT_EQ(u.error(), "world");
+}
+
+TEST(UnexpectedTest, ErrorAccessRvalue) {
+  auto e = argparse::unexpected<int>(99).error();
+  EXPECT_EQ(e, 99);
+}
+
+TEST(UnexpectedTest, VerifyStaticAssertAllowsValidTypes) {
+  // These types must compile — the static_assert in unexpected checks
+  // is_valid_unexpected and must pass for these:
+  [[maybe_unused]] argparse::unexpected<int> u1(1);
+  [[maybe_unused]] argparse::unexpected<std::string> u2(std::string("ok"));
+  [[maybe_unused]] argparse::unexpected<double> u3(3.14);
+  [[maybe_unused]] argparse::unexpected<std::vector<int>> u4(
+      std::vector<int>{1, 2, 3});
+  SUCCEED();
+}
+
 // ============================================================================
 // is_expected / is_expected_v
 // ============================================================================
@@ -1292,6 +1321,52 @@ TEST(ExpectedTraitsTest, IsExpected) {
   static_assert(argparse::is_expected_v<expected<void, std::string>>);
   static_assert(!argparse::is_expected_v<int>);
   static_assert(!argparse::is_expected_v<std::string>);
+}
+
+// ============================================================================
+// is_unexpected / is_unexpected_v
+// ============================================================================
+
+TEST(ExpectedTraitsTest, IsUnexpected) {
+  static_assert(argparse::is_unexpected_v<argparse::unexpected<int>>);
+  static_assert(argparse::is_unexpected_v<argparse::unexpected<std::string>>);
+  static_assert(!argparse::is_unexpected_v<int>);
+  static_assert(!argparse::is_unexpected_v<std::string>);
+  static_assert(!argparse::is_unexpected_v<expected<int, std::string>>);
+}
+
+// ============================================================================
+// is_valid_unexpected — validates the template argument constraints for
+// unexpected<E> as specified in [expected.un.general]
+// ============================================================================
+
+TEST(ExpectedTraitsTest, IsValidUnexpected) {
+  // Valid types: object types that are not cv-qualified, not arrays,
+  // and not unexpected specializations
+  static_assert(argparse::is_valid_unexpected<int>::value);
+  static_assert(argparse::is_valid_unexpected<std::string>::value);
+  static_assert(argparse::is_valid_unexpected<double>::value);
+  static_assert(argparse::is_valid_unexpected<std::vector<int>>::value);
+
+  // cv-qualified types are invalid
+  static_assert(!argparse::is_valid_unexpected<const int>::value);
+  static_assert(!argparse::is_valid_unexpected<volatile int>::value);
+  static_assert(!argparse::is_valid_unexpected<const volatile int>::value);
+
+  // array types are invalid
+  static_assert(!argparse::is_valid_unexpected<int[]>::value);
+  static_assert(!argparse::is_valid_unexpected<int[5]>::value);
+
+  // unexpected specializations are invalid (cannot nest)
+  static_assert(
+      !argparse::is_valid_unexpected<argparse::unexpected<int>>::value);
+
+  // void is not an object type
+  static_assert(!argparse::is_valid_unexpected<void>::value);
+
+  // references are not object types
+  static_assert(!argparse::is_valid_unexpected<int&>::value);
+  static_assert(!argparse::is_valid_unexpected<const int&>::value);
 }
 
 // ============================================================================
