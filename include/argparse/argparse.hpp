@@ -2376,6 +2376,7 @@ class FlagSchema {
                               negatable_);
   }
   bool hidden() const { return hidden_; }
+  void set_hidden(bool v) { hidden_ = v; }
 
   std::vector<char> const& short_names() const { return short_names_; }
   std::vector<std::string> const& long_names() const { return long_names_; }
@@ -2412,6 +2413,7 @@ class OptionSchema {
   }
 
   bool hidden() const { return hidden_; }
+  void set_hidden(bool v) { hidden_ = v; }
 
   std::vector<char> const& short_names() const { return short_names_; }
   std::vector<std::string> const& long_names() const { return long_names_; }
@@ -2438,6 +2440,7 @@ class PositionalSchema {
 
   bool is_container() const { return is_container_; }
   bool hidden() const { return hidden_; }
+  void set_hidden(bool v) { hidden_ = v; }
 
   std::vector<char> const& short_names() const { return short_names_; }
   std::vector<std::string> const& long_names() const { return long_names_; }
@@ -2675,6 +2678,7 @@ class CommandSchema {
   }
 
   bool hidden() const { return hidden_; }
+  void set_hidden(bool v) { hidden_ = v; }
   bool treat_remaining_as_positional() const {
     return treat_remaining_as_positional_;
   }
@@ -2716,7 +2720,7 @@ class ArgBase {
   virtual ~ArgBase() = default;
 
   ArgBase& hidden(bool v = true) {
-    hidden_ = v;
+    std::visit([v](auto&& flag) { flag->set_hidden(v); }, schema_);
     return *this;
   }
 
@@ -2743,6 +2747,10 @@ class ArgBase {
         [](auto& flag) -> std::string const& { return flag->description(); },
         schema_);
   }
+  bool is_hidden() const {
+    return std::visit([](auto& flag) -> bool { return flag->hidden(); },
+                      schema_);
+  }
 
  protected:
   bool is_flag() const {
@@ -2757,7 +2765,6 @@ class ArgBase {
   virtual std::string usage() const = 0;
   size_t count_{0};
   std::string env_key_;
-  bool hidden_{false};
   std::variant<std::shared_ptr<FlagSchema>, std::shared_ptr<OptionSchema>,
                std::shared_ptr<PositionalSchema>>
       schema_;
@@ -4352,7 +4359,7 @@ class Command {
       usage_str << "\n\nOptions:";
     }
     for (const auto& arg : args_) {
-      if ((arg->is_option() || arg->is_flag()) && !arg->hidden_) {
+      if ((arg->is_option() || arg->is_flag()) && !arg->is_hidden()) {
         usage_str << "\n" << arg->usage();
       }
     }
@@ -4363,7 +4370,7 @@ class Command {
       usage_str << "\n\nPositionals:";
     }
     for (const auto& arg : args_) {
-      if (arg->is_positional() && !arg->hidden_) {
+      if (arg->is_positional() && !arg->is_hidden()) {
         usage_str << "\n" << arg->usage();
       }
     }
@@ -4405,11 +4412,11 @@ class Command {
     return command_schema_.description();
   }
   Command& hidden(bool v = true) {
-    is_hidden_ = v;
+    command_schema_.set_hidden(v);
     return *this;
   }
   bool is_parsed() { return is_parsed_; }
-  bool is_hidden() const { return is_hidden_; }
+  bool is_hidden() const { return command_schema_.hidden(); }
   void set_treat_remaining_as_positional(bool v = true) {
     command_schema_.set_treat_remaining_as_positional(v);
   }
@@ -4432,7 +4439,6 @@ class Command {
   Command* parent_{nullptr};
   std::function<void()> callback_{nullptr};
   bool is_parsed_{false};
-  bool is_hidden_{false};
   CommandSchema command_schema_;
 };
 
@@ -4583,13 +4589,13 @@ class ArgParser : public Command {
     os << "\n";
 
     bool has_any_option = std::ranges::any_of(cmd.args_, [](auto const& a) {
-      return !a->hidden_ && (a->is_flag() || a->is_option());
+      return !a->is_hidden() && (a->is_flag() || a->is_option());
     });
 
     // ---- prev-word dispatch (space-separated option values) ----
     bool has_prev_cases = false;
     for (auto const& arg : cmd.args_) {
-      if (arg->hidden_) {
+      if (arg->is_hidden()) {
         continue;
       }
       if (!arg->is_option()) {
@@ -4627,7 +4633,7 @@ class ArgParser : public Command {
     // Also emit prev-case entries for options that take a value but
     // have no explicit choices — default to file completion.
     for (auto const& arg : cmd.args_) {
-      if (arg->hidden_) {
+      if (arg->is_hidden()) {
         continue;
       }
       if (!arg->is_option()) {
@@ -4664,7 +4670,7 @@ class ArgParser : public Command {
     // ---- --opt=value dispatch (equals-separated long-option values) ----
     bool has_eq_cases = false;
     for (auto const& arg : cmd.args_) {
-      if (arg->hidden_) {
+      if (arg->is_hidden()) {
         continue;
       }
       if (!arg->is_option()) {
@@ -4708,7 +4714,7 @@ class ArgParser : public Command {
       os << "        local opts=\"";
       std::vector<std::string> opt_names;
       for (auto const& arg : cmd.args_) {
-        if (arg->hidden_) {
+        if (arg->is_hidden()) {
           continue;
         }
         if (arg->is_flag() || arg->is_option()) {
@@ -4757,7 +4763,7 @@ class ArgParser : public Command {
     if (cmd.subcommands_.empty()) {
       std::vector<OptionBase*> positionals;
       for (auto const& arg : cmd.args_) {
-        if (arg->hidden_) {
+        if (arg->is_hidden()) {
           continue;
         }
         if (!arg->is_positional()) {
@@ -4781,7 +4787,7 @@ class ArgParser : public Command {
         // takes an argument.
         bool has_value_opts = false;
         for (auto const& arg : cmd.args_) {
-          if (arg->hidden_) {
+          if (arg->is_hidden()) {
             continue;
           }
           if (!arg->is_option()) {
@@ -4792,7 +4798,7 @@ class ArgParser : public Command {
         if (has_value_opts) {
           os << "            case \"$_w\" in\n";
           for (auto const& arg : cmd.args_) {
-            if (arg->hidden_) {
+            if (arg->is_hidden()) {
               continue;
             }
             if (!arg->is_option()) {
@@ -4843,7 +4849,7 @@ class ArgParser : public Command {
     bool has_visible_positionals = false;
     if (cmd.subcommands_.empty()) {
       for (auto const& arg : cmd.args_) {
-        if (!arg->hidden_ && arg->is_positional()) {
+        if (!arg->is_hidden() && arg->is_positional()) {
           has_visible_positionals = true;
           break;
         }
@@ -4968,7 +4974,7 @@ class ArgParser : public Command {
           os << "    options=(\n";
 
           for (auto const& arg : cmd->args_) {
-            if (arg->hidden_) {
+            if (arg->is_hidden()) {
               continue;
             }
             if (!arg->is_flag() && !arg->is_option()) {
@@ -5086,7 +5092,7 @@ class ArgParser : public Command {
             // Collect positional arguments for this command
             std::vector<OptionBase*> positionals;
             for (auto const& arg : cmd->args_) {
-              if (arg->hidden_) {
+              if (arg->is_hidden()) {
                 continue;
               }
               if (!arg->is_positional()) {
@@ -5193,7 +5199,7 @@ class ArgParser : public Command {
 
           // Options / flags for this command
           for (auto const& arg : cmd->args_) {
-            if (arg->hidden_) {
+            if (arg->is_hidden()) {
               continue;
             }
             if (!arg->is_flag() && !arg->is_option()) {
@@ -5293,7 +5299,7 @@ class ArgParser : public Command {
             // as they are mutually exclusive).
             std::vector<OptionBase*> positionals;
             for (auto const& arg : cmd->args_) {
-              if (arg->hidden_) {
+              if (arg->is_hidden()) {
                 continue;
               }
               if (!arg->is_positional()) {
