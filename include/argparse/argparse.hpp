@@ -2794,9 +2794,6 @@ class CommandSchema {
 };
 
 class ArgBase {
-  friend class Command;
-  friend class ArgParser;
-
  public:
   ArgBase(std::shared_ptr<FlagSchema> flag) : schema_{flag} {}
   ArgBase(std::shared_ptr<OptionSchema> option) : schema_{option} {}
@@ -2844,6 +2841,17 @@ class ArgBase {
     return std::visit([](auto& flag) -> bool { return flag->hidden(); },
                       schema_);
   }
+  bool is_flag() const {
+    return std::holds_alternative<std::shared_ptr<FlagSchema>>(schema_);
+  }
+  bool is_option() const {
+    return std::holds_alternative<std::shared_ptr<OptionSchema>>(schema_);
+  }
+  bool is_positional() const {
+    return std::holds_alternative<std::shared_ptr<PositionalSchema>>(schema_);
+  }
+
+  virtual std::string usage() const = 0;
 
  protected:
   template <typename T>
@@ -2854,16 +2862,6 @@ class ArgBase {
   T& get_schema() {
     return *std::get<std::shared_ptr<T>>(schema_);
   }
-  bool is_flag() const {
-    return std::holds_alternative<std::shared_ptr<FlagSchema>>(schema_);
-  }
-  bool is_option() const {
-    return std::holds_alternative<std::shared_ptr<OptionSchema>>(schema_);
-  }
-  bool is_positional() const {
-    return std::holds_alternative<std::shared_ptr<PositionalSchema>>(schema_);
-  }
-  virtual std::string usage() const = 0;
   size_t count_{0};
   std::variant<std::shared_ptr<FlagSchema>, std::shared_ptr<OptionSchema>,
                std::shared_ptr<PositionalSchema>>
@@ -2871,9 +2869,6 @@ class ArgBase {
 };
 
 class FlagBase : public ArgBase {
-  friend class Command;
-  friend class ArgParser;
-
  public:
   FlagBase(std::shared_ptr<FlagSchema> flag) : ArgBase(flag) {}
 
@@ -2884,14 +2879,14 @@ class FlagBase : public ArgBase {
     return std::get<std::shared_ptr<FlagSchema>>(schema_)->is_negatable();
   }
 
- protected:
-  virtual void parse() = 0;
-  virtual void parse_negated() = 0;
   std::string usage() const override {
     auto [left, right] =
         std::visit([](auto& flag) { return flag->help_row(); }, schema_);
     return detail::format(left, right, 1);
   }
+
+  virtual void parse() = 0;
+  virtual void parse_negated() = 0;
 };
 
 template <typename T>
@@ -2907,9 +2902,6 @@ concept bindable_bool_flag =
 
 template <bindable_flag T = bool>
 class Flag final : public FlagBase {
-  friend class Command;
-  friend class ArgParser;
-
  public:
   using value_type = std::conditional_t<detail::is_optional_v<T>,
                                         detail::extract_value_type_t<T>, T>;
@@ -2936,7 +2928,6 @@ class Flag final : public FlagBase {
 
   T const& value() const { return bind_value_; }
 
- protected:
   void parse() override {
     if constexpr (detail::is_optional_v<T>) {
       auto& flag_value = bind_value_.get();
@@ -2982,10 +2973,6 @@ class Flag final : public FlagBase {
 };
 
 class OptionBase : public ArgBase {
-  friend class Command;
-  friend class ArgParser;
-  friend class OptionAlias;
-
  public:
   OptionBase(std::shared_ptr<OptionSchema> option) : ArgBase(option) {}
   OptionBase(std::shared_ptr<PositionalSchema> positional)
@@ -3018,7 +3005,12 @@ class OptionBase : public ArgBase {
     }
   }
 
- protected:
+  std::string usage() const override {
+    auto [left, right] =
+        std::visit([](auto& flag) { return flag->help_row(); }, schema_);
+    return detail::format(left, right, 1);
+  }
+
   virtual void parse(const std::string& opt_value) {
     for (const auto& validator : pre_parse_validators_) {
       if (auto [ok, err_msg] = validator(opt_value); !ok) {
@@ -3090,11 +3082,8 @@ class OptionBase : public ArgBase {
       parse(env.value());
     }
   }
-  std::string usage() const override {
-    auto [left, right] =
-        std::visit([](auto& flag) { return flag->help_row(); }, schema_);
-    return detail::format(left, right, 1);
-  }
+
+ protected:
   bool is_required_{false};
   std::vector<std::string> opt_values;
   std::vector<std::function<std::pair<bool, std::string>(std::string const&)>>
@@ -3172,9 +3161,6 @@ class OptionBaseCRTP : public OptionBase {
 
 template <detail::bindable T>
 class Option final : public OptionBaseCRTP<Option<T>> {
-  friend class Command;
-  friend class ArgParser;
-
  public:
   using value_type = std::conditional_t<detail::is_optional_v<T>,
                                         detail::extract_value_type_t<T>, T>;
@@ -3266,7 +3252,6 @@ class Option final : public OptionBaseCRTP<Option<T>> {
 
   T const& value() const { return bind_value_; }
 
- protected:
   void parse(const std::string& opt_value) override {
     OptionBaseCRTP<Option<T>>::parse(opt_value);
     auto parsed_value = parse_function_(opt_value);
@@ -3400,9 +3385,6 @@ class OptionAlias : public FlagBase {
 
 template <detail::bindable T>
 class Positional final : public OptionBaseCRTP<Positional<T>> {
-  friend class Command;
-  friend class ArgParser;
-
  public:
   using value_type = std::conditional_t<detail::is_optional_v<T>,
                                         detail::extract_value_type_t<T>, T>;
@@ -3516,7 +3498,6 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
     return *this;
   }
 
- protected:
   void parse(const std::string& opt_value) override {
     OptionBaseCRTP<Positional<T>>::parse(opt_value);
     auto parsed_value = parse_function_(opt_value);
