@@ -2428,8 +2428,24 @@ class OptionSchema {
   }
 
   std::pair<std::string, std::string> help_row() const {
+    std::string extra_desc;
+    if (!choices().empty()) {
+      std::vector<std::string> choice_strs;
+      for (auto const& [value, help] : this->choices()) {
+        choice_strs.push_back("[" + value + "] " + help);
+      }
+      extra_desc += "\nchoices: (";
+      extra_desc += detail::join(choice_strs, ", ");
+      extra_desc += ")";
+    }
+    if (!default_value_.empty()) {
+      extra_desc += "\ndefault: " + default_value_;
+      if (!bind_env_.empty()) {
+        extra_desc += ", ENV:" + bind_env_;
+      }
+    }
     return argparse::help_row(short_names_, long_names_, value_placeholder_,
-                              description_, false);
+                              description_ + extra_desc, false);
   }
 
   bool hidden() const { return hidden_; }
@@ -2439,11 +2455,27 @@ class OptionSchema {
   std::vector<std::string> const& long_names() const { return long_names_; }
   std::string const& description() const { return description_; }
 
+  void set_default_value(std::string const& value) { default_value_ = value; }
+  void set_bind_env(std::string const& value) { bind_env_ = value; }
+  void set_value_placeholder(std::string const& value) {
+    value_placeholder_ = value;
+  }
+  void set_choices(std::map<std::string, std::string> const& choices) {
+    choices_ = choices;
+  }
+
+  std::string const& bind_env() const { return bind_env_; }
+  std::string const& value_placeholder() const { return value_placeholder_; }
+  std::map<std::string, std::string> const& choices() const { return choices_; }
+
  private:
   std::vector<char> short_names_;
   std::vector<std::string> long_names_;
   std::string description_;
   std::string value_placeholder_;
+  std::string default_value_;
+  std::string bind_env_;
+  std::map<std::string, std::string> choices_;
   bool hidden_{false};
 };
 
@@ -2454,8 +2486,25 @@ class PositionalSchema {
         description_(std::move(description)),
         is_container_{is_container} {}
   std::pair<std::string, std::string> help_row() const {
-    return std::pair<std::string, std::string>{long_names_.front(),
-                                               description_};
+    std::string extra_desc;
+    if (!choices().empty()) {
+      std::vector<std::string> choice_strs;
+      for (auto const& [value, help] : this->choices()) {
+        choice_strs.push_back("[" + value + "] " + help);
+      }
+      extra_desc += "\nchoices: (";
+      extra_desc += detail::join(choice_strs, ", ");
+      extra_desc += ")";
+    }
+    if (!default_value_.empty()) {
+      extra_desc += "\ndefault: " + default_value_;
+      if (!bind_env_.empty()) {
+        extra_desc += ", ENV:" + bind_env_;
+      }
+    }
+    return std::pair<std::string, std::string>{
+        value_placeholder_.empty() ? long_names_.front() : value_placeholder_,
+        description_ + extra_desc};
   }
 
   bool is_container() const { return is_container_; }
@@ -2467,10 +2516,26 @@ class PositionalSchema {
   std::string const& name() const { return long_names_.front(); }
   std::string const& description() const { return description_; }
 
+  void set_default_value(std::string const& value) { default_value_ = value; }
+  void set_bind_env(std::string const& value) { bind_env_ = value; }
+  void set_value_placeholder(std::string const& value) {
+    value_placeholder_ = value;
+  }
+  void set_choices(std::map<std::string, std::string> const& choices) {
+    choices_ = choices;
+  }
+  std::string const& bind_env() const { return bind_env_; }
+  std::string const& value_placeholder() const { return value_placeholder_; }
+  std::map<std::string, std::string> const& choices() const { return choices_; }
+
  private:
   std::vector<char> short_names_;
   std::vector<std::string> long_names_;
   std::string description_;
+  std::string value_placeholder_;
+  std::string default_value_;
+  std::string bind_env_;
+  std::map<std::string, std::string> choices_;
   bool is_container_;
   bool hidden_{false};
 };
@@ -2745,7 +2810,15 @@ class ArgBase {
   }
 
   ArgBase& env(std::string const& env) {
-    env_key_ = env;
+    std::visit(
+        [&env](auto&& schema) {
+          using SchemaPtr = std::decay_t<decltype(schema)>;
+          if constexpr (!std::is_same_v<SchemaPtr,
+                                        std::shared_ptr<FlagSchema>>) {
+            schema->set_bind_env(env);
+          }
+        },
+        schema_);
     return *this;
   }
   std::vector<char> const& short_names() const {
@@ -2773,6 +2846,14 @@ class ArgBase {
   }
 
  protected:
+  template <typename T>
+  T const& get_schema() const {
+    return *std::get<std::shared_ptr<T>>(schema_);
+  }
+  template <typename T>
+  T& get_schema() {
+    return *std::get<std::shared_ptr<T>>(schema_);
+  }
   bool is_flag() const {
     return std::holds_alternative<std::shared_ptr<FlagSchema>>(schema_);
   }
@@ -2784,7 +2865,6 @@ class ArgBase {
   }
   virtual std::string usage() const = 0;
   size_t count_{0};
-  std::string env_key_;
   std::variant<std::shared_ptr<FlagSchema>, std::shared_ptr<OptionSchema>,
                std::shared_ptr<PositionalSchema>>
       schema_;
@@ -2914,6 +2994,30 @@ class OptionBase : public ArgBase {
   void required() { is_required_ = true; }
   bool is_required() const { return is_required_; }
 
+  std::map<std::string, std::string> const& choices() const {
+    if (is_option()) {
+      return get_schema<OptionSchema>().choices();
+    } else {
+      return get_schema<PositionalSchema>().choices();
+    }
+  }
+
+  std::string const& value_placeholder() const {
+    if (is_option()) {
+      return get_schema<OptionSchema>().value_placeholder();
+    } else {
+      return get_schema<PositionalSchema>().value_placeholder();
+    }
+  }
+
+  std::string const& bind_env() const {
+    if (is_option()) {
+      return get_schema<OptionSchema>().bind_env();
+    } else {
+      return get_schema<PositionalSchema>().bind_env();
+    }
+  }
+
  protected:
   virtual void parse(const std::string& opt_value) {
     for (const auto& validator : pre_parse_validators_) {
@@ -2930,8 +3034,8 @@ class OptionBase : public ArgBase {
         detail::report_invalid_argument(msg + err_msg);
       }
     }
-    if (!choices_.empty()) {
-      if (choices_.find(opt_value) == choices_.end()) {
+    if (!choices().empty()) {
+      if (choices().find(opt_value) == choices().end()) {
         std::string msg = "Invalid choice: ";
         msg += detail::join(long_names(), ',');
         if (!long_names().empty() && !short_names().empty()) {
@@ -2942,7 +3046,7 @@ class OptionBase : public ArgBase {
         msg += opt_value;
         msg += "` is an invalid value. Valid choices are: ";
         std::vector<std::string> keys;
-        std::transform(choices_.begin(), choices_.end(), back_inserter(keys),
+        std::transform(choices().begin(), choices().end(), back_inserter(keys),
                        [](auto const& pair) { return pair.first; });
         msg += detail::join(keys, ',');
         detail::report_invalid_argument(msg);
@@ -2958,54 +3062,43 @@ class OptionBase : public ArgBase {
 
   template <typename T>
   void set_value_placeholder_for_type() {
-    if constexpr (detail::is_optional_v<T>) {
-      set_value_placeholder_for_type<typename T::value_type>();
+    using value_type = std::conditional_t<detail::is_optional_v<T>,
+                                          detail::extract_value_type_t<T>, T>;
+    std::string value_placeholder;
+    if constexpr (std::is_integral_v<value_type>) {
+      value_placeholder = "<N>";
+    } else if constexpr (std::is_floating_point_v<value_type>) {
+      value_placeholder = "<x.y>";
     } else {
-      if constexpr (std::is_integral_v<T>) {
-        value_placeholder_ = "<N>";
-      } else if constexpr (std::is_floating_point_v<T>) {
-        value_placeholder_ = "<x.y>";
-      } else {
-        value_placeholder_ = "<arg>";
+      value_placeholder = "<arg>";
+    }
+    if (!value_placeholder.empty()) {
+      if (is_option()) {
+        get_schema<OptionSchema>().set_value_placeholder(value_placeholder);
+      } else if (is_positional()) {
+        get_schema<PositionalSchema>().set_value_placeholder(value_placeholder);
       }
     }
   }
 
   void use_env_if_needed() {
-    if (count() != 0 || env_key_.empty()) {
+    auto const& env_key = bind_env();
+    if (count() != 0 || env_key.empty()) {
       return;
     }
-    if (auto env = detail::getenv(env_key_); env.has_value()) {
+    if (auto env = detail::getenv(env_key); env.has_value()) {
       parse(env.value());
     }
   }
   std::string usage() const override {
-    std::string extra_desc;
-    if (!this->choices_.empty()) {
-      std::vector<std::string> choice_strs;
-      for (auto const& [value, help] : this->choices_) {
-        choice_strs.push_back("[" + value + "] " + help);
-      }
-      extra_desc += "\nchoices: (";
-      extra_desc += detail::join(choice_strs, ", ");
-      extra_desc += ")";
-    }
-    if (auto default_value = get_default_value(); default_value.has_value()) {
-      extra_desc += "\ndefault: " + *default_value;
-      if (!env_key_.empty()) {
-        extra_desc += ", ENV:" + env_key_;
-      }
-    }
     auto [left, right] =
         std::visit([](auto& flag) { return flag->help_row(); }, schema_);
-    return detail::format(left, right + extra_desc, 1);
+    return detail::format(left, right, 1);
   }
   bool is_required_{false};
-  std::string value_placeholder_;
   std::vector<std::string> opt_values;
   std::vector<std::function<std::pair<bool, std::string>(std::string const&)>>
       pre_parse_validators_;
-  std::map<std::string, std::string> choices_;
 };
 
 template <typename Derived>
@@ -3021,7 +3114,11 @@ class OptionBaseCRTP : public OptionBase {
 
   Derived& choices(
       std::map<std::string, std::string> const& choices_description) {
-    this->choices_ = choices_description;
+    if (is_option()) {
+      get_schema<OptionSchema>().set_choices(choices_description);
+    } else {
+      get_schema<PositionalSchema>().set_choices(choices_description);
+    }
     return static_cast<Derived&>(*this);
   }
 
@@ -3035,20 +3132,26 @@ class OptionBaseCRTP : public OptionBase {
     for (auto const& choice : choices) {
       choices_description[choice] = "";
     }
-    this->choices_ = choices_description;
+    if (is_option()) {
+      get_schema<OptionSchema>().set_choices(choices_description);
+    } else {
+      get_schema<PositionalSchema>().set_choices(choices_description);
+    }
     return static_cast<Derived&>(*this);
   }
 
   Derived& value_placeholder(std::string const& value_placeholder) {
-    bool add_parentheses = true;
+    std::string vp;
     if (!value_placeholder.empty() && (value_placeholder.starts_with('<') ||
                                        value_placeholder.starts_with('['))) {
-      add_parentheses = false;
-    }
-    if (add_parentheses) {
-      this->value_placeholder_ = "<" + value_placeholder + ">";
+      vp = value_placeholder;
     } else {
-      this->value_placeholder_ = value_placeholder;
+      vp = "<" + value_placeholder + ">";
+    }
+    if (is_option()) {
+      get_schema<OptionSchema>().set_value_placeholder(vp);
+    } else {
+      get_schema<PositionalSchema>().set_value_placeholder(vp);
     }
     return static_cast<Derived&>(*this);
   }
@@ -3109,6 +3212,7 @@ class Option final : public OptionBaseCRTP<Option<T>> {
     requires(!detail::from_string_container<T>)
   {
     this->default_value_ = default_value;
+    this->template get_schema<OptionSchema>().set_default_value(default_value);
     return *this;
   }
 
@@ -3116,6 +3220,8 @@ class Option final : public OptionBaseCRTP<Option<T>> {
     requires detail::from_string_container<T>
   {
     this->default_value_ = default_value;
+    this->template get_schema<OptionSchema>().set_default_value(
+        "{" + detail::join(default_value, ',') + "}");
     return *this;
   }
 
@@ -3356,12 +3462,16 @@ class Positional final : public OptionBaseCRTP<Positional<T>> {
     requires(!detail::from_string_container<T>)
   {
     this->default_value_ = default_value;
+    this->template get_schema<PositionalSchema>().set_default_value(
+        default_value);
     return *this;
   }
   Positional<T>& default_value(std::vector<std::string> const& default_value)
     requires detail::from_string_container<T>
   {
     this->default_value_ = default_value;
+    this->template get_schema<PositionalSchema>().set_default_value(
+        "{" + detail::join(default_value, ',') + "}");
     return *this;
   }
 
@@ -4312,7 +4422,7 @@ class Command {
     }
     for (const auto& arg : positionals) {
       usage_str << " "
-                << dynamic_cast<OptionBase*>(arg.get())->value_placeholder_;
+                << dynamic_cast<OptionBase*>(arg.get())->value_placeholder();
       if (dynamic_cast<OptionBase*>(arg.get())->is_multiple()) {
         usage_str << "...";
       }
@@ -4566,7 +4676,7 @@ class ArgParser : public Command {
         continue;
       }
       auto* opt = dynamic_cast<OptionBase*>(arg.get());
-      if (!opt || opt->choices_.empty()) {
+      if (!opt || opt->choices().empty()) {
         continue;
       }
 
@@ -4585,7 +4695,7 @@ class ArgParser : public Command {
       os << "        " << detail::join(patterns, '|') << ")\n";
 
       std::vector<std::string> choice_keys;
-      for (auto const& [k, _] : opt->choices_) {
+      for (auto const& [k, _] : opt->choices()) {
         choice_keys.push_back(k);
       }
       os << "            # shellcheck disable=SC2207\n";
@@ -4604,7 +4714,7 @@ class ArgParser : public Command {
         continue;
       }
       auto* opt = dynamic_cast<OptionBase*>(arg.get());
-      if (!opt || !opt->choices_.empty()) {
+      if (!opt || !opt->choices().empty()) {
         continue;
       }
 
@@ -4641,7 +4751,7 @@ class ArgParser : public Command {
         continue;
       }
       auto* opt = dynamic_cast<OptionBase*>(arg.get());
-      if (!opt || opt->choices_.empty()) {
+      if (!opt || opt->choices().empty()) {
         continue;
       }
 
@@ -4655,7 +4765,7 @@ class ArgParser : public Command {
       for (auto const& l : arg->long_names()) {
         os << "            --" << l << ")\n";
         std::vector<std::string> choice_keys;
-        for (auto const& [k, _] : opt->choices_) {
+        for (auto const& [k, _] : opt->choices()) {
           choice_keys.push_back(k);
         }
         os << "                # shellcheck disable=SC2207\n";
@@ -4789,9 +4899,9 @@ class ArgParser : public Command {
         os << "    case $_pos_count in\n";
         for (size_t idx = 0; idx < positionals.size(); ++idx) {
           os << "        " << idx << ")\n";
-          if (!positionals[idx]->choices_.empty()) {
+          if (!positionals[idx]->choices().empty()) {
             std::vector<std::string> choice_keys;
-            for (auto const& [k, _] : positionals[idx]->choices_) {
+            for (auto const& [k, _] : positionals[idx]->choices()) {
               choice_keys.push_back(k);
             }
             os << "            # shellcheck disable=SC2207\n";
@@ -4948,7 +5058,7 @@ class ArgParser : public Command {
             std::string desc = escape_zsh_desc(arg->description());
             bool is_opt = arg->is_option();
             auto* opt = is_opt ? dynamic_cast<OptionBase*>(arg.get()) : nullptr;
-            bool has_choices = opt && !opt->choices_.empty();
+            bool has_choices = opt && !opt->choices().empty();
 
             for (auto const& s : arg->short_names()) {
               os << "        '-" << s;
@@ -4957,13 +5067,13 @@ class ArgParser : public Command {
               }
               if (is_opt) {
                 os << ":"
-                   << (opt->value_placeholder_.empty()
+                   << (opt->value_placeholder().empty()
                            ? "arg"
-                           : escape_zsh_spec(opt->value_placeholder_));
+                           : escape_zsh_spec(opt->value_placeholder()));
                 if (has_choices) {
                   os << ":(";
                   std::vector<std::string> choice_keys;
-                  for (auto const& [k, _] : opt->choices_) {
+                  for (auto const& [k, _] : opt->choices()) {
                     choice_keys.push_back(escape_zsh_spec(k));
                   }
                   os << detail::join(choice_keys, ' ');
@@ -4981,13 +5091,13 @@ class ArgParser : public Command {
               }
               if (is_opt) {
                 os << ":"
-                   << (opt->value_placeholder_.empty()
+                   << (opt->value_placeholder().empty()
                            ? "arg"
-                           : escape_zsh_spec(opt->value_placeholder_));
+                           : escape_zsh_spec(opt->value_placeholder()));
                 if (has_choices) {
                   os << ":(";
                   std::vector<std::string> choice_keys;
-                  for (auto const& [k, _] : opt->choices_) {
+                  for (auto const& [k, _] : opt->choices()) {
                     choice_keys.push_back(escape_zsh_spec(k));
                   }
                   os << detail::join(choice_keys, ' ');
@@ -5075,14 +5185,14 @@ class ArgParser : public Command {
                 os << " \\\n        '"
                    << (is_last && is_multi ? "*" : argparse::to_string(idx + 1))
                    << ":"
-                   << (positionals[idx]->value_placeholder_.empty()
+                   << (positionals[idx]->value_placeholder().empty()
                            ? "arg" + argparse::to_string(idx + 1)
                            : escape_zsh_spec(
-                                 positionals[idx]->value_placeholder_));
-                if (!positionals[idx]->choices_.empty()) {
+                                 positionals[idx]->value_placeholder()));
+                if (!positionals[idx]->choices().empty()) {
                   os << ":(";
                   std::vector<std::string> choice_keys;
-                  for (auto const& [k, _] : positionals[idx]->choices_) {
+                  for (auto const& [k, _] : positionals[idx]->choices()) {
                     choice_keys.push_back(escape_zsh_spec(k));
                   }
                   os << detail::join(choice_keys, ' ');
@@ -5173,7 +5283,7 @@ class ArgParser : public Command {
             std::string desc = arg->description();
             bool is_opt = arg->is_option();
             auto* opt = is_opt ? dynamic_cast<OptionBase*>(arg.get()) : nullptr;
-            bool has_choices = opt && !opt->choices_.empty();
+            bool has_choices = opt && !opt->choices().empty();
 
             for (auto const& s : arg->short_names()) {
               os << "complete -c " << command() << cond_prefix << " -s " << s;
@@ -5185,7 +5295,7 @@ class ArgParser : public Command {
                 if (has_choices) {
                   os << " -f";
                   std::vector<std::string> choice_keys;
-                  for (auto const& [k, _] : opt->choices_) {
+                  for (auto const& [k, _] : opt->choices()) {
                     choice_keys.push_back(k);
                   }
                   os << " -a '" << escape_fish(detail::join(choice_keys, ' '))
@@ -5204,7 +5314,7 @@ class ArgParser : public Command {
                 if (has_choices) {
                   os << " -f";
                   std::vector<std::string> choice_keys;
-                  for (auto const& [k, _] : opt->choices_) {
+                  for (auto const& [k, _] : opt->choices()) {
                     choice_keys.push_back(k);
                   }
                   os << " -a '" << escape_fish(detail::join(choice_keys, ' '))
@@ -5275,11 +5385,11 @@ class ArgParser : public Command {
               }
             }
             for (auto const* pos : positionals) {
-              if (pos->choices_.empty()) {
+              if (pos->choices().empty()) {
                 continue;
               }
               std::vector<std::string> choice_keys;
-              for (auto const& [k, _] : pos->choices_) {
+              for (auto const& [k, _] : pos->choices()) {
                 choice_keys.push_back(k);
               }
               os << "complete -c " << command() << cond_prefix << " -f -a '"
