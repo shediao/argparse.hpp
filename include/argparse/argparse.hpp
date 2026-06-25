@@ -2323,16 +2323,19 @@ inline std::pair<std::string, std::string> help_row(
   std::pair<std::string, std::string> ret;
   std::string& left = get<0>(ret);
   std::string& right = get<1>(ret);
-  right = description;
 
   if (!short_names.empty()) {
     left.append(1, '-');
     left.append(1, short_names[0]);
+  } else {
+    left.append(2, ' ');
   }
 
   if (!long_names.empty()) {
-    if (!left.empty()) {
+    if (!short_names.empty()) {
       left.append(", ");
+    } else {
+      left.append("  ");
     }
     left.append(2, '-');
     if (negatable) {
@@ -2340,6 +2343,23 @@ inline std::pair<std::string, std::string> help_row(
     }
     left.append(long_names[0]);
   }
+
+  std::string extra_desc;
+  {
+    std::vector<std::string> aliases;
+    for (size_t i = 1; i < short_names.size(); ++i) {
+      aliases.push_back(std::string(1, short_names[i]));
+    }
+    for (size_t i = 1; i < long_names.size(); ++i) {
+      aliases.push_back(long_names[i]);
+    }
+    if (!aliases.empty()) {
+      extra_desc += "\naliases: " + detail::join(aliases, ", ");
+    }
+  }
+
+  right = description;
+  right += extra_desc;
 
   if (!value_placeholder.empty()) {
     left.append(1, ' ');
@@ -2788,39 +2808,9 @@ class FlagBase : public ArgBase {
   virtual void parse() = 0;
   virtual void parse_negated() = 0;
   std::string usage() const override {
-    std::stringstream opt_str;
-    if (short_names().empty()) {
-      if (!long_names().empty()) {
-        //         "-x, --foo"
-        opt_str << "    --" << (is_negatable() ? "[no-]" : "")
-                << long_names()[0];
-      } else {
-        opt_str << "  ";
-      }
-    } else {
-      if (is_negatable() && long_names().empty()) {
-        opt_str << "[--no]-" << short_names()[0];
-      } else {
-        opt_str << "-" << short_names()[0];
-      }
-      if (!long_names().empty()) {
-        opt_str << ", --" << (is_negatable() ? "[no-]" : "") << long_names()[0];
-      }
-    }
-    std::string extra_desc;
-    {
-      std::vector<std::string> aliases;
-      for (size_t i = 1; i < short_names().size(); ++i) {
-        aliases.push_back(std::string(1, short_names()[i]));
-      }
-      for (size_t i = 1; i < long_names().size(); ++i) {
-        aliases.push_back(long_names()[i]);
-      }
-      if (!aliases.empty()) {
-        extra_desc += "\naliases: " + detail::join(aliases, ", ");
-      }
-    }
-    return detail::format(opt_str.str(), description() + extra_desc, 1);
+    auto [left, right] =
+        std::visit([](auto& flag) { return flag->help_row(); }, schema_);
+    return detail::format(left, right, 1);
   }
 };
 
@@ -3006,35 +2996,9 @@ class OptionBase : public ArgBase {
         extra_desc += ", ENV:" + env_key_;
       }
     }
-    if (is_option()) {
-      std::vector<std::string> aliases;
-      for (size_t i = 1; i < short_names().size(); ++i) {
-        aliases.push_back(std::string(1, short_names()[i]));
-      }
-      for (size_t i = 1; i < long_names().size(); ++i) {
-        aliases.push_back(long_names()[i]);
-      }
-      if (!aliases.empty()) {
-        extra_desc += "\naliases: " + detail::join(aliases, ", ");
-      }
-    }
-
-    std::stringstream opt_str;
-    if (is_option()) {
-      if (short_names().empty()) {
-        //         "-x, --foo"
-        opt_str << "    --" << long_names()[0] << " " << value_placeholder_;
-      } else {
-        opt_str << "-" << short_names()[0];
-        if (!long_names().empty()) {
-          opt_str << ", --" << long_names()[0];
-        }
-        opt_str << " " << value_placeholder_;
-      }
-    } else {
-      opt_str << long_names()[0];
-    }
-    return detail::format(opt_str.str(), description() + extra_desc, 1);
+    auto [left, right] =
+        std::visit([](auto& flag) { return flag->help_row(); }, schema_);
+    return detail::format(left, right + extra_desc, 1);
   }
   bool is_required_{false};
   std::string value_placeholder_;
