@@ -90,13 +90,17 @@ using std::is_arithmetic_v;
 using std::is_array_v;
 using std::is_constructible_v;
 using std::is_convertible_v;
+using std::is_copy_assignable_v;
 using std::is_copy_constructible_v;
 using std::is_default_constructible_v;
 using std::is_floating_point_v;
 using std::is_function_v;
 using std::is_integral_v;
+using std::is_move_assignable_v;
 using std::is_move_constructible_v;
 using std::is_nothrow_constructible_v;
+using std::is_nothrow_copy_assignable_v;
+using std::is_nothrow_copy_constructible_v;
 using std::is_nothrow_move_assignable_v;
 using std::is_nothrow_move_constructible_v;
 using std::is_nothrow_swappable_v;
@@ -371,7 +375,15 @@ class expected : private expected_storage<T, E> {
   }
 
   // Assignment
-  constexpr expected& operator=(expected const& other) {
+  constexpr expected& operator=(const expected&) = delete;
+  constexpr expected& operator=(expected const& other) noexcept(
+      is_nothrow_copy_assignable_v<T> && is_nothrow_copy_constructible_v<T> &&
+      is_nothrow_copy_assignable_v<E> && is_nothrow_copy_constructible_v<E>)
+    requires(is_copy_assignable_v<T> && is_copy_constructible_v<T> &&
+             is_copy_assignable_v<E> && is_copy_constructible_v<E> &&
+             (is_nothrow_move_constructible_v<T> ||
+              is_nothrow_move_constructible_v<E>))
+  {
     if (this == &other) {
       return *this;
     }
@@ -380,12 +392,35 @@ class expected : private expected_storage<T, E> {
   }
 
   constexpr expected& operator=(expected&& other) noexcept(
-      std::is_nothrow_move_assignable_v<T> &&
-      std::is_nothrow_move_assignable_v<E>) {
+      is_nothrow_move_assignable_v<T> && is_nothrow_move_constructible_v<T> &&
+      is_nothrow_move_assignable_v<E> && is_nothrow_move_constructible_v<E>)
+    requires(is_move_constructible_v<T> && is_move_assignable_v<T> &&
+             is_move_constructible_v<E> && is_move_assignable_v<E> &&
+             (is_nothrow_move_constructible_v<T> ||
+              is_nothrow_move_constructible_v<E>))
+  {
     if (this == &other) {
       return *this;
     }
     move_from(std::move(other));
+    return *this;
+  }
+
+  template <class U = T>
+  constexpr expected& operator=(U&& v)
+    requires(!is_same_v<expected, remove_cvref_t<U>> &&
+             !is_unexpected<remove_cvref_t<U>>::value &&
+             is_constructible_v<T, U> && std::is_assignable_v<T&, U> &&
+             (is_nothrow_constructible_v<T, U> ||
+              is_nothrow_move_constructible_v<T> ||
+              is_nothrow_move_constructible_v<E>))
+  {
+    if (this->has_value()) {
+      this->value() = std::forward<U>(v);
+    } else {
+      base::destroy();
+      construct_value(std::forward<U>(v));
+    }
     return *this;
   }
 
@@ -960,6 +995,20 @@ class expected<T&, E> : private expected_storage<T*, E> {
       base::construct_value(other.storage_.value);
     } else {
       base::construct_error(std::move(other.storage_.error));
+    }
+    return *this;
+  }
+
+  template <class U = T>
+  constexpr expected& operator=(U& v)
+    requires(!is_same_v<expected, remove_cvref_t<U>> &&
+             !is_unexpected<remove_cvref_t<U>>::value)
+  {
+    if (this->has_value()) {
+      this->storage_.value = &v;
+    } else {
+      base::destroy();
+      construct_value(&v);
     }
     return *this;
   }

@@ -97,6 +97,100 @@ TEST(ExpectedValueTest, MoveAssignment) {
   EXPECT_EQ(d.error(), "e1");
 }
 
+// ============================================================================
+// expected<T, E> — value assignment via operator=(U&&)
+// ============================================================================
+
+TEST(ExpectedValueAssignmentTest, AssignValueToValue) {
+  expected<int, std::string> e(10);
+  e = 42;
+  EXPECT_TRUE(e.has_value());
+  EXPECT_EQ(e.value(), 42);
+}
+
+TEST(ExpectedValueAssignmentTest, AssignValueToError) {
+  expected<int, std::string> e(make_unexpected(std::string("was error")));
+  e = 99;
+  EXPECT_TRUE(e.has_value());
+  EXPECT_EQ(e.value(), 99);
+}
+
+TEST(ExpectedValueAssignmentTest, AssignRvalueToValue) {
+  expected<std::string, int> e(std::string("hello"));
+  e = std::string("world");
+  EXPECT_TRUE(e.has_value());
+  EXPECT_EQ(e.value(), "world");
+}
+
+TEST(ExpectedValueAssignmentTest, AssignRvalueToError) {
+  expected<std::string, int> e(make_unexpected(404));
+  e = std::string("recovered");
+  EXPECT_TRUE(e.has_value());
+  EXPECT_EQ(e.value(), "recovered");
+}
+
+TEST(ExpectedValueAssignmentTest, AssignConvertibleType) {
+  expected<std::string, int> e(make_unexpected(500));
+  e = "const char*";  // const char* converts to std::string via construct_value
+  EXPECT_TRUE(e.has_value());
+  EXPECT_EQ(e.value(), "const char*");
+}
+
+TEST(ExpectedValueAssignmentTest, AssignMultipleTimes) {
+  expected<int, std::string> e(make_unexpected(std::string("start")));
+  e = 1;
+  EXPECT_EQ(e.value(), 1);
+  e = 2;
+  EXPECT_EQ(e.value(), 2);
+  e = 3;
+  EXPECT_EQ(e.value(), 3);
+}
+
+TEST(ExpectedValueAssignmentTest, AssignBackAndForth) {
+  expected<int, std::string> e(10);
+  e = 20;
+  EXPECT_EQ(e.value(), 20);
+  // make error via copy-assign from another expected
+  e = expected<int, std::string>(make_unexpected(std::string("err")));
+  EXPECT_FALSE(e.has_value());
+  EXPECT_EQ(e.error(), "err");
+  // recover via value assignment
+  e = 30;
+  EXPECT_TRUE(e.has_value());
+  EXPECT_EQ(e.value(), 30);
+}
+
+TEST(ExpectedValueAssignmentTest, AssignWithMoveOnlyValue) {
+  expected<std::unique_ptr<int>, std::string> e(
+      make_unexpected(std::string("error")));
+  e = std::make_unique<int>(42);
+  EXPECT_TRUE(e.has_value());
+  EXPECT_EQ(*e.value(), 42);
+}
+
+TEST(ExpectedValueAssignmentTest, AssignMoveOnlyValueToValue) {
+  expected<std::unique_ptr<int>, std::string> e(std::make_unique<int>(10));
+  e = std::make_unique<int>(99);
+  EXPECT_TRUE(e.has_value());
+  EXPECT_EQ(*e.value(), 99);
+}
+
+TEST(ExpectedValueAssignmentTest, AssignToSelfSameValue) {
+  // Assign the same value already held — just a smoke test
+  expected<int, std::string> e(42);
+  e = 42;
+  EXPECT_TRUE(e.has_value());
+  EXPECT_EQ(e.value(), 42);
+}
+
+TEST(ExpectedValueAssignmentTest, NoexceptRequirementMet) {
+  // int is nothrow constructible and assignable, so this should compile
+  // and be usable in noexcept contexts
+  expected<int, std::string> e(1);
+  e = 5;
+  EXPECT_EQ(e.value(), 5);
+}
+
 // Self-assignment is protected by the 'if (this == &other)' guard
 // inside the assignment operators.
 TEST(ExpectedValueTest, SelfAssignment) {
