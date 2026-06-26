@@ -1,4 +1,39 @@
+# clangd configuration for ai.cli
+# https://clangd.llvm.org/config
+
 CompileFlags:
+  # Use compile_commands.json from the build directory
+  CompilationDatabase: build/
+  # Additional flags applied to all files
   Add:
     - -std=c++20
     - -Wall
+  Remove:
+    # Remove flags that may confuse clangd's parser
+    - -municode
+    - -mconsole
+    - -fvisibility=hidden
+    - -fvisibility-inlines-hidden
+    - -fsanitize=address,undefined
+    - -fno-omit-frame-pointer
+    - -fno-optimize-sibling-calls
+    - -fno-keep-inline-dllexport
+    - /fsanitize=address
+
+Diagnostics:
+  # Unused includes are noisy in large projects; comment out to enable
+  #UnusedIncludes: None
+
+Index:
+  Background: Build
+
+InlayHints:
+  DeducedTypes: true
+  ParameterNames: true
+  Designators: true
+
+Completion:
+  AllScopes: true
+
+Hover:
+  ShowAKA: true
