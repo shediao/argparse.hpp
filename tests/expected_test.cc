@@ -1312,6 +1312,230 @@ TEST(UnexpectedTest, VerifyStaticAssertAllowsValidTypes) {
 }
 
 // ============================================================================
+// unexpected<E> — swap (member & free function)
+// ============================================================================
+
+TEST(UnexpectedSwapTest, MemberSwap) {
+  argparse::unexpected<int> a(1);
+  argparse::unexpected<int> b(2);
+  a.swap(b);
+  EXPECT_EQ(a.error(), 2);
+  EXPECT_EQ(b.error(), 1);
+}
+
+TEST(UnexpectedSwapTest, MemberSwapStrings) {
+  argparse::unexpected<std::string> a(std::string("hello"));
+  argparse::unexpected<std::string> b(std::string("world"));
+  a.swap(b);
+  EXPECT_EQ(a.error(), "world");
+  EXPECT_EQ(b.error(), "hello");
+}
+
+TEST(UnexpectedSwapTest, SwapTwice) {
+  argparse::unexpected<int> a(10);
+  argparse::unexpected<int> b(20);
+  a.swap(b);
+  a.swap(b);
+  EXPECT_EQ(a.error(), 10);
+  EXPECT_EQ(b.error(), 20);
+}
+
+TEST(UnexpectedSwapTest, FreeFunctionSwap) {
+  argparse::unexpected<int> a(1);
+  argparse::unexpected<int> b(2);
+  using std::swap;
+  swap(a, b);
+  EXPECT_EQ(a.error(), 2);
+  EXPECT_EQ(b.error(), 1);
+}
+
+TEST(UnexpectedSwapTest, FreeFunctionSwapViaFriend) {
+  // Verify ADL finds the friend swap
+  argparse::unexpected<std::string> a(std::string("a"));
+  argparse::unexpected<std::string> b(std::string("b"));
+  swap(a, b);  // ADL should find argparse::swap via friend
+  EXPECT_EQ(a.error(), "b");
+  EXPECT_EQ(b.error(), "a");
+
+  // ADL swap round-trip
+  swap(a, b);
+  EXPECT_EQ(a.error(), "a");
+  EXPECT_EQ(b.error(), "b");
+}
+
+TEST(UnexpectedSwapTest, NoexceptSpecification) {
+  // int is nothrow swappable
+  static_assert(noexcept(std::declval<argparse::unexpected<int>&>().swap(
+      std::declval<argparse::unexpected<int>&>())));
+  // ADL swap is also noexcept
+  static_assert(noexcept(swap(std::declval<argparse::unexpected<int>&>(),
+                              std::declval<argparse::unexpected<int>&>())));
+}
+
+// ============================================================================
+// unexpected<E> — operator==
+// ============================================================================
+
+TEST(UnexpectedCompareTest, EqualSameType) {
+  argparse::unexpected<int> a(42);
+  argparse::unexpected<int> b(42);
+  EXPECT_TRUE(a == b);
+  EXPECT_FALSE(a != b);
+}
+
+TEST(UnexpectedCompareTest, NotEqualSameType) {
+  argparse::unexpected<int> a(1);
+  argparse::unexpected<int> b(2);
+  EXPECT_FALSE(a == b);
+  EXPECT_TRUE(a != b);
+}
+
+TEST(UnexpectedCompareTest, EqualDifferentTypes) {
+  // unexpected<int> vs unexpected<long> — cross-type comparison
+  argparse::unexpected<int> a(42);
+  argparse::unexpected<long> b(42);
+  EXPECT_TRUE(a == b);
+  EXPECT_FALSE(a != b);
+}
+
+TEST(UnexpectedCompareTest, NotEqualDifferentTypes) {
+  argparse::unexpected<int> a(1);
+  argparse::unexpected<long> b(2);
+  EXPECT_FALSE(a == b);
+  EXPECT_TRUE(a != b);
+}
+
+TEST(UnexpectedCompareTest, StringErrors) {
+  argparse::unexpected<std::string> a(std::string("hello"));
+  argparse::unexpected<std::string> b(std::string("hello"));
+  EXPECT_TRUE(a == b);
+
+  argparse::unexpected<std::string> c(std::string("world"));
+  EXPECT_FALSE(a == c);
+}
+
+TEST(UnexpectedCompareTest, ConstObjects) {
+  const argparse::unexpected<int> a(42);
+  const argparse::unexpected<int> b(42);
+  EXPECT_TRUE(a == b);
+}
+
+// ============================================================================
+// unexpected<E> — in-place construction (std::in_place_t)
+// ============================================================================
+
+TEST(UnexpectedInPlaceTest, ConstructWithInPlace) {
+  argparse::unexpected<int> u(std::in_place, 42);
+  EXPECT_EQ(u.error(), 42);
+}
+
+TEST(UnexpectedInPlaceTest, ConstructWithInPlaceString) {
+  argparse::unexpected<std::string> u(std::in_place, "hello");
+  EXPECT_EQ(u.error(), "hello");
+}
+
+TEST(UnexpectedInPlaceTest, ConstructWithInPlaceMultiArg) {
+  argparse::unexpected<std::string> u(std::in_place, 5, 'x');
+  EXPECT_EQ(u.error(), "xxxxx");
+}
+
+TEST(UnexpectedInPlaceTest, ConstructWithInPlaceZeroArgs) {
+  argparse::unexpected<int> u(std::in_place);
+  EXPECT_EQ(u.error(), 0);  // int{} is 0
+
+  argparse::unexpected<std::string> u2(std::in_place);
+  EXPECT_EQ(u2.error(), "");  // std::string{} is ""
+}
+
+TEST(UnexpectedInPlaceTest, ConstructWithInPlaceMoveOnly) {
+  argparse::unexpected<std::unique_ptr<int>> u(std::in_place, new int(99));
+  EXPECT_EQ(*u.error(), 99);
+}
+
+TEST(UnexpectedInPlaceTest, ConstructWithInPlaceVector) {
+  argparse::unexpected<std::vector<int>> u(std::in_place,
+                                           std::initializer_list<int>{1, 2, 3});
+  ASSERT_EQ(u.error().size(), 3);
+  EXPECT_EQ(u.error()[0], 1);
+  EXPECT_EQ(u.error()[1], 2);
+  EXPECT_EQ(u.error()[2], 3);
+}
+
+// ============================================================================
+// unexpected<E> — defaulted copy/move assignment
+// ============================================================================
+
+TEST(UnexpectedAssignmentTest, CopyAssignment) {
+  argparse::unexpected<int> a(10);
+  argparse::unexpected<int> b(20);
+  b = a;
+  EXPECT_EQ(b.error(), 10);
+  EXPECT_EQ(a.error(), 10);  // a unchanged
+}
+
+TEST(UnexpectedAssignmentTest, MoveAssignment) {
+  argparse::unexpected<int> a(10);
+  argparse::unexpected<int> b(20);
+  b = std::move(a);
+  EXPECT_EQ(b.error(), 10);
+}
+
+TEST(UnexpectedAssignmentTest, CopyAssignmentStrings) {
+  argparse::unexpected<std::string> a(std::string("hello"));
+  argparse::unexpected<std::string> b(std::string("world"));
+  b = a;
+  EXPECT_EQ(b.error(), "hello");
+  EXPECT_EQ(a.error(), "hello");
+}
+
+TEST(UnexpectedAssignmentTest, MoveAssignmentStrings) {
+  argparse::unexpected<std::string> a(std::string("hello"));
+  argparse::unexpected<std::string> b(std::string("world"));
+  b = std::move(a);
+  EXPECT_EQ(b.error(), "hello");
+}
+
+TEST(UnexpectedAssignmentTest, SelfCopyAssignment) {
+  argparse::unexpected<int> a(42);
+  const auto& ref = a;
+  a = ref;
+  EXPECT_EQ(a.error(), 42);
+}
+
+TEST(UnexpectedAssignmentTest, SelfMoveAssignment) {
+  // Self-move-assign via intermediate to avoid -Wself-move
+  argparse::unexpected<int> a(99);
+  argparse::unexpected<int> tmp(std::move(a));
+  a = std::move(tmp);
+  EXPECT_EQ(a.error(), 99);
+}
+
+// ============================================================================
+// unexpected<E> — const&& error() access (regression: const correctness)
+// ============================================================================
+
+TEST(UnexpectedConstRvalueTest, ConstRvalueErrorAccess) {
+  const argparse::unexpected<int> u(42);
+  // std::move on const object calls error() const&&
+  auto e = std::move(u).error();
+  // e should be const int&&, effectively int (decays in auto)
+  EXPECT_EQ(e, 42);
+}
+
+TEST(UnexpectedConstRvalueTest, ConstRvalueErrorAccessString) {
+  const argparse::unexpected<std::string> u(std::string("hello"));
+  auto e = std::move(u).error();
+  EXPECT_EQ(e, "hello");
+}
+
+TEST(UnexpectedConstRvalueTest, VerifyReturnTypeIsConstRvalueRef) {
+  // The return type of error() const&& should be const E&&
+  using U = argparse::unexpected<int>;
+  static_assert(
+      std::is_same_v<decltype(std::declval<const U&&>().error()), const int&&>);
+}
+
+// ============================================================================
 // is_expected / is_expected_v
 // ============================================================================
 

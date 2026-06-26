@@ -81,8 +81,37 @@
 #endif
 
 namespace argparse {
+using std::conditional_t;
+using std::convertible_to;
+using std::decay_t;
+using std::declval;
+using std::invoke_result_t;
+using std::is_arithmetic_v;
+using std::is_array_v;
+using std::is_constructible_v;
+using std::is_convertible_v;
+using std::is_copy_constructible_v;
+using std::is_default_constructible_v;
+using std::is_floating_point_v;
+using std::is_function_v;
+using std::is_integral_v;
+using std::is_move_constructible_v;
+using std::is_nothrow_constructible_v;
+using std::is_nothrow_move_assignable_v;
+using std::is_nothrow_move_constructible_v;
+using std::is_nothrow_swappable_v;
+using std::is_reference_v;
+using std::is_same_v;
+using std::is_signed_v;
+using std::is_swappable_v;
+using std::is_void_v;
+using std::is_volatile_v;
+using std::remove_cv_t;
+using std::remove_cvref_t;
+using std::same_as;
 using std::to_string;
 using std::to_wstring;
+using std::tuple_size_v;
 
 inline constexpr size_t TOTAL_WIDTH = 80;
 
@@ -112,12 +141,52 @@ class unexpected {
  public:
   using error_type = E;
 
-  constexpr explicit unexpected(error_type const& e) : error_(e) {}
-  constexpr explicit unexpected(error_type&& e) : error_(std::move(e)) {}
+  template <class _Error = E>
+    requires(!std::is_same_v<std::remove_cvref_t<_Error>, unexpected> &&
+             !std::is_same_v<std::remove_cvref_t<_Error>, std::in_place_t> &&
+             std::is_constructible_v<E, _Error>)
+  constexpr explicit unexpected(_Error&& e) noexcept(
+      std::is_nothrow_constructible_v<E, _Error>)
+      : error_(std::forward<_Error>(e)) {}
+
+  template <class... Args>
+    requires std::is_constructible_v<E, Args...>
+  constexpr explicit unexpected(std::in_place_t, Args&&... args) noexcept(
+      std::is_nothrow_constructible_v<E, Args...>)
+      : error_(std::forward<Args>(args)...) {}
+
+  constexpr unexpected(const unexpected&) = default;
+  constexpr unexpected(unexpected&&) = default;
+
+  constexpr unexpected& operator=(const unexpected&) = default;
+  constexpr unexpected& operator=(unexpected&&) = default;
 
   constexpr error_type& error() & noexcept { return error_; }
   constexpr error_type const& error() const& noexcept { return error_; }
   constexpr error_type&& error() && noexcept { return std::move(error_); }
+  constexpr const error_type&& error() const&& noexcept {
+    return std::move(error_);
+  }
+
+  constexpr void swap(unexpected& other) noexcept(is_nothrow_swappable_v<E>) {
+    static_assert(is_swappable_v<E>,
+                  "unexpected::swap requires is_swappable_v<E> to be true");
+    using std::swap;
+    swap(error_, other.error_);
+  }
+
+  friend constexpr void swap(unexpected& x,
+                             unexpected& y) noexcept(noexcept(x.swap(y)))
+    requires is_swappable_v<E>
+  {
+    x.swap(y);
+  }
+
+  template <class E2>
+  friend constexpr bool operator==(const unexpected& x,
+                                   const unexpected<E2>& y) {
+    return x.error_ == y.error();
+  }
 
  private:
   E error_;
