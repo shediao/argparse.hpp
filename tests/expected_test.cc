@@ -939,7 +939,17 @@ TEST(ExpectedRefTest, Comparison) {
   expected<int&, std::string> c(v3);
   EXPECT_TRUE(a == b);
   EXPECT_FALSE(a == c);
+  EXPECT_FALSE(b == c);
   EXPECT_TRUE(a == 10);
+  EXPECT_FALSE(a == 20);
+  EXPECT_FALSE(b == 30);
+
+  expected<int&, std::string> a1(v1);
+  expected<int&, std::string> b1(v2);
+  expected<int&, std::string> c1(v3);
+  EXPECT_TRUE(a == a1);
+  EXPECT_TRUE(b == b1);
+  EXPECT_TRUE(c == c1);
 }
 
 // ============================================================================

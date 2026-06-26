@@ -776,22 +776,41 @@ class expected : private expected_storage<T, E> {
       other.swap(*this);
     }
   }
+  friend constexpr void swap(expected& x,
+                             expected& y) noexcept(noexcept(x.swap(y)))
+    requires requires { x.swap(y); }
+  {
+    x.swap(y);
+  }
 
   // Destructor
   constexpr ~expected() = default;
 
-  bool operator==(const expected& other) const {
-    if (base::has_value_impl() && other.base::has_value_impl()) {
-      return this->storage_.value == other.storage_.value;
+  template <class T2, class E2>
+  friend constexpr bool operator==(const expected& x, const expected<T2, E2>& y)
+    requires(!is_void_v<T>)
+  {
+    if (x.has_value() != y.has_value()) {
+      return false;
+    } else {
+      if (x.has_value()) {
+        return x.value() == y.value();
+      } else {
+        return x.error() == y.error();
+      }
     }
-    if (base::has_error_impl() && other.base::has_error_impl()) {
-      return this->storage_.error == other.storage_.error;
-    }
-    return false;
   }
 
-  bool operator==(const T& value) const {
-    return has_value() && this->storage_.value == value;
+  template <class T2>
+  friend constexpr bool operator==(const expected& x, const T2& v)
+    requires(!is_expected_v<T2>)
+  {
+    return x.has_value() && static_cast<bool>(x.value() == v);
+  }
+
+  template <class E2>
+  friend constexpr bool operator==(const expected& x, const unexpected<E2>& e) {
+    return !x.has_value() && static_cast<bool>(x.error() == e.error());
   }
 
  private:
@@ -1309,18 +1328,30 @@ class expected<T&, E> : private expected_storage<T*, E> {
     }
   }
 
-  bool operator==(expected const& other) const {
-    if (has_value() && other.has_value()) {
-      return *this->storage_.value == *other.storage_.value;
+  template <class T2, class E2>
+  friend constexpr bool operator==(const expected& x,
+                                   const expected<T2&, E2>& y) {
+    if (x.has_value() != y.has_value()) {
+      return false;
+    } else {
+      if (x.has_value()) {
+        return *x.storage_.value == *y.storage_.value;
+      } else {
+        return x.error() == y.error();
+      }
     }
-    if (!has_value() && !other.has_value()) {
-      return this->storage_.error == other.storage_.error;
-    }
-    return false;
   }
 
-  bool operator==(T const& value) const {
-    return has_value() && *this->storage_.value == value;
+  template <class T2>
+  friend constexpr bool operator==(const expected& x, T2 const& v)
+    requires(!is_expected_v<T2>)
+  {
+    return x.has_value() && *x.storage_.value == v;
+  }
+
+  template <class E2>
+  friend constexpr bool operator==(const expected& x, const unexpected<E2>& e) {
+    return !x.has_value() && static_cast<bool>(x.error() == e.error());
   }
 
  private:
@@ -1696,6 +1727,22 @@ class expected<void, E> {
     }
   }
 
+  template <typename T2, typename E2>
+  friend constexpr bool operator==(const expected& x, const expected<T2, E2>& y)
+    requires(is_same_v<void, T2>)
+  {
+    if (x.has_value() != y.has_value()) {
+      return false;
+    } else {
+      return x.has_value() || static_cast<bool>(x.error() == y.error());
+    }
+  }
+
+  template <typename E2>
+  friend constexpr bool operator==(const expected& x, const unexpected<E2>& y) {
+    return !x.has_value() && static_cast<bool>(x.error() == y.error());
+  }
+
  private:
   constexpr void check_value() const {
 #ifdef __cpp_exceptions
@@ -1713,34 +1760,6 @@ class expected<void, E> {
 
   bool has_value_;
 };
-
-template <typename T, typename E>
-constexpr bool operator==(expected<T, E> const& lhs,
-                          expected<T, E> const& rhs) {
-  if (lhs.has_value() != rhs.has_value()) {
-    return false;
-  }
-
-  if (lhs.has_value()) {
-    return lhs.value() == rhs.value();
-  }
-
-  return lhs.error() == rhs.error();
-}
-
-template <typename E>
-constexpr bool operator==(expected<void, E> const& lhs,
-                          expected<void, E> const& rhs) {
-  if (lhs.has_value() != rhs.has_value()) {
-    return false;
-  }
-
-  if (lhs.has_value()) {
-    return true;  // both void, both have value
-  }
-
-  return lhs.error() == rhs.error();
-}
 
 namespace detail {
 inline size_t& option_name_width_impl() {
