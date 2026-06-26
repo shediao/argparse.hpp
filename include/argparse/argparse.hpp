@@ -117,8 +117,6 @@ using std::to_string;
 using std::to_wstring;
 using std::tuple_size_v;
 
-inline constexpr size_t TOTAL_WIDTH = 80;
-
 template <typename E>
 class unexpected;
 template <typename E>
@@ -2219,14 +2217,9 @@ inline std::string word_wrap(const std::string& text, size_t width) {
 //
 // The 'indent' parameter specifies the number of spaces to prepend to
 // the first line and to every continuation line.
-inline std::string format(
-    std::string const& left_content, std::string const& right_content,
-    size_t indent,
-    size_t left_width = std::clamp(option_name_width(), static_cast<size_t>(16),
-                                   static_cast<size_t>(40)),
-    size_t right_width = (TOTAL_WIDTH > option_name_width() + 40)
-                             ? (TOTAL_WIDTH - option_name_width())
-                             : 40) {
+inline std::string format(std::string const& left_content,
+                          std::string const& right_content, size_t indent,
+                          size_t left_width, size_t right_width) {
   std::string prefix(indent, ' ');
 
   // Length of the last line of left_content (may be multi-line).
@@ -2711,6 +2704,9 @@ class PositionalSchema {
 };
 
 class CommandSchema {
+  inline static constexpr size_t MAX_LEFT_WIDTH = 32;
+  inline static constexpr size_t MAX_WIDTH = 80;
+
  public:
   CommandSchema(std::string name, std::string description,
                 CommandSchema* parent)
@@ -2865,71 +2861,139 @@ class CommandSchema {
     return false;
   }
 
-  std::string usage(size_t max_left_width = 32, size_t max_right_width = 80) {
+  std::string usage() const {
+    size_t max_left_width = 0;
+    size_t max_right_width = 0;
+    // Compute max_left_width from visible help row widths.
     {
       size_t max_width = 0;
       for (auto&& flag : flags_) {
-        max_width = (std::max)(max_width, flag->help_row().first.size());
+        if (!flag->hidden()) {
+          max_width = (std::max)(max_width, flag->help_row().first.size());
+        }
       }
       for (auto&& option : options_) {
-        max_width = (std::max)(max_width, option->help_row().first.size());
+        if (!option->hidden()) {
+          max_width = (std::max)(max_width, option->help_row().first.size());
+        }
       }
       for (auto&& positional : positionals_) {
-        max_width = (std::max)(max_width, positional->help_row().first.size());
+        if (!positional->hidden()) {
+          max_width =
+              (std::max)(max_width, positional->help_row().first.size());
+        }
       }
-      max_left_width = (std::min)(max_width, max_left_width);
+      max_left_width = (std::min)(max_width + 3, MAX_LEFT_WIDTH);
+      max_right_width = MAX_WIDTH - max_left_width;
     }
 
-    CommandSchema* parent = parent_;
-    std::string command_str;
-    while (parent != nullptr) {
-      command_str.insert(0, parent->name_ + " ");
-      parent = parent->parent_;
+    std::stringstream usage_str;
+    if (!description_.empty()) {
+      usage_str << description_;
+      if (description_.back() != '\n') {
+        usage_str << '\n';
+      }
     }
-    std::stringstream out;
-    out << "Usage:\n";
-    out << "  " << command_str << name_ << "\n";
+    usage_str << "\nUsage:\n";
+
+    // Build parent command chain.
+    {
+      std::vector<std::string> parent_cmds;
+      CommandSchema* p = parent_;
+      while (p != nullptr) {
+        parent_cmds.push_back(p->name_);
+        p = p->parent_;
+      }
+      std::copy(parent_cmds.rbegin(), parent_cmds.rend(),
+                std::ostream_iterator<std::string>(usage_str, " "));
+    }
 
     if (!usage_header_.empty()) {
-      out << usage_header_;
+      usage_str << usage_header_;
       if (usage_header_.back() != '\n') {
-        out << '\n';
+        usage_str << '\n';
       }
     }
-    out << "\nDescription:\n";
-    out << description_ << "\n";
-    if (!positionals_.empty()) {
-      out << "\nArguments:\n";
-    }
-    for (auto&& positional : positionals_) {
-      auto [left, right] = positional->help_row();
-      out << detail::format(left, right, 1, max_left_width, max_right_width)
-          << "\n";
-    }
-    out << "\nOptions:\n";
-    for (auto&& flag : flags_) {
-      auto [left, right] = flag->help_row();
-      out << detail::format(left, right, 1, max_left_width, max_right_width)
-          << "\n";
-    }
-    for (auto&& option : options_) {
-      auto [left, right] = option->help_row();
-      out << detail::format(left, right, 1, max_left_width, max_right_width)
-          << "\n";
+
+    usage_str << name_;
+    if (!flags_.empty() || !options_.empty()) {
+      usage_str << " [options]...";
     }
     if (!subcommands_.empty()) {
-      out << "\nCommands:\n";
+      usage_str << " [cmd] [options]...";
     }
-    for (auto&& subcommand : subcommands_) {
-      out << detail::format(subcommand->name_, subcommand->description_, 1,
-                            max_left_width, max_right_width)
-          << "\n";
+    if (!positionals_.empty()) {
+      usage_str << " [--]";
+    }
+    for (auto&& positional : positionals_) {
+      std::string vp = positional->value_placeholder();
+      if (vp.empty()) {
+        vp = positional->name();
+      }
+      usage_str << " " << vp;
+      if (positional->is_container()) {
+        usage_str << "...";
+      }
+    }
+
+    // Options section (flags + options).
+    bool has_visible_opts =
+        std::ranges::any_of(flags_, [](auto&& f) { return !f->hidden(); });
+    if (!has_visible_opts) {
+      has_visible_opts =
+          std::ranges::any_of(options_, [](auto&& o) { return !o->hidden(); });
+    }
+    if (has_visible_opts) {
+      usage_str << "\n\nOptions:";
+    }
+    for (auto&& flag : flags_) {
+      if (!flag->hidden()) {
+        auto [left, right] = flag->help_row();
+        usage_str << "\n"
+                  << detail::format(left, right, 1, max_left_width,
+                                    max_right_width);
+      }
+    }
+    for (auto&& option : options_) {
+      if (!option->hidden()) {
+        auto [left, right] = option->help_row();
+        usage_str << "\n"
+                  << detail::format(left, right, 1, max_left_width,
+                                    max_right_width);
+      }
+    }
+
+    // Positionals section.
+    bool has_visible_pos = std::ranges::any_of(
+        positionals_, [](auto&& p) { return !p->hidden(); });
+    if (has_visible_pos) {
+      usage_str << "\n\nPositionals:";
+    }
+    for (auto&& positional : positionals_) {
+      if (!positional->hidden()) {
+        auto [left, right] = positional->help_row();
+        usage_str << "\n"
+                  << detail::format(left, right, 1, max_left_width,
+                                    max_right_width);
+      }
+    }
+
+    if (!subcommands_.empty()) {
+      usage_str << "\nAvailable Commands:\n";
+      for (auto const& cmd : subcommands_) {
+        if (cmd->hidden()) {
+          continue;
+        }
+        usage_str << detail::format(cmd->name(), cmd->description(), 1,
+                                    max_left_width, max_right_width)
+                  << "\n";
+      }
     }
 
     if (!usage_footer_.empty()) {
-      out << "\n" << usage_footer_;
+      usage_str << "\n" << usage_footer_;
     }
-    return out.str();
+    return usage_str.str();
   }
 
   bool hidden() const { return hidden_; }
@@ -3021,8 +3085,6 @@ class ArgBase {
     return std::holds_alternative<std::shared_ptr<PositionalSchema>>(schema_);
   }
 
-  virtual std::string usage() const = 0;
-
  protected:
   template <typename T>
   T const& get_schema() const {
@@ -3047,12 +3109,6 @@ class FlagBase : public ArgBase {
   }
   bool is_negatable() const {
     return std::get<std::shared_ptr<FlagSchema>>(schema_)->is_negatable();
-  }
-
-  std::string usage() const override {
-    auto [left, right] =
-        std::visit([](auto& flag) { return flag->help_row(); }, schema_);
-    return detail::format(left, right, 1);
   }
 
   virtual void parse() = 0;
@@ -3173,12 +3229,6 @@ class OptionBase : public ArgBase {
     } else {
       return get_schema<PositionalSchema>().bind_env();
     }
-  }
-
-  std::string usage() const override {
-    auto [left, right] =
-        std::visit([](auto& flag) { return flag->help_row(); }, schema_);
-    return detail::format(left, right, 1);
   }
 
   virtual void parse(const std::string& opt_value) {
@@ -4535,81 +4585,7 @@ class Command {
   }
 
  public:
-  virtual std::string usage() const {
-    std::stringstream usage_str;
-
-    if (parent_ != nullptr) {
-      std::vector<std::string> parent_cmds;
-      Command* p = parent_;
-      while (p != nullptr) {
-        parent_cmds.push_back(p->command());
-        p = p->parent_;
-      }
-      std::copy(parent_cmds.rbegin(), parent_cmds.rend(),
-                std::ostream_iterator<std::string>(usage_str, " "));
-    }
-
-    if (!command_schema_.usage_header().empty()) {
-      usage_str << command_schema_.usage_header();
-      if (command_schema_.usage_header().back() != '\n') {
-        usage_str << '\n';
-      }
-    }
-
-    usage_str << command();
-    if (std::ranges::find_if(args_, [](const auto& arg) {
-          return arg->is_option() || arg->is_flag();
-        }) != args_.end()) {
-      usage_str << " [options]...";
-    }
-    if (!subcommands_.empty()) {
-      usage_str << " [cmd] [options]...";
-    }
-    auto positionals = args_ | std::views::filter([](const auto& arg) {
-                         return arg->is_positional();
-                       });
-    if (!positionals.empty()) {
-      usage_str << " [--]";
-    }
-    for (const auto& arg : positionals) {
-      usage_str << " "
-                << dynamic_cast<OptionBase*>(arg.get())->value_placeholder();
-      if (dynamic_cast<OptionBase*>(arg.get())->is_multiple()) {
-        usage_str << "...";
-      }
-    }
-    if (std::ranges::find_if(args_, [](const auto& arg) {
-          return arg->is_option() || arg->is_flag();
-        }) != args_.end()) {
-      usage_str << "\n\nOptions:";
-    }
-    for (const auto& arg : args_) {
-      if ((arg->is_option() || arg->is_flag()) && !arg->is_hidden()) {
-        usage_str << "\n" << arg->usage();
-      }
-    }
-
-    if (std::ranges::find_if(args_, [](const auto& arg) {
-          return arg->is_positional();
-        }) != args_.end()) {
-      usage_str << "\n\nPositionals:";
-    }
-    for (const auto& arg : args_) {
-      if (arg->is_positional() && !arg->is_hidden()) {
-        usage_str << "\n" << arg->usage();
-      }
-    }
-    if (!command_schema_.usage_footer().empty()) {
-      usage_str << "\n" << command_schema_.usage_footer();
-    }
-    return usage_str.str();
-  }
-  std::string one_line_usage() {
-    std::stringstream usage_str;
-    usage_str << detail::format(command_schema_.name(),
-                                command_schema_.description(), 1);
-    return usage_str.str();
-  }
+  virtual std::string usage() const { return command_schema_.usage(); }
   void add_default_help_flag() {
     static bool default_help{false};
     auto* const help = get("help", false);
@@ -4677,29 +4653,6 @@ class ArgParser : public Command {
   using Command::add_flag;
   using Command::add_option;
   using Command::add_positional;
-  std::string usage() const override {
-    std::stringstream usage_str;
-    if (!description().empty()) {
-      usage_str << description();
-      if (description().back() != '\n') {
-        usage_str << '\n';
-      }
-    }
-    usage_str << "\nUsage:\n";
-    usage_str << this->Command::usage();
-
-    if (!subcommands_.empty()) {
-      usage_str << "\nAvailable Commands:";
-      for (auto const& cmd : subcommands_) {
-        if (cmd->is_hidden()) {
-          continue;
-        }
-        usage_str << "\n" << cmd->one_line_usage();
-      }
-    }
-
-    return usage_str.str();
-  }
   void print_usage() const override { std::cerr << this->usage() << '\n'; }
   Command& parse(size_t argc, const char* const* argv) {
     add_default_help_flag();
