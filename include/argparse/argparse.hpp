@@ -1328,6 +1328,13 @@ class expected<T&, E> : private expected_storage<T*, E> {
     }
   }
 
+  friend constexpr void swap(expected& x,
+                             expected& y) noexcept(noexcept(x.swap(y)))
+    requires requires { x.swap(y); }
+  {
+    x.swap(y);
+  }
+
   template <class T2, class E2>
   friend constexpr bool operator==(const expected& x,
                                    const expected<T2&, E2>& y) {
@@ -1725,6 +1732,13 @@ class expected<void, E> {
     } else {
       other.swap(*this);
     }
+  }
+
+  friend constexpr void swap(expected& x,
+                             expected& y) noexcept(noexcept(x.swap(y)))
+    requires requires { x.swap(y); }
+  {
+    x.swap(y);
   }
 
   template <typename T2, typename E2>
