@@ -1422,14 +1422,7 @@ class expected<T, E> {
       construct_error(std::move(other.error_));
     }
   }
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-#endif
   constexpr ~expected() { destroy_error(); }
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
 
   constexpr bool has_value() const noexcept { return has_value_; }
 
@@ -1787,8 +1780,11 @@ class expected<T, E> {
 #endif
   }
 
+  struct __empty {};
+
   union {
     E error_;
+    __empty empty;
   };
 
   bool has_value_;
