@@ -1400,37 +1400,33 @@ class expected<T, E> {
 
   template <typename... Args>
   constexpr expected(unexpect_t, Args&&... args) : has_value_(false) {
-    new (&error_) E(std::forward<Args>(args)...);
+    construct_error(std::forward<Args>(args)...);
   }
 
   constexpr expected(unexpected<E> const& e) : has_value_(false) {
-    new (&error_) E(e.error());
+    construct_error(e.error());
   }
 
   constexpr expected(unexpected<E>&& e) : has_value_(false) {
-    new (&error_) E(std::move(e.error()));
+    construct_error(std::move(e.error()));
   }
 
   constexpr expected(expected const& other) : has_value_(other.has_value_) {
     if (!has_value_) {
-      new (&error_) E(other.error_);
+      construct_error(other.error_);
     }
   }
 
   constexpr expected(expected&& other) : has_value_(other.has_value_) {
     if (!has_value_) {
-      new (&error_) E(std::move(other.error_));
+      construct_error(std::move(other.error_));
     }
   }
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #endif
-  constexpr ~expected() {
-    if (!has_value_) {
-      error_.~E();
-    }
-  }
+  constexpr ~expected() { destroy_error(); }
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic pop
 #endif
@@ -1486,12 +1482,10 @@ class expected<T, E> {
     if (this == &other) {
       return *this;
     }
-    if (!has_value_) {
-      error_.~E();
-    }
+    destroy_error();
     has_value_ = other.has_value_;
     if (!has_value_) {
-      new (&error_) E(other.error_);
+      construct_error(other.error_);
     }
     return *this;
   }
@@ -1500,12 +1494,10 @@ class expected<T, E> {
     if (this == &other) {
       return *this;
     }
-    if (!has_value_) {
-      error_.~E();
-    }
+    destroy_error();
     has_value_ = other.has_value_;
     if (!has_value_) {
-      new (&error_) E(std::move(other.error_));
+      construct_error(std::move(other.error_));
     }
     return *this;
   }
@@ -1733,12 +1725,12 @@ class expected<T, E> {
     } else if (has_value() && !other.has_value()) {
       if constexpr (std::is_nothrow_move_constructible_v<E>) {
         E temp{std::move(other.error_)};
-        std::destroy_at(&(other.error_));
-        std::construct_at(&(this->error_), std::move(temp));
+        other.destroy_error();
+        this->construct_error(std::move(temp));
       } else {
         try {
-          std::construct_at(&(this->error_), std::move(other.error_));
-          std::destroy_at(&(other.error_));
+          this->construct_error(std::move(other.error_));
+          other.destroy_error();
         } catch (...) {
           throw;
         }
@@ -1774,6 +1766,17 @@ class expected<T, E> {
   }
 
  private:
+  template <typename... Args>
+  constexpr void construct_error(Args&&... args) {
+    std::construct_at(std::addressof(error_), std::forward<Args>(args)...);
+  }
+
+  constexpr void destroy_error() noexcept {
+    if (!has_value_) {
+      std::destroy_at(std::addressof(error_));
+    }
+  }
+
   constexpr void check_value() const {
 #ifdef __cpp_exceptions
     if (!has_value_) {
