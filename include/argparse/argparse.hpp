@@ -1354,7 +1354,7 @@ class expected<T&, E> : private expected_storage<T*, E> {
       return false;
     } else {
       if (x.has_value()) {
-        return *x.storage_.value == *y.storage_.value;
+        return x.value() == y.value();
       } else {
         return x.error() == y.error();
       }
