@@ -138,6 +138,9 @@ class unexpected {
                 "array type, a specialization of unexpected, or a cv-qualified "
                 "type is ill-formed.");
 
+  template <typename E2>
+  friend class unexpected;
+
  public:
   using error_type = E;
 
@@ -182,7 +185,7 @@ class unexpected {
     x.swap(y);
   }
 
-  template <class E2>
+  template <typename E2>
   friend constexpr bool operator==(const unexpected& x,
                                    const unexpected<E2>& y) {
     return x.error_ == y.error();
@@ -231,6 +234,9 @@ class bad_expected_access : public bad_expected_access<void> {
 
 template <typename T, typename E>
 class expected_storage {
+  template <typename T2, typename E2>
+  friend class expected_storage;
+
  protected:
   union storage_t {
     T value;
@@ -317,6 +323,9 @@ class expected : private expected_storage<T, E> {
                 "template argument for unexpected is ill-formed.");
 
   using base = expected_storage<T, E>;
+
+  template <typename T2, typename E2>
+  friend class expected;
 
  public:
   using value_type = T;
@@ -879,6 +888,9 @@ template <typename T, typename E>
 class expected<T&, E> : private expected_storage<T*, E> {
   using base = expected_storage<T*, E>;
 
+  template <typename T2, typename E2>
+  friend class expected;
+
  public:
   using value_type = T&;
   using error_type = E;
@@ -1373,8 +1385,12 @@ class expected<T&, E> : private expected_storage<T*, E> {
   }
 };
 
-template <typename E>
-class expected<void, E> {
+template <typename T, typename E>
+  requires(is_void_v<T>)
+class expected<T, E> {
+  template <typename T2, typename E2>
+  friend class expected;
+
  public:
   using error_type = E;
   using value_type = void;

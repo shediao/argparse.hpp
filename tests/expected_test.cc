@@ -3117,3 +3117,353 @@ TEST(ExpectedSwapMoveOnlyBothTest, CrossStateReverse) {
   EXPECT_EQ(*b.error(), 99);
   SUCCEED();
 }
+
+// ============================================================================
+// Swap — self-swap (all three specializations)
+// ============================================================================
+
+TEST(ExpectedSwapSelfTest, ValueType) {
+  expected<int, std::string> a(42);
+  a.swap(a);
+  EXPECT_TRUE(a.has_value());
+  EXPECT_EQ(a.value(), 42);
+
+  expected<int, std::string> b(make_unexpected(std::string("err")));
+  b.swap(b);
+  EXPECT_FALSE(b.has_value());
+  EXPECT_EQ(b.error(), "err");
+}
+
+TEST(ExpectedSwapSelfTest, RefType) {
+  int val = 42;
+  expected<int&, std::string> a(val);
+  a.swap(a);
+  EXPECT_TRUE(a.has_value());
+  EXPECT_EQ(&a.value(), &val);
+
+  expected<int&, std::string> b(make_unexpected(std::string("err")));
+  b.swap(b);
+  EXPECT_FALSE(b.has_value());
+  EXPECT_EQ(b.error(), "err");
+}
+
+TEST(ExpectedSwapSelfTest, VoidType) {
+  expected<void, std::string> a;
+  a.swap(a);
+  EXPECT_TRUE(a.has_value());
+
+  expected<void, std::string> b(make_unexpected(std::string("err")));
+  b.swap(b);
+  EXPECT_FALSE(b.has_value());
+  EXPECT_EQ(b.error(), "err");
+}
+
+// ============================================================================
+// expected<T&, E> — swap with both having error
+// ============================================================================
+
+TEST(ExpectedSwapRefErrorTest, BothHaveError) {
+  expected<int&, std::string> a(make_unexpected(std::string("a")));
+  expected<int&, std::string> b(make_unexpected(std::string("b")));
+  a.swap(b);
+  EXPECT_EQ(a.error(), "b");
+  EXPECT_EQ(b.error(), "a");
+}
+
+TEST(ExpectedSwapRefErrorTest, BothHaveErrorRoundTrip) {
+  expected<int&, std::string> a(make_unexpected(std::string("first")));
+  expected<int&, std::string> b(make_unexpected(std::string("second")));
+  a.swap(b);
+  EXPECT_EQ(a.error(), "second");
+  EXPECT_EQ(b.error(), "first");
+  a.swap(b);
+  EXPECT_EQ(a.error(), "first");
+  EXPECT_EQ(b.error(), "second");
+}
+
+// ============================================================================
+// Swap — non-trivial value type with trivially-destructible error
+// ============================================================================
+
+TEST(ExpectedSwapNonTrivialValueTest, SwapStrings) {
+  expected<std::string, int> a(std::string("hello"));
+  expected<std::string, int> b(std::string("world"));
+  a.swap(b);
+  EXPECT_EQ(a.value(), "world");
+  EXPECT_EQ(b.value(), "hello");
+}
+
+TEST(ExpectedSwapNonTrivialValueTest, CrossState) {
+  expected<std::string, int> a(std::string("hello"));
+  expected<std::string, int> b(make_unexpected(42));
+  a.swap(b);
+  EXPECT_FALSE(a.has_value());
+  EXPECT_EQ(a.error(), 42);
+  EXPECT_TRUE(b.has_value());
+  EXPECT_EQ(b.value(), "hello");
+}
+
+TEST(ExpectedSwapNonTrivialValueTest, CrossStateReverse) {
+  expected<std::string, int> a(make_unexpected(99));
+  expected<std::string, int> b(std::string("world"));
+  a.swap(b);
+  EXPECT_TRUE(a.has_value());
+  EXPECT_EQ(a.value(), "world");
+  EXPECT_FALSE(b.has_value());
+  EXPECT_EQ(b.error(), 99);
+}
+
+// ============================================================================
+// expected<T, E> — operator== with unexpected<E> and unexpected<E2>
+// ============================================================================
+
+TEST(ExpectedComparisonTest, CompareWithUnexpected) {
+  // expected with error vs unexpected with same error
+  expected<int, std::string> e(make_unexpected(std::string("err")));
+  auto u = make_unexpected(std::string("err"));
+  EXPECT_TRUE(e == u);
+  EXPECT_FALSE(e != u);
+
+  // expected with error vs unexpected with different error
+  auto u2 = make_unexpected(std::string("other"));
+  EXPECT_FALSE(e == u2);
+  EXPECT_TRUE(e != u2);
+
+  // expected with value vs unexpected — always false
+  expected<int, std::string> v(42);
+  EXPECT_FALSE(v == u);
+  EXPECT_TRUE(v != u);
+}
+
+TEST(ExpectedComparisonTest, CompareWithUnexpectedDifferentType) {
+  // unexpected<E2> where E2 is convertible/comparable to E
+  expected<int, std::string> e(make_unexpected(std::string("err")));
+  // std::string compares with const char* via operator==
+  auto u = make_unexpected("err");
+  EXPECT_TRUE(e == u);
+
+  auto u2 = make_unexpected("other");
+  EXPECT_FALSE(e == u2);
+
+  // Error vs value: false
+  expected<int, std::string> v(42);
+  EXPECT_FALSE(v == u);
+}
+
+TEST(ExpectedComparisonTest, CompareCrossTypeValue) {
+  // expected<int,E> == expected<long,E>
+  expected<int, std::string> a(42);
+  expected<long, std::string> b(42);
+  EXPECT_TRUE(a == b);
+
+  expected<int, std::string> c(10);
+  expected<long, std::string> d(20);
+  EXPECT_FALSE(c == d);
+
+  // Cross-type with different value state
+  expected<int, std::string> e(make_unexpected(std::string("err")));
+  expected<long, std::string> f(42);
+  EXPECT_FALSE(e == f);
+  EXPECT_FALSE(f == e);
+}
+
+TEST(ExpectedComparisonTest, CompareCrossTypeError) {
+  // expected<T,int> == expected<T,long>
+  expected<int, int> a(make_unexpected(42));
+  expected<int, long> b(make_unexpected(42));
+  EXPECT_TRUE(a == b);
+
+  expected<int, int> c(make_unexpected(10));
+  expected<int, long> d(make_unexpected(20));
+  EXPECT_FALSE(c == d);
+
+  // Cross-type error with value: false
+  expected<int, int> e(42);
+  expected<int, long> f(make_unexpected(42));
+  EXPECT_FALSE(e == f);
+}
+
+TEST(ExpectedComparisonTest, CompareCrossTypeBoth) {
+  // expected<int,int> == expected<long,long>
+  expected<int, int> a(42);
+  expected<long, long> b(42);
+  EXPECT_TRUE(a == b);
+
+  expected<int, int> c(make_unexpected(99));
+  expected<long, long> d(make_unexpected(99));
+  EXPECT_TRUE(c == d);
+
+  expected<int, int> e(42);
+  expected<long, long> f(make_unexpected(42));
+  EXPECT_FALSE(e == f);
+}
+
+TEST(ExpectedComparisonTest, ConstObjects) {
+  const expected<int, std::string> a(42);
+  const expected<int, std::string> b(42);
+  EXPECT_TRUE(a == b);
+
+  const expected<int, std::string> c(make_unexpected(std::string("err")));
+  const expected<int, std::string> d(make_unexpected(std::string("err")));
+  EXPECT_TRUE(c == d);
+
+  const expected<int, std::string> e(42);
+  const expected<int, std::string> f(make_unexpected(std::string("err")));
+  EXPECT_FALSE(e == f);
+}
+
+// ============================================================================
+// expected<T&, E> — operator== comprehensive tests
+// ============================================================================
+
+TEST(ExpectedRefComparisonTest, ErrorVsError) {
+  expected<int&, std::string> a(make_unexpected(std::string("a")));
+  expected<int&, std::string> b(make_unexpected(std::string("a")));
+  EXPECT_TRUE(a == b);
+
+  expected<int&, std::string> c(make_unexpected(std::string("b")));
+  EXPECT_FALSE(a == c);
+}
+
+TEST(ExpectedRefComparisonTest, ValueVsError) {
+  int val = 42;
+  expected<int&, std::string> a(val);
+  expected<int&, std::string> b(make_unexpected(std::string("err")));
+  EXPECT_FALSE(a == b);
+  EXPECT_FALSE(b == a);
+}
+
+TEST(ExpectedRefComparisonTest, CompareWithUnexpected) {
+  expected<int&, std::string> e(make_unexpected(std::string("err")));
+  auto u = make_unexpected(std::string("err"));
+  EXPECT_TRUE(e == u);
+
+  auto u2 = make_unexpected(std::string("other"));
+  EXPECT_FALSE(e == u2);
+
+  // Value vs unexpected: false
+  int val = 42;
+  expected<int&, std::string> v(val);
+  EXPECT_FALSE(v == u);
+}
+
+TEST(ExpectedRefComparisonTest, CompareWithUnexpectedDifferentType) {
+  expected<int&, std::string> e(make_unexpected(std::string("err")));
+  auto u = make_unexpected("err");
+  EXPECT_TRUE(e == u);
+
+  auto u2 = make_unexpected("other");
+  EXPECT_FALSE(e == u2);
+}
+TEST(ExpectedRefComparisonTest, CompareCrossTypeValue) {
+  int ival = 42;
+  long lval = 42;
+  long lval2 = 99;
+  expected<int&, std::string> a(ival);
+  expected<long&, std::string> b(lval);
+  EXPECT_TRUE(a == b);
+
+  expected<long&, std::string> c(lval2);
+  EXPECT_FALSE(a == c);
+}
+
+TEST(ExpectedRefComparisonTest, CompareCrossTypeError) {
+  // Cross-type error comparison works because it uses public error() accessor.
+  // Note: Cross-type value comparison is not supported due to private member
+  // access limitations in the friend operator==.
+  expected<int&, int> a(make_unexpected(42));
+  expected<int&, long> b(make_unexpected(42L));
+  EXPECT_TRUE(a == b);
+
+  expected<int&, int> c(make_unexpected(10));
+  expected<int&, long> d(make_unexpected(20L));
+  EXPECT_FALSE(c == d);
+
+  // Cross-type with different state
+  int val = 42;
+  expected<int&, int> e(val);
+  expected<int&, long> f(make_unexpected(42L));
+  EXPECT_FALSE(e == f);
+}
+
+// Note: Cross-type operator== for expected<T&,E> (different T2 or E2)
+// is not tested because the friend function cannot access private members
+// of a different specialization. This is a known limitation.
+
+TEST(ExpectedRefComparisonTest, ConstObjects) {
+  int v1 = 10, v2 = 10, v3 = 20;
+  const expected<int&, std::string> a(v1);
+  const expected<int&, std::string> b(v2);
+  EXPECT_TRUE(a == b);
+
+  const expected<int&, std::string> c(v3);
+  EXPECT_FALSE(a == c);
+
+  const expected<int&, std::string> d(make_unexpected(std::string("err")));
+  const expected<int&, std::string> e(make_unexpected(std::string("err")));
+  EXPECT_TRUE(d == e);
+
+  EXPECT_FALSE(a == d);
+}
+
+// ============================================================================
+// expected<void, E> — operator== comprehensive tests
+// ============================================================================
+
+TEST(ExpectedVoidComparisonTest, CompareWithUnexpected) {
+  expected<void, std::string> e(make_unexpected(std::string("err")));
+  auto u = make_unexpected(std::string("err"));
+  EXPECT_TRUE(e == u);
+
+  auto u2 = make_unexpected(std::string("other"));
+  EXPECT_FALSE(e == u2);
+
+  // Value vs unexpected: false
+  expected<void, std::string> v;
+  EXPECT_FALSE(v == u);
+}
+
+TEST(ExpectedVoidComparisonTest, CompareWithUnexpectedDifferentType) {
+  expected<void, std::string> e(make_unexpected(std::string("err")));
+  // const char* compares with std::string
+  auto u = make_unexpected("err");
+  EXPECT_TRUE(e == u);
+
+  auto u2 = make_unexpected("other");
+  EXPECT_FALSE(e == u2);
+}
+
+TEST(ExpectedVoidComparisonTest, CompareCrossTypeError) {
+  // expected<void,int> == expected<void,long>
+  // Note: expected<void,E> does not have a converting constructor from
+  // unexpected<U>, so we must construct with the exact error type.
+  expected<void, int> a(make_unexpected(42));
+  expected<void, long> b(make_unexpected(42L));
+  EXPECT_TRUE(a == b);
+
+  expected<void, int> c(make_unexpected(10));
+  expected<void, long> d(make_unexpected(20L));
+  EXPECT_FALSE(c == d);
+
+  // Value vs error cross-type
+  expected<void, int> e;
+  expected<void, long> f(make_unexpected(42L));
+  EXPECT_FALSE(e == f);
+
+  // Both value
+  expected<void, int> g;
+  expected<void, long> h;
+  EXPECT_TRUE(g == h);
+}
+
+TEST(ExpectedVoidComparisonTest, ConstObjects) {
+  const expected<void, std::string> a;
+  const expected<void, std::string> b;
+  EXPECT_TRUE(a == b);
+
+  const expected<void, std::string> c(make_unexpected(std::string("err")));
+  const expected<void, std::string> d(make_unexpected(std::string("err")));
+  EXPECT_TRUE(c == d);
+
+  EXPECT_FALSE(a == c);
+}
