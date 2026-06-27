@@ -3955,8 +3955,7 @@ inline expected<token_stream<token>, std::string> transform(
 class Command {
   friend class ArgParser;
 
-  template <typename T>
-    requires std::same_as<T, bool> || std::same_as<std::optional<bool>, T>
+  template <bindable_bool_flag T>
   Flag<T>& add_flag_bool(
       const std::string& name, const std::string& description, T& bind_value,
       std::function<void(detail::extract_value_type_t<T>&)> action = store_true,
